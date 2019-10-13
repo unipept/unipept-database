@@ -14,10 +14,12 @@ database: \
 	<<<TABDIR>>>/ec_cross_references.tsv.gz \
 	<<<TABDIR>>>/embl_cross_references.tsv.gz \
 	<<<TABDIR>>>/go_cross_references.tsv.gz \
+	<<<TABDIR>>>/interpro_cross_references.tsv.gz \
 	<<<TABDIR>>>/sequences.tsv.gz \
 	<<<TABDIR>>>/peptides.tsv.gz \
 	<<<TABDIR>>>/ec_numbers.tsv.gz \
-	<<<TABDIR>>>/go_terms.tsv.gz
+	<<<TABDIR>>>/go_terms.tsv.gz \
+	<<<TABDIR>>>/interpro_entries.tsv.gz
 
 .PHONY: index
 index: <<<TABDIR>>>/<<<KMER_LENGTH>>>-mer.index
@@ -98,6 +100,7 @@ lineage_taxons: $(JAR) <<<INTDIR>>>/names.dmp <<<INTDIR>>>/clean-nodes.dmp
 <<<TABDIR>>>/ec_cross_references.tsv.gz: tables
 <<<TABDIR>>>/embl_cross_references.tsv.gz: tables
 <<<TABDIR>>>/go_cross_references.tsv.gz: tables
+<<<TABDIR>>>/interpro_cross_references.tsv.gz: tables
 tables: $(JAR) <<<TABDIR>>>/taxons.tsv.gz <<<SOURCE_FILES>>>
 	<<<LOGADD>>> "Started calculation of most tables."
 	@mkdir -p <<<TABDIR>>>
@@ -111,6 +114,7 @@ tables: $(JAR) <<<TABDIR>>>/taxons.tsv.gz <<<SOURCE_FILES>>>
 		--ec              >(<<<CMD_GZIP>>> > <<<TABDIR>>>/ec_cross_references.tsv.gz) \
 		--embl            >(<<<CMD_GZIP>>> > <<<TABDIR>>>/embl_cross_references.tsv.gz) \
 		--go              >(<<<CMD_GZIP>>> > <<<TABDIR>>>/go_cross_references.tsv.gz) \
+		--interpro        >(<<<CMD_GZIP>>> > <<<TABDIR>>>/interpro_cross_references.tsv.gz) \
 		--proteomes       >(<<<CMD_GZIP>>> > <<<INTDIR>>>/proteomes.tsv.gz) \
 		--proteomes-ref   >(<<<CMD_GZIP>>> > <<<TABDIR>>>/proteome_cross_references.tsv.gz) \
 		<<<SOURCE_INPUTS>>>
@@ -311,6 +315,12 @@ tables: $(JAR) <<<TABDIR>>>/taxons.tsv.gz <<<SOURCE_FILES>>>
 	@mkdir -p $(dir $@)
 	./createGoTerms.sh | <<<CMD_GZIP>>> > $@
 	<<<LOGADD>>> "Finished creating GO terms."
+
+<<<TABDIR>>>/interpro_entries.tsv.gz: createInterProEntries.sh
+	<<<LOGADD>>> "started creating InterPro entries"
+	@mkdir -p $(dir $@)
+	./createInterProEntries.sh | <<<CMD_GZIP>>> > $@
+	<<<LOGADD>>> "Finished creating InterPro entries."
 # }}}
 
 .PHONY: clean_intermediates
