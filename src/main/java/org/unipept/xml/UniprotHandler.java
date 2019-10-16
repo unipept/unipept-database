@@ -46,7 +46,7 @@ public class UniprotHandler extends DefaultHandler {
             public void handleTag(String data) {
                 emitEntry(currentItem);
                 i++;
-                if (i % 10000 == 0) System.out.println(
+                if (i % 100000 == 0) System.err.println(
                     new Timestamp(System.currentTimeMillis())
                     + " Entry " + i + " added"
                 );

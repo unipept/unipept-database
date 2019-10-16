@@ -69,7 +69,7 @@ public class FunctionAnalysisPeptides {
             }
             done++;
             if (done % 1000000 == 0) {
-                System.out.println("FA " + done + " rows");
+                System.err.println("FA " + done + " rows");
             }
         }
         if (!m.isEmpty()) {
