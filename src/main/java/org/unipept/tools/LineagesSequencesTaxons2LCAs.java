@@ -18,8 +18,8 @@ public class LineagesSequencesTaxons2LCAs {
     private int[][] taxonomy;
     private final Writer writer;
 
-    public LineagesSequencesTaxons2LCAs(String taxonomyFile, String outputFile) throws IOException {
-        writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(outputFile), "utf-8"));
+    public LineagesSequencesTaxons2LCAs(String taxonomyFile) throws IOException {
+        writer = new BufferedWriter(new OutputStreamWriter(System.out, "utf-8"));
         buildTaxonomy(taxonomyFile);
     }
 
@@ -46,8 +46,8 @@ public class LineagesSequencesTaxons2LCAs {
         taxonomyMap.keySet().stream().forEach(key -> taxonomy[key] = taxonomyMap.get(key));
     }
 
-    public void calculateLCAs(String file) throws IOException {
-        BufferedReader br = new BufferedReader(new InputStreamReader(new FileInputStream(file)), 67108864);
+    public void calculateLCAs() throws IOException {
+        BufferedReader br = new BufferedReader(new InputStreamReader(System.in), 67108864);
 
         int count = 0;
         String currentSequence = null;
@@ -118,23 +118,21 @@ public class LineagesSequencesTaxons2LCAs {
     }
 
     /**
-     * first argument should be the lineages in tsv format with a header row. Create by running:
-     * $ echo "select * from lineages;" | mysql -u unipept -p unipept > lineages.tsv
+     * first argument should be the lineages in tsv format without a header row. Create by running:
+     * $ echo "select * from lineages;" | mysql -u unipept -p unipept | sed 1d > lineages.tsv
      * <p/>
-     * second argument should be the peptides in gzip'ed tsv format with a header row. Create by running:
+     * standard input should be the peptides in tsv format with a header row. Create by running:
      * $ echo "select sequence_id, taxon_id from peptides left join uniprot_entries on peptides.uniprot_entry_id = uniprot_entries.id;" | \n
      * mysql -u unipept -p unipept -q | sort -S 50% --parallel=12 -k1n > sequences.tsv
-     * <p/>
-     * third argument should be the filename of the output file
      *
      * @param args
      */
     public static void main(String... args) {
         try {
             System.err.println(new Timestamp(System.currentTimeMillis()) + ": reading taxonomy");
-            LineagesSequencesTaxons2LCAs l = new LineagesSequencesTaxons2LCAs(args[0], args[2]);
+            LineagesSequencesTaxons2LCAs l = new LineagesSequencesTaxons2LCAs(args[0]);
             System.err.println(new Timestamp(System.currentTimeMillis()) + ": reading sequences");
-            l.calculateLCAs(args[1]);
+            l.calculateLCAs();
             l.close();
         } catch (IOException e) {
             e.printStackTrace();
