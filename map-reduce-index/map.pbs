@@ -1,0 +1,19 @@
+#!/bin/bash
+#PBS -l nodes=1:ppn=8
+#PBS -l walltime=00:30:00
+# wsub -t 1-20 -batch map.pbs
+INTDIR=../small/intermediate
+TABDIR=../small/tables
+ACIDS=ACDEFGHIKLMNPQRSTVWY
+PREFIX=$(echo $ACIDS | cut -c $PBS_ARRAYID)
+
+JAR=../target/unipept-0.0.1-SNAPSHOT.jar
+PAC=org.unipept.tools
+
+zcat $TABDIR/uniprot_entries.tsv.gz \
+	| awk -v OFS='	' -v FS='	' '{ for(i = length($7) - 9 + 1; i > 0; i -= 1) if(substr($7, i, 1) == "'"$PREFIX"'") print(substr($7, i + 1, 8), $4) }' \
+	| grep -v "[^$ACIDS]" \
+	| LC_ALL=C sort --parallel=24 \
+	| java -Xms3g -Xmx3g -cp ${JAR} ${PAC}.LineagesSequencesTaxons2LCAs <(zcat $TABDIR/lineages.tsv.gz) \
+	| sed "s/^/$PREFIX/" \
+	> $INTDIR/sequence_taxon.${PREFIX}.tsv.gz
