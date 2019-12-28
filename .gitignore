@@ -1,6 +1,6 @@
 target/
-data/*.tsv.gz
-data/*.sh
+.devcontainer/data/*.tsv.gz
+.devcontainer/data/*.sh
 makefile
 proteomes.sh
 createEcNumbers.sh
