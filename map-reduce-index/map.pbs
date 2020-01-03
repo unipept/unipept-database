@@ -1,19 +1,25 @@
 #!/bin/bash
-#PBS -l nodes=1:ppn=8
-#PBS -l walltime=00:30:00
-# wsub -t 1-20 -batch map.pbs
-INTDIR=../small/intermediate
-TABDIR=../small/tables
+#PBS -N unipept-index
+#PBS -m e
+#PBS -l nodes=1:ppn=9
+#PBS -l walltime=72:00:00
+#PBS -l vmem=480gb
+# wsub -t 1-20 -batch map.pbs -epilog reduce.sh
+TABDIR="/user/data/gent/gvo000/gvo00038/vsc41079/data/tables"
+INTDIR="/kyukon/scratch/gent/vo/000/gvo00038/intermediate/"
 ACIDS=ACDEFGHIKLMNPQRSTVWY
 PREFIX=$(echo $ACIDS | cut -c $PBS_ARRAYID)
 
 JAR=../target/unipept-0.0.1-SNAPSHOT.jar
 PAC=org.unipept.tools
 
+module load Java
+
 zcat $TABDIR/uniprot_entries.tsv.gz \
 	| awk -v OFS='	' -v FS='	' '{ for(i = length($7) - 9 + 1; i > 0; i -= 1) if(substr($7, i, 1) == "'"$PREFIX"'") print(substr($7, i + 1, 8), $4) }' \
-	| grep -v "[^$ACIDS]" \
+	| grep "^[$ACIDS]*	[0-9]*$" \
 	| LC_ALL=C sort --parallel=24 \
 	| java -Xms3g -Xmx3g -cp ${JAR} ${PAC}.LineagesSequencesTaxons2LCAs <(zcat $TABDIR/lineages.tsv.gz) \
 	| sed "s/^/$PREFIX/" \
+	| gzip - \
 	> $INTDIR/sequence_taxon.${PREFIX}.tsv.gz
