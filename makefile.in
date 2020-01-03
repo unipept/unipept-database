@@ -254,6 +254,7 @@ tables: $(JAR) <<<TABDIR>>>/taxons.tsv.gz <<<SOURCE_FILES>>>
 		| umgap buildindex \
 		> $@
 	<<<LOGADD>>> "Finished the construction of the <<<KMER_LENGTH>>>-mer index."
+# }}}
 
 # Functional Data {{{ ----------------------------------------------------------
 <<<TABDIR>>>/ec_numbers.tsv.gz: createEcNumbers.sh
