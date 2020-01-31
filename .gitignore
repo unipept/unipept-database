@@ -8,3 +8,8 @@ createGoTerms.sh
 createInterProEntries.sh
 type_strains.sh
 latest-config
+.classpath
+.project
+.settings
+.vscode
+createKeggPathways.sh
