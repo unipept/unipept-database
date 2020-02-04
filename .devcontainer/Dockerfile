@@ -3,7 +3,21 @@ FROM mysql:8.0
 LABEL maintainer="Pieter Verschaffelt <pieter.verschaffelt@ugent.be>"
 
 RUN mkdir -p /usr/share/man/man1
-RUN apt-get update && apt-get install -y default-jdk git dos2unix curl maven make wget unzip expect gawk
+RUN apt-get update && apt-get install -y default-jdk git dos2unix maven make wget unzip expect gawk binutils gcc libssl-dev
+
+# Now, build curl from source to upgrade it to version 7.68.0 (instead of the default 7.52.0 in this image)
+# This fixes https://github.com/curl/curl/issues/3750 which is present in older versions of curl
+RUN wget https://curl.haxx.se/download/curl-7.68.0.zip && \
+    unzip curl-7.68.0.zip && \
+    cd curl-7.68.0 && \
+    ./configure --disable-dependency-tracking --with-ssl && \
+    make && \
+    make install && \
+    cd "/"
+
+# Configure curl to use the newly builded libcurl
+RUN ldconfig
+
 # The files needed to build the database are part of the unipept repository
 RUN git clone "https://github.com/unipept/make-database"
 

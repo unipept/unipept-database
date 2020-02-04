@@ -10,7 +10,7 @@ services:
       MYSQL_PASSWORD: unipept
     restart: always
     ports:
-      - "3306:3306"
+      - "3307:3306"
     hostname: mysql
     volumes:
       - ./data:/data
@@ -19,7 +19,7 @@ services:
       - db
     image: phpmyadmin/phpmyadmin
     ports:
-      - '8080:80'
+      - '8081:80'
     environment:
       PMA_HOST: db
       MYSQL_ROOT_PASSWORD: unipept
