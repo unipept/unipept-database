@@ -1,5 +1,8 @@
 #!/bin/bash
 
+set -e
+set -o pipefail
+
 # Move to the backend-folder in which all database-generation files live.
 cd /make-database
 

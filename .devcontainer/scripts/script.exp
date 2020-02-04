@@ -68,8 +68,8 @@ Where should I store the downloaded source xml files (large, single-write, singl
 send -- "\r"
 expect -exact "\r
 How much memory should Java use? \[6g\] "
-send -- "6g\r"
-expect -exact "6g\r
+send -- "2g\r"
+expect -exact "2g\r
 Which batch size should I use for communication with Entrez? \[1000\] "
 send -- "1000\r"
 expect -exact "1000\r
