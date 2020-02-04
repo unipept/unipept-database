@@ -1,0 +1,22 @@
+# Run `./configure` to configure the unipept backend makefile.
+#
+# Editing this file does not configure the unipept backend run, it will
+# only change the suggested configuration when you run `./configure`.
+CONFIG_PEPTIDE_MIN_LENGTH="5"
+CONFIG_PEPTIDE_MAX_LENGTH="50"
+CONFIG_KMER_LENGTH="9"
+CONFIG_TABDIR="./data/tables"
+CONFIG_INTDIR="./data/intermediate"
+CONFIG_TAXDIR="./data/taxon"
+CONFIG_SRCDIR="./data/sources"
+CONFIG_JAVA_MEM="6g"
+CONFIG_ENTREZ_BATCH_SIZE="1000"
+CONFIG_CMD_SORT="sort --buffer-size=80% --parallel=4"
+CONFIG_CMD_GZIP="gzip -"
+CONFIG_CMD_ZCAT="gzcat"
+CONFIG_CMD_UNZIP="unzip -DD"
+CONFIG_CMD_SED="sed"
+CONFIG_CMD_AWK="gawk"
+CONFIG_CMD_MKTEMP="mktemp"
+CONFIG_CMD_JOIN="join"
+CONFIG_SOURCES=(

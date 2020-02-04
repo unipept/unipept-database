@@ -13,3 +13,5 @@ latest-config
 .settings
 .vscode
 createKeggPathways.sh
+data/
+.DS_Store
