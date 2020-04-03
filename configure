@@ -119,7 +119,7 @@ option "CONFIG_CMD_JOIN" "join" "What's my gnu join executable (e.g. join, gjoin
 
 sources_count="${#CONFIG_SOURCES[@]}"
 if [ "$sources_count" == "0" ]; then
-    CONFIG_SOURCES=('swissprot' 'http://ftp.ebi.ac.uk/pub/databases/uniprot/knowledgebase/uniprot_sprot.xml.gz'
+    CONFIG_SOURCES=('swissprot' 'http://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/complete/uniprot_sprot.xml.gz'
                     'trembl' 'http://ftp.ebi.ac.uk/pub/databases/uniprot/knowledgebase/uniprot_trembl.xml.gz')
     sources_count=4
 fi
