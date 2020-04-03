@@ -22,6 +22,7 @@ public class UniprotHandler extends DefaultHandler {
     private UniprotProteomeRef protRef;
     private StringBuilder charData;
     private int i;
+    private boolean inComment = false;
     private boolean inOrganism = false;
     private boolean inEvidence = false;
     private boolean inRecommendedName = false;
@@ -47,8 +48,8 @@ public class UniprotHandler extends DefaultHandler {
                 emitEntry(currentItem);
                 i++;
                 if (i % 100000 == 0) System.err.println(
-                    new Timestamp(System.currentTimeMillis())
-                    + " Entry " + i + " added"
+                        new Timestamp(System.currentTimeMillis())
+                                + " Entry " + i + " added"
                 );
             }
         });
@@ -91,6 +92,10 @@ public class UniprotHandler extends DefaultHandler {
         endTagWorkers.put("dbReference", new EndTagWorker() {
             @Override
             public void handleTag(String data) {
+                if (inComment) {
+                    return;
+                }
+
                 if (!inOrganism) {
                     if (dbRef != null) {
                         currentItem.addDbRef(dbRef);
@@ -119,6 +124,12 @@ public class UniprotHandler extends DefaultHandler {
                 } else if (inSubmittedName) {
                     currentItem.setSubmittedName(data);
                 }
+            }
+        });
+        endTagWorkers.put("comment", new EndTagWorker() {
+            @Override
+            public void handleTag(String data) {
+                inComment = false;
             }
         });
 
@@ -158,6 +169,11 @@ public class UniprotHandler extends DefaultHandler {
         startTagWorkers.put("dbReference", new StartTagWorker() {
             @Override
             public void handleTag(Attributes atts) {
+                // Skip references if they are embedded in comments (otherwise, these could cause duplicate identifiers)
+                if (inComment) {
+                    return;
+                }
+
                 if (inOrganism) {
                     if (atts.getValue("type").equals("NCBI Taxonomy"))
                         currentItem.setTaxonId(Integer.valueOf(atts.getValue("id")));
@@ -189,6 +205,12 @@ public class UniprotHandler extends DefaultHandler {
                     else if (atts.getValue("type").equals("nucleotide sequence ID"))
                         dbRef.setSequenceId(atts.getValue("value"));
                 }
+            }
+        });
+        startTagWorkers.put("comment", new StartTagWorker() {
+            @Override
+            public void handleTag(Attributes atts) {
+                inComment = true;
             }
         });
     }
