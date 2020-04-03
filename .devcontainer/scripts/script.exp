@@ -97,7 +97,7 @@ expect -exact "\r
 What's my gnu join executable (e.g. join, gjoin)? \[join\] "
 send -- "\r"
 expect -exact "\r
-Parse swissprot (http://ftp.ebi.ac.uk/pub/databases/uniprot/knowledgebase/uniprot_sprot.xml.gz)? \[Y/n\] "
+Parse swissprot (http://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/complete/uniprot_sprot.xml.gz)? \[Y/n\] "
 send -- "\r"
 expect -exact "\r
 Parse trembl (http://ftp.ebi.ac.uk/pub/databases/uniprot/knowledgebase/uniprot_trembl.xml.gz)? \[Y/n\] "
