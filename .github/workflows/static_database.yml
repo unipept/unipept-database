@@ -1,0 +1,96 @@
+name: Database
+
+on:
+  schedule:
+    # * is a special character in YAML so you have to quote this string
+    - cron:  '0 0 1 * *'
+
+jobs:
+  generate_static_database:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-java@v1
+        with:
+          java-version: '11'
+          java-package: jdk 
+          architecture: x64 
+      - name: Get current date
+        id: date
+        run: echo "::set-output name=date::$(date +'%Y-%m-%d')"
+      - name: Install required utilities
+        run: |
+          sudo apt-get update
+          sudo apt-get -y install git make maven wget unzip expect gawk sqlite3 libsqlite3-dev
+      - name: Where is expect?
+        run: |
+          which expect
+      - name: Configure makefile
+        run: |
+          # The generation of umgap-data is not required for the static database
+          sed -i '/checkdep umgap/d' configure
+          sed -i '/all: makefile database index/d' makefile.in
+          chmod +x workflows/static_database/script.exp
+          chmod +x configure
+          ./workflows/static_database/script.exp
+      - name: Generate tsv.gz files
+        shell: bash
+        run: |
+          make taxons
+          make functional_annotations
+      - name: Build SQLite database from generated files
+        shell: bash
+        run: |
+          chmod +x workflows/static_database/build_database.sh
+          ./workflows/static_database/build_database.sh
+      - name: ls
+        run: ls -hl
+      - name: Update database versioning
+        shell: bash
+        run: |
+          rm workflows/static_database/version.txt
+          echo "${{ steps.date.outputs.date }}" > workflows/static_database/version.txt
+      - name: Update resources
+        uses: alexesprit/action-update-file@master
+        with:
+          file-path: workflows/static_database/version.txt
+          commit-msg: Bump db version to ${{ steps.date.outputs.date }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Get newly made commit sha
+        id: commit_sha
+        shell: bash
+        run: |
+          echo "::set-output name=sha::$(git rev-parse HEAD)"
+      - name: Create new tag
+        uses: octokit/request-action@v2.x
+        id: create_new_tag
+        with:
+          route: POST /repos/:owner/:repo/git/tags
+          owner: unipept
+          repo: make-database
+          tag: database-${{ steps.date.outputs.date }}
+          message: "Static information database built on ${{ steps.date.outputs.date }}"
+          object: ${{ steps.commit_sha.outputs.sha }}
+          type: commit
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: database-${{ steps.date.outputs.date }}
+          release_name: Static database ${{ steps.date.outputs.date }}
+          draft: false
+          prerelease: false
+      - name: Upload Release Asset
+        id: upload-release-asset 
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }} 
+          asset_path: ./output.zip
+          asset_name: unipept-static-db-${{ steps.date.outputs.date }}.zip
+          asset_content_type: application/zip
