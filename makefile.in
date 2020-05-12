@@ -32,6 +32,12 @@ taxons: \
 	<<<TABDIR>>>/taxons.tsv.gz \
 	<<<TABDIR>>>/lineages.tsv.gz
 
+.PHONY: functional_annotations
+functional_annotations: \
+    <<<TABDIR>>>/interpro_entries.tsv.gz \
+	<<<TABDIR>>>/go_terms.tsv.gz \
+	<<<TABDIR>>>/ec_numbers.tsv.gz
+
 .PHONY: download
 download: <<<SOURCE_FILES>>>
 # }}}
@@ -70,7 +76,7 @@ $(JAR): $(SRC)
 	<<<LOGADD>>> "Finished unzipping names or nodes from the taxon dump."
 
 <<<INTDIR>>>/clean-nodes.dmp: <<<INTDIR>>>/nodes.dmp
-	<<<LOGADD>>> "Starting cleaning unknown ranks form nodes."
+	<<<LOGADD>>> "Starting cleaning unknown ranks from nodes."
 	@mkdir -p $(dir $@)
 	<<<CMD_SED>>> < "$<" \
 		-e 's/subcohort/no rank/' \
