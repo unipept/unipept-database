@@ -6,6 +6,7 @@ zcat data/tables/ec_numbers.tsv.gz | sed "s/\t/$/g" | sqlite3 -csv -separator "$
 zcat data/tables/go_terms.tsv.gz | sed "s/\t/$/g" | sqlite3 -csv -separator "$" output.db '.import /dev/stdin go_terms'
 zcat data/tables/interpro_entries.tsv.gz | sed "s/\t/$/g" | sqlite3 -csv -separator "$" output.db '.import /dev/stdin interpro_entries'
 zcat data/tables/taxons.tsv.gz | sed "s/\t/$/g" | sqlite3 -csv -separator "$" output.db '.import /dev/stdin taxons'
+zcat data/tables/lineages.tsv.gz | sed "s/\t/$/g" | sqlite3 -csv -separator "$" output.db '.import /dev/stdin lineages'
 
 # Compress the database before uploading it to a Github release
 zip output.zip output.db

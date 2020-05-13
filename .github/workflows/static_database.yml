@@ -1,9 +1,9 @@
 name: Database
 
-on:
-  schedule:
+on: [push]
+  #schedule:
     # * is a special character in YAML so you have to quote this string
-    - cron:  '0 0 1 * *'
+  #  - cron:  '0 0 1 * *'
 
 jobs:
   generate_static_database:

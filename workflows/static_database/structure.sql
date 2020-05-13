@@ -35,3 +35,36 @@ CREATE TABLE IF NOT EXISTS `taxons` (
   `valid_taxon` INT NOT NULL DEFAULT 1 ,
   PRIMARY KEY (`id`)
 );
+
+CREATE TABLE `lineages` (
+  `taxon_id` INT NOT NULL ,
+  `superkingdom` INT NULL DEFAULT NULL ,
+  `kingdom` INT NULL DEFAULT NULL ,
+  `subkingdom` INT NULL DEFAULT NULL ,
+  `superphylum` INT NULL DEFAULT NULL ,
+  `phylum` INT NULL DEFAULT NULL ,
+  `subphylum` INT NULL DEFAULT NULL ,
+  `superclass` INT NULL DEFAULT NULL ,
+  `class` INT NULL DEFAULT NULL ,
+  `subclass` INT NULL DEFAULT NULL ,
+  `infraclass` INT NULL DEFAULT NULL ,
+  `superorder` INT NULL DEFAULT NULL ,
+  `order` INT NULL DEFAULT NULL ,
+  `suborder` INT NULL DEFAULT NULL ,
+  `infraorder` INT NULL DEFAULT NULL ,
+  `parvorder` INT NULL DEFAULT NULL ,
+  `superfamily` INT NULL DEFAULT NULL ,
+  `family` INT NULL DEFAULT NULL ,
+  `subfamily` INT NULL DEFAULT NULL ,
+  `tribe` INT NULL DEFAULT NULL ,
+  `subtribe` INT NULL DEFAULT NULL ,
+  `genus` INT NULL DEFAULT NULL ,
+  `subgenus` INT NULL DEFAULT NULL ,
+  `species_group` INT NULL DEFAULT NULL ,
+  `species_subgroup` INT NULL DEFAULT NULL ,
+  `species` INT NULL DEFAULT NULL ,
+  `subspecies` INT NULL DEFAULT NULL ,
+  `varietas` INT NULL DEFAULT NULL ,
+  `forma` INT NULL DEFAULT NULL ,
+  PRIMARY KEY (`taxon_id`)
+);
