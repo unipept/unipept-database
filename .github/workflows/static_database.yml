@@ -22,9 +22,6 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get -y install git make maven wget unzip expect gawk sqlite3 libsqlite3-dev
-      - name: Where is expect?
-        run: |
-          which expect
       - name: Configure makefile
         run: |
           # The generation of umgap-data is not required for the static database
@@ -43,8 +40,6 @@ jobs:
         run: |
           chmod +x workflows/static_database/build_database.sh
           ./workflows/static_database/build_database.sh
-      - name: ls
-        run: ls -hl
       - name: Update database versioning
         shell: bash
         run: |
