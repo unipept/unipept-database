@@ -90,6 +90,7 @@ public class TaxonList extends ArrayList<Taxon> {
             (t.name.matches(".*\\d.*") && !t.name.contains("virus"))
             || t.name.endsWith(" sp.")
             || t.name.endsWith(" genomosp.")
+            || t.name.contains(" bacterium")
           )
         )
         || t.name.contains("enrichment culture")
