@@ -84,7 +84,6 @@ $(JAR): $(SRC)
 		-e 's/subsection/no rank/' \
 		-e 's/section/no rank/' \
 		-e 's/series/no rank/' \
-		-e 's/strain/no rank' \
 		> "$@"
 	<<<LOGADD>>> "Finished cleaning unknown ranks form nodes."
 
