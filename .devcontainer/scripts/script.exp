@@ -17,7 +17,7 @@
 # this in the first place.  The -C flag allows you to define a
 # character to toggle this mode off and on.
 
-set force_conservative 0  ;# set to 1 to force conservative mode even if
+set force_conservative 1  ;# set to 1 to force conservative mode even if
 			  ;# script wasn't run conservatively originally
 if {$force_conservative} {
 	set send_slow {1 .1}
@@ -96,11 +96,11 @@ send -- "\r"
 expect -exact "\r
 What's my gnu join executable (e.g. join, gjoin)? \[join\] "
 send -- "\r"
-expect -exact "\r
-Parse swissprot (http://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/complete/uniprot_sprot.xml.gz)? \[Y/n\] "
+expect -re "\r
+Parse swissprot .*"
 send -- "\r"
-expect -exact "\r
-Parse trembl (http://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/complete/uniprot_trembl.xml.gz)? \[Y/n\] "
+expect -re "\r
+Parse trembl .*"
 send -- "n\r"
 expect -exact "n\r
 Add another source by entering the name. An empty name cancels: "
