@@ -39,6 +39,10 @@ Taxons
    * species subgroup
    * species
    * subspecies
+   * clade
+   * strain
+   * isolate
+   * serotype
    * varietas
    * forma
  - ***parent***: The taxon id of the parent. Refers to another entry

@@ -2,7 +2,7 @@ import sys
 from collections import defaultdict
 
 order = [
-	["subspecies", "varietas", "forma"],
+	["subspecies", "clade", "strain", "isolate", "serotype", "varietas", "forma"],
 	["species"],
 	["genus", "subgenus", "species group", "species subgroup"],
 	["family", "subfamily", "tribe", "subtribe"],

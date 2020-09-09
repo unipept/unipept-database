@@ -64,7 +64,12 @@ CREATE TABLE `lineages` (
   `species_subgroup` INT NULL DEFAULT NULL ,
   `species` INT NULL DEFAULT NULL ,
   `subspecies` INT NULL DEFAULT NULL ,
+  `clade` INT NULL DEFAULT NULL ,
+  `strain` INT NULL DEFAULT NULL ,
+  `isolate` INT NULL DEFAULT NULL ,
+  `serotype` INT NULL DEFAULT NULL ,
   `varietas` INT NULL DEFAULT NULL ,
   `forma` INT NULL DEFAULT NULL ,
+  `forma_specialis` INT NULL DEFAULT NULL ,
   PRIMARY KEY (`taxon_id`)
 );

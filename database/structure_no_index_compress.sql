@@ -11,7 +11,7 @@ USE `unipept` ;
 CREATE  TABLE IF NOT EXISTS `unipept`.`taxons` (
   `id` MEDIUMINT UNSIGNED NOT NULL ,
   `name` VARCHAR(120) NOT NULL ,
-  `rank` ENUM('no rank', 'superkingdom', 'kingdom', 'subkingdom', 'superphylum', 'phylum', 'subphylum', 'superclass', 'class', 'subclass', 'infraclass', 'superorder', 'order', 'suborder', 'infraorder', 'parvorder', 'superfamily', 'family', 'subfamily', 'tribe', 'subtribe', 'genus', 'subgenus', 'species group', 'species subgroup', 'species', 'subspecies', 'varietas', 'forma' ) NULL DEFAULT NULL ,
+  `rank` ENUM('no rank', 'superkingdom', 'kingdom', 'subkingdom', 'superphylum', 'phylum', 'subphylum', 'superclass', 'class', 'subclass', 'infraclass', 'superorder', 'order', 'suborder', 'infraorder', 'parvorder', 'superfamily', 'family', 'subfamily', 'tribe', 'subtribe', 'genus', 'subgenus', 'species group', 'species subgroup', 'species', 'subspecies', 'clade', 'strain', 'isolate', 'serotype', 'varietas', 'forma', 'forma specialis' ) NULL DEFAULT NULL ,
   `parent_id` MEDIUMINT UNSIGNED NULL DEFAULT NULL ,
   `valid_taxon` BIT NOT NULL DEFAULT 1 ,
   PRIMARY KEY (`id`))
@@ -110,8 +110,13 @@ CREATE  TABLE IF NOT EXISTS `unipept`.`lineages` (
   `species_subgroup` MEDIUMINT NULL DEFAULT NULL ,
   `species` MEDIUMINT NULL DEFAULT NULL ,
   `subspecies` MEDIUMINT NULL DEFAULT NULL ,
+  `clade` MEDIUMINT NULL DEFAULT NULL ,
+  `strain` MEDIUMINT NULL DEFAULT NULL ,
+  `isolate` MEDIUMINT NULL DEFAULT NULL ,
+  `serotype` MEDIUMINT NULL DEFAULT NULL ,
   `varietas` MEDIUMINT NULL DEFAULT NULL ,
   `forma` MEDIUMINT NULL DEFAULT NULL ,
+  `forma specialis` MEDIUMINT NULL DEFAULT NULL
   PRIMARY KEY (`taxon_id`))
 ENGINE = InnoDB
 DEFAULT CHARACTER SET = ascii

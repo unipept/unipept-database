@@ -84,6 +84,12 @@ $(JAR): $(SRC)
 		-e 's/subsection/no rank/' \
 		-e 's/section/no rank/' \
 		-e 's/series/no rank/' \
+		-e 's/biotype/no rank/' \
+		-e 's/serogroup/no rank/' \
+		-e 's/morph/no rank/' \
+		-e 's/genotype/no rank/' \
+		-e 's/subvariety/no rank/' \
+		-e 's/pathogroup/no rank/' \
 		> "$@"
 	<<<LOGADD>>> "Finished cleaning unknown ranks form nodes."
 
