@@ -10,9 +10,9 @@ import java.util.regex.Pattern;
 
 public class LineagesSequencesTaxons2LCAs {
 
-    public static final int GENUS = 20;
-    public static final int SPECIES = 24;
-    public static final int RANKS = 28;
+    public static final int GENUS = 18;
+    public static final int SPECIES = 22;
+    public static final int RANKS = 27;
     private static final Pattern SEPARATOR = Pattern.compile("\t");
     private static final String NULL = "\\N";
     private int[][] taxonomy;
@@ -30,7 +30,7 @@ public class LineagesSequencesTaxons2LCAs {
 
         br.lines()
                 .forEach(line -> {
-                    String[] elements = SEPARATOR.split(line, 29);
+                    String[] elements = SEPARATOR.split(line, 28);
 
                     int key = Integer.parseInt(elements[0]);
                     int[] lineage = Arrays.stream(elements)
