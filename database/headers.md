@@ -22,12 +22,10 @@ Taxons
    * superclass
    * class
    * subclass
-   * infraclass
    * superorder
    * order
    * suborder
    * infraorder
-   * parvorder
    * superfamily
    * family
    * subfamily
@@ -39,10 +37,7 @@ Taxons
    * species subgroup
    * species
    * subspecies
-   * clade
    * strain
-   * isolate
-   * serotype
    * varietas
    * forma
  - ***parent***: The taxon id of the parent. Refers to another entry

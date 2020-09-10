@@ -90,6 +90,12 @@ $(JAR): $(SRC)
 		-e 's/genotype/no rank/' \
 		-e 's/subvariety/no rank/' \
 		-e 's/pathogroup/no rank/' \
+		-e 's/forma specialis/no rank/' \
+		-e 's/serotype/no rank/' \
+		-e 's/clade/no rank/' \
+		-e 's/isolate/no rank/' \
+		-e 's/infraclass/no rank/' \
+		-e 's/parvorder/no rank/' \
 		> "$@"
 	<<<LOGADD>>> "Finished cleaning unknown ranks form nodes."
 
