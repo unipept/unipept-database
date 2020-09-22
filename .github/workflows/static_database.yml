@@ -49,7 +49,7 @@ jobs:
           rm workflows/static_database/version.txt
           echo "${{ steps.date.outputs.date }}" > workflows/static_database/version.txt
       - name: Update resources
-        uses: test-room-7/action-update-file@master
+        uses: test-room-7/action-update-file@v1
         with:
           file-path: workflows/static_database/version.txt
           commit-msg: Bump db version to ${{ steps.date.outputs.date }}
