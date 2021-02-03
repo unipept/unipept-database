@@ -63,6 +63,7 @@ checkdep wc
 checkdep xargs
 checkdep umgap "umgap crate (for umgap buildindex)"
 checkdep uuidgen
+checkdep pv
 
 # --------------------------------------------------------------------
 # utility functions
@@ -139,7 +140,8 @@ if ACTIVE; then
 	echo "$SOURCES" > "$TMP/sources" &
 	while read name url; do
 		log "Started downloading $name"
-		curl --continue-at - --create-dirs --progress-bar "$url" --output "$INTDIR/$name.tsv.gz"
+		size="$(curl -I "$url" -s | grep -i content-length | tr -cd '[0-9]')"
+		curl --continue-at - --create-dirs "$url" --silent | pv -s "$size" --numeric --timer > "$INTDIR/$name.tsv.gz"
 		log "Finished downloading $name"
 	done < "$TMP/sources"
 	rm "$TMP/sources"
@@ -338,7 +340,7 @@ if ACTIVE; then
 	log "Started fetching of type strain data."
 	mkdir -p "$INTDIR"
 	touch "$TMP/type_strains"
-	header="$(curl --progress-bar -d 'db=assembly' -d 'term="sequence from type"' -d 'field=filter' -d 'usehistory=y' "$ENTREZ_URL/esearch.fcgi" \
+	header="$(curl -d 'db=assembly' -d 'term="sequence from type"' -d 'field=filter' -d 'usehistory=y' "$ENTREZ_URL/esearch.fcgi" \
 	        | grep -e 'QueryKey' -e 'WebEnv' | tr -d '\n')"
 	query_key="$(echo "$header" | sed -n 's/.*<QueryKey>\(.*\)<\/QueryKey>.*/\1/p')"
 	web_env="$(echo "$header" | sed -n 's/.*<WebEnv>\(.*\)<\/WebEnv>.*/\1/p')"
@@ -351,7 +353,7 @@ if ACTIVE; then
 		                 -d "WebEnv=$web_env" \
 		                 -d "retmax=$ENTREZ_BATCH_SIZE" \
 		                 -d "retstart=$retstart" \
-		                 --progress-bar "$ENTREZ_URL/esummary.fcgi" \
+		                 "$ENTREZ_URL/esummary.fcgi" \
 		          | grep '<Genbank>' \
 		          | sed -e 's/<[^>]*>//g' -e 's/[ \t][ \t]*//g' \
 		          | tee -a "$TMP/type_strains" \
