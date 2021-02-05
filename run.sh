@@ -340,7 +340,7 @@ if ACTIVE; then
 	log "Started fetching of type strain data."
 	mkdir -p "$INTDIR"
 	touch "$TMP/type_strains"
-	header="$(curl -d 'db=assembly' -d 'term="sequence from type"' -d 'field=filter' -d 'usehistory=y' "$ENTREZ_URL/esearch.fcgi" \
+	header="$(curl -s -d 'db=assembly' -d 'term="sequence from type"' -d 'field=filter' -d 'usehistory=y' "$ENTREZ_URL/esearch.fcgi" \
 	        | grep -e 'QueryKey' -e 'WebEnv' | tr -d '\n')"
 	query_key="$(echo "$header" | sed -n 's/.*<QueryKey>\(.*\)<\/QueryKey>.*/\1/p')"
 	web_env="$(echo "$header" | sed -n 's/.*<WebEnv>\(.*\)<\/WebEnv>.*/\1/p')"
@@ -353,7 +353,7 @@ if ACTIVE; then
 		                 -d "WebEnv=$web_env" \
 		                 -d "retmax=$ENTREZ_BATCH_SIZE" \
 		                 -d "retstart=$retstart" \
-		                 "$ENTREZ_URL/esummary.fcgi" \
+		                 -s "$ENTREZ_URL/esummary.fcgi" \
 		          | grep '<Genbank>' \
 		          | sed -e 's/<[^>]*>//g' -e 's/[ \t][ \t]*//g' \
 		          | tee -a "$TMP/type_strains" \
@@ -443,17 +443,23 @@ if ACTIVE; then
 	log "Finished creating InterPro Entries."
 fi
 
-alias ACTIVE=false
 
-if ACTIVE && have "$TABDIR/uniprot_entries.tsv.gz" "$TABDIR/lineages.tsv.gz"; then
+if ACTIVE && have "$TABDIR/uniprot_entries.tsv.gz" "$TABDIR/taxons.tsv.gz"; then
 	log "Started the construction of the $KMER_LENGTH-mer index."
-	mkdir -p "$TABDIR"
-	zcat "$TABDIR/uniprot_entries.tsv.gz" \
-		| awk -v FS='	' -v OFS='	' '{ for(i = length($7) - '"$KMER_LENGTH"' + 1; i > 0; i -= 1) print(substr($7, i, '"$KMER_LENGTH"'), $4) }' \
-		| grep -v '[BJOUXZ]' \
-		| LC_ALL=C $CMD_SORT \
-		| java_ LineagesSequencesTaxons2LCAs "$(guz "$TABDIR/lineages.tsv.gz")" \
-		| umgap buildindex \
-		> $@
+	for PREFIX in A C D E F G H I K L M N P Q R S T V W Y; do
+		pv -N $PREFIX "$TABDIR/uniprot_entries.tsv.gz" \
+			| gunzip \
+			| cut -f4,7 \
+			| grep "^[0-9]*	[ACDEFGHIKLMNPQRSTVWY]*$" \
+			| tee -a failure \
+			| umgap splitkmers -k"$KMER_LENGTH" \
+			| sed -n "s/^$PREFIX//p" \
+			| LC_ALL=C $CMD_SORT \
+			| sed "s/^/$PREFIX/"
+	done \
+			| umgap joinkmers "$(guz "$TABDIR/taxons.tsv.gz")" \
+			| cut -d'	' -f1,2 \
+			| umgap buildindex \
+			> "$TABDIR/$KMER_LENGTH-mer.index"
 	log "Finished the construction of the $KMER_LENGTH-mer index."
 fi
