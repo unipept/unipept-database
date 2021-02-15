@@ -17,7 +17,7 @@ function print {
 function doCmd {
     echo -n "-> "
     print "$1"
-    echo $1 | mysql -u unipept -punipept unipept 2>&1 | sed "s/^/   /" | grep -v "Using a password on the command line interface can be insecure" | tee -a $logfile
+    echo $1 | mysql -u unipept -punipept unipept2 2>&1 | sed "s/^/   /" | grep -v "Using a password on the command line interface can be insecure" | tee -a $logfile
 }
 
 
