@@ -37,7 +37,7 @@ TMP="$(mktemp -d)"
 trap "rm -rf '$TMP'" EXIT KILL
 
 # --------------------------------------------------------------------
-# checking installed dependencies
+# utility functions
 
 checkdep() {
     which $1 > /dev/null 2>&1 || hash $1 > /dev/null 2>&1 || {
@@ -45,28 +45,6 @@ checkdep() {
         exit 1
     }
 }
-
-checkdep diff
-checkdep cat
-checkdep curl
-checkdep grep
-checkdep java
-checkdep make
-checkdep mkdir
-checkdep mkfifo
-checkdep mvn "Maven"
-checkdep rm
-checkdep tee
-checkdep tr
-checkdep uniq
-checkdep wc
-checkdep xargs
-checkdep umgap "umgap crate (for umgap buildindex)"
-checkdep uuidgen
-checkdep pv
-
-# --------------------------------------------------------------------
-# utility functions
 
 log() { echo "$(date +'[%s (%F %T)]')" "$@"; }
 
@@ -103,11 +81,9 @@ have() {
 }
 
 # --------------------------------------------------------------------
-# targets
+# steps
 
-alias ACTIVE=true
-
-if ACTIVE; then
+create_taxon_tables() {
 	log "Started creating the taxon tables."
 
 	curl --create-dirs --silent --output "$TMP/taxdmp.zip" "$TAXON_URL"
@@ -132,12 +108,13 @@ if ACTIVE; then
 
 	rm "$TMP/names.dmp" "$TMP/nodes.dmp"
 	log "Finished creating the taxon tables."
-fi
+}
 
 
-if ACTIVE; then
+download_sources() {
 	mkfifo "$TMP/sources"
 	echo "$SOURCES" > "$TMP/sources" &
+	mkdir -p "$INTDIR"
 	while read name url; do
 		log "Started downloading $name"
 		size="$(curl -I "$url" -s | grep -i content-length | tr -cd '[0-9]')"
@@ -145,10 +122,11 @@ if ACTIVE; then
 		log "Finished downloading $name"
 	done < "$TMP/sources"
 	rm "$TMP/sources"
-fi
+}
 
 
-if ACTIVE && have "$TABDIR/taxons.tsv.gz"; then
+create_most_tables() {
+	have "$TABDIR/taxons.tsv.gz" || return
 	log "Started calculation of most tables."
 
 	sources=""
@@ -183,10 +161,11 @@ if ACTIVE && have "$TABDIR/taxons.tsv.gz"; then
 	rm "$TMP/sources"
 
 	log "Finished calculation of most tables."
-fi
+}
 
 
-if ACTIVE && have "$INTDIR/peptides.tsv.gz" "$TABDIR/uniprot_entries.tsv.gz"; then
+join_equalized_pepts_and_entries() {
+	have "$INTDIR/peptides.tsv.gz" "$TABDIR/uniprot_entries.tsv.gz" || return
 	log "Started the joining of equalized peptides and uniprot entries."
 	mkfifo "$TMP/peptides" "$TMP/entries"
 	zcat "$INTDIR/peptides.tsv.gz" | awk '{ printf("%012d\t%s\n", $4, $2) }' > "$TMP/peptides" &
@@ -196,10 +175,11 @@ if ACTIVE && have "$INTDIR/peptides.tsv.gz" "$TABDIR/uniprot_entries.tsv.gz"; th
 		| $CMD_GZIP - > "$INTDIR/aa_sequence_taxon_equalized.tsv.gz"
 	rm "$TMP/peptides" "$TMP/entries"
 	log "Finished the joining of equalized peptides and uniprot entries."
-fi
+}
 
 
-if ACTIVE && have "$INTDIR/peptides.tsv.gz" "$TABDIR/uniprot_entries.tsv.gz"; then
+join_original_pepts_and_entries() {
+	have "$INTDIR/peptides.tsv.gz" "$TABDIR/uniprot_entries.tsv.gz" || return
 	log "Started the joining of original peptides and uniprot entries."
 	mkfifo "$TMP/peptides" "$TMP/entries"
 	zcat "$INTDIR/peptides.tsv.gz" | awk '{ printf("%012d\t%s\n", $4, $3) }' > "$TMP/peptides" &
@@ -209,10 +189,11 @@ if ACTIVE && have "$INTDIR/peptides.tsv.gz" "$TABDIR/uniprot_entries.tsv.gz"; th
 		| $CMD_GZIP - > "$INTDIR/aa_sequence_taxon_original.tsv.gz"
 	rm "$TMP/peptides" "$TMP/entries"
 	log "Finished the joining of original peptides and uniprot entries."
-fi
+}
 
 
-if ACTIVE && have "$INTDIR/aa_sequence_taxon_equalized.tsv.gz" "$INTDIR/aa_sequence_taxon_original.tsv.gz"; then
+number_sequences() {
+	have "$INTDIR/aa_sequence_taxon_equalized.tsv.gz" "$INTDIR/aa_sequence_taxon_original.tsv.gz" || return
 	log "Started the numbering of sequences."
 	mkfifo "$TMP/equalized" "$TMP/original"
 	zcat "$INTDIR/aa_sequence_taxon_equalized.tsv.gz" | cut -f1 | uniq > "$TMP/equalized" &
@@ -221,10 +202,11 @@ if ACTIVE && have "$INTDIR/aa_sequence_taxon_equalized.tsv.gz" "$INTDIR/aa_seque
 		| sed 's/^ *//' | $CMD_GZIP - > "$INTDIR/sequences.tsv.gz"
 	rm "$TMP/equalized" "$TMP/original"
 	log "Finished the numbering of sequences."
-fi
+}
 
 
-if ACTIVE && have "$INTDIR/sequences.tsv.gz" "$INTDIR/aa_sequence_taxon_equalized.tsv.gz" "$TABDIR/lineages.tsv.gz"; then
+calculate_equalized_lcas() {
+	have "$INTDIR/sequences.tsv.gz" "$INTDIR/aa_sequence_taxon_equalized.tsv.gz" "$TABDIR/lineages.tsv.gz" || return
 	log "Started the calculation of equalized LCA's (after substituting AA's by ID's)."
 	join -t '	' -o '1.1,2.2' -1 2 -2 1 \
 			"$(guz "$INTDIR/sequences.tsv.gz")" \
@@ -232,11 +214,11 @@ if ACTIVE && have "$INTDIR/sequences.tsv.gz" "$INTDIR/aa_sequence_taxon_equalize
 		| java_ LineagesSequencesTaxons2LCAs "$(guz "$TABDIR/lineages.tsv.gz")" \
 		| $CMD_GZIP - > "$INTDIR/LCAs_equalized.tsv.gz"
 	log "Finished the calculation of equalized LCA's (after substituting AA's by ID's)."
-	rm "$INTDIR/aa_sequence_taxon_equalized.tsv.gz"
-fi
+}
 
 
-if ACTIVE && have "$INTDIR/sequences.tsv.gz" "$INTDIR/aa_sequence_taxon_original.tsv.gz" "$TABDIR/lineages.tsv.gz"; then
+calculate_original_lcas() {
+	have "$INTDIR/sequences.tsv.gz" "$INTDIR/aa_sequence_taxon_original.tsv.gz" "$TABDIR/lineages.tsv.gz" || return
 	log "Started the calculation of original LCA's (after substituting AA's by ID's)."
 	join -t '	' -o '1.1,2.2' -1 2 -2 1 \
 			"$(guz "$INTDIR/sequences.tsv.gz")" \
@@ -244,64 +226,66 @@ if ACTIVE && have "$INTDIR/sequences.tsv.gz" "$INTDIR/aa_sequence_taxon_original
 		| java_ LineagesSequencesTaxons2LCAs "$(guz "$TABDIR/lineages.tsv.gz")" \
 		| $CMD_GZIP - > "$INTDIR/LCAs_original.tsv.gz"
 	log "Finished the calculation of original LCA's (after substituting AA's by ID's)."
-	rm "$INTDIR/aa_sequence_taxon_original.tsv.gz"
-fi
+}
 
 
-if ACTIVE && have "$INTDIR/peptides.tsv.gz" "$INTDIR/sequences.tsv.gz"; then
+substitute_equalized_aas() {
+	have "$INTDIR/peptides.tsv.gz" "$INTDIR/sequences.tsv.gz" || return
 	log "Started the substitution of equalized AA's by ID's for the peptides."
 	zcat "$INTDIR/peptides.tsv.gz" \
 		| LC_ALL=C $CMD_SORT -k 2b,2 \
 		| join -t '	' -o '1.1,2.1,1.3,1.4,1.5' -1 2 -2 2 - "$(guz "$INTDIR/sequences.tsv.gz")" \
 		| $CMD_GZIP - > "$INTDIR/peptides_by_equalized.tsv.gz"
 	log "Finished the substitution of equalized AA's by ID's for the peptides."
-	rm "$INTDIR/peptides.tsv.gz"
-fi
+}
 
 
-if ACTIVE && have "$INTDIR/peptides_by_equalized.tsv.gz"; then
+calculate_equalized_fas() {
+	have "$INTDIR/peptides_by_equalized.tsv.gz" || return
 	log "Started the calculation of equalized FA's."
 	mkfifo "$TMP/peptides"
 	zcat "$INTDIR/peptides_by_equalized.tsv.gz" | cut -f2,5 > "$TMP/peptides" &
 	java_ FunctionAnalysisPeptides "$TMP/peptides" "$(gz "$INTDIR/FAs_equalized.tsv.gz")"
 	rm "$TMP/peptides"
 	log "Finished the calculation of equalized FA's."
-fi
+}
 
 
-if ACTIVE && have "$INTDIR/peptides_by_equalized.tsv.gz" "$INTDIR/sequences.tsv.gz"; then
+substitute_original_aas() {
+	have "$INTDIR/peptides_by_equalized.tsv.gz" "$INTDIR/sequences.tsv.gz" || return
 	log "Started the substitution of original AA's by ID's for the peptides."
 	zcat "$INTDIR/peptides_by_equalized.tsv.gz" \
 		| LC_ALL=C $CMD_SORT -k 3b,3 \
 		| join -t '	' -o '1.1,1.2,2.1,1.4,1.5' -1 3 -2 2 - "$(guz "$INTDIR/sequences.tsv.gz")" \
 		| $CMD_GZIP - > "$INTDIR/peptides_by_original.tsv.gz"
 	log "Finished the substitution of equalized AA's by ID's for the peptides."
-	rm "$INTDIR/peptides_by_equalized.tsv.gz"
-fi
+}
 
 
-if ACTIVE && have "$INTDIR/peptides_by_original.tsv.gz"; then
+calculate_original_fas() {
+	have "$INTDIR/peptides_by_original.tsv.gz" || return
 	log "Started the calculation of original FA's."
 	mkfifo "$TMP/peptides"
 	zcat "$INTDIR/peptides_by_original.tsv.gz" | cut -f3,5 > "$TMP/peptides" &
 	java_ FunctionAnalysisPeptides "$TMP/peptides" "$(gz "$INTDIR/FAs_original.tsv.gz")"
 	rm "$TMP/peptides"
 	log "Finished the calculation of original FA's."
-fi
+}
 
 
-if ACTIVE && have "$INTDIR/peptides_by_original.tsv.gz"; then
+sort_peptides() {
+	have "$INTDIR/peptides_by_original.tsv.gz" || return
 	log "Started sorting the peptides table."
 	mkdir -p "$TABDIR"
 	zcat "$INTDIR/peptides_by_original.tsv.gz" \
 		| LC_ALL=C $CMD_SORT -n \
 		| $CMD_GZIP - > "$TABDIR/peptides.tsv.gz"
 	log "Finished sorting the peptides table."
-	rm "$INTDIR/peptides_by_original.tsv.gz"
-fi
+}
 
 
-if ACTIVE && have "$INTDIR/LCAs_original.tsv.gz" "$INTDIR/LCAs_equalized.tsv.gz" "$INTDIR/FAs_original.tsv.gz" "$INTDIR/FAs_equalized.tsv.gz" "$INTDIR/sequences.tsv.gz"; then
+create_sequence_table() {
+	have "$INTDIR/LCAs_original.tsv.gz" "$INTDIR/LCAs_equalized.tsv.gz" "$INTDIR/FAs_original.tsv.gz" "$INTDIR/FAs_equalized.tsv.gz" "$INTDIR/sequences.tsv.gz" || return
 	log "Started the creation of the sequences table."
 	mkdir -p "$TABDIR"
 	mkfifo "$TMP/olcas" "$TMP/elcas" "$TMP/ofas" "$TMP/efas"
@@ -317,26 +301,21 @@ if ACTIVE && have "$INTDIR/LCAs_original.tsv.gz" "$INTDIR/LCAs_equalized.tsv.gz"
 		| sed 's/^0*//' | $CMD_GZIP - > "$TABDIR/sequences.tsv.gz"
 	rm "$TMP/olcas" "$TMP/elcas" "$TMP/ofas" "$TMP/efas"
 	log "Finished the creation of the sequences table."
-	rm "$INTDIR/LCAs_original.tsv.gz"
-	rm "$INTDIR/LCAs_equalized.tsv.gz"
-	rm "$INTDIR/FAs_original.tsv.gz"
-	rm "$INTDIR/FAs_equalized.tsv.gz"
-	rm "$INTDIR/sequences.tsv.gz"
-fi
+}
 
 
-if ACTIVE && have "$INTDIR/proteomes.tsv.gz"; then
+fetch_proteomes() {
+	have "$INTDIR/proteomes.tsv.gz" || return
 	log "Started fetching of proteome data."
 	mkfifo "$TMP/data"
 	$CMD_SORT -t'	' -k6 "$TMP/data" | $CMD_GZIP - > "$INTDIR/proteomes_data.tsv.gz" & # sort by assembly
 	java_ FetchProteomes "$(guz "$INTDIR/proteomes.tsv.gz")" "$TMP/data"
 	rm "$TMP/data"
 	log "Finished fetching of proteome data."
-	rm "$INTDIR/proteomes.tsv.gz"
-fi
+}
 
 
-if ACTIVE; then
+fetch_type_strains() {
 	log "Started fetching of type strain data."
 	mkdir -p "$INTDIR"
 	touch "$TMP/type_strains"
@@ -363,10 +342,11 @@ if ACTIVE; then
 
 	$CMD_SORT "$TMP/type_strains" | sed 's/$/\t1/' | $CMD_GZIP - > "$INTDIR/proteomes_type_strains.tsv.gz"
 	log "Finished fetching of type strain data."
-fi
+}
 
 
-if ACTIVE && have "$INTDIR/proteomes_data.tsv.gz" "$INTDIR/proteomes_type_strains.tsv.gz"; then
+join_type_strains_to_proteomes() {
+	have "$INTDIR/proteomes_data.tsv.gz" "$INTDIR/proteomes_type_strains.tsv.gz" || return
 	log "Started adding type strain boolean to proteome data."
 	mkdir -p "$TABDIR"
 	# tmp: 1)id 2)accession-id 3)name-str 4)reference-bool 5)strain-id 6)assembly-id
@@ -381,10 +361,10 @@ if ACTIVE && have "$INTDIR/proteomes_data.tsv.gz" "$INTDIR/proteomes_type_strain
 		| $CMD_SORT -n \
 		| $CMD_GZIP - > "$TABDIR/proteomes.tsv.gz"
 	log "Finished adding type strain boolean to proteome data."
-fi
+}
 
 
-if ACTIVE; then
+fetch_ec_numbers() {
 	log "Started creating EC numbers."
 	mkdir -p "$TABDIR"
 	{
@@ -400,10 +380,10 @@ if ACTIVE; then
 			END   { print id, name }'
 	} | cat -n | sed 's/^ *//' | $CMD_GZIP - > "$TABDIR/ec_numbers.tsv.gz"
 	log "Finished creating EC numbers."
-fi
+}
 
 
-if ACTIVE; then
+fetch_go_terms() {
 	log "Started creating GO terms."
 	mkdir -p "$TABDIR"
 	curl -Ls "$GO_TERM_URL" | awk '
@@ -433,18 +413,19 @@ if ACTIVE; then
 			}
 			type = "" }' | $CMD_GZIP - > "$TABDIR/go_terms.tsv.gz"
 	log "Finished creating GO terms."
-fi
+}
 
 
-if ACTIVE; then
+fetch_interpro_entries() {
 	log "Started creating InterPro Entries."
 	mkdir -p "$TABDIR"
 	curl -s "$INTERPRO_URL" | grep '^IPR' | cat -n | sed 's/^ *//' | $CMD_GZIP - > "$TABDIR/interpro_entries.tsv.gz"
 	log "Finished creating InterPro Entries."
-fi
+}
 
 
-if ACTIVE && have "$TABDIR/uniprot_entries.tsv.gz" "$TABDIR/taxons.tsv.gz"; then
+create_kmer_index() {
+	have "$TABDIR/uniprot_entries.tsv.gz" "$TABDIR/taxons.tsv.gz" || return
 	log "Started the construction of the $KMER_LENGTH-mer index."
 	for PREFIX in A C D E F G H I K L M N P Q R S T V W Y; do
 		pv -N $PREFIX "$TABDIR/uniprot_entries.tsv.gz" \
@@ -462,4 +443,71 @@ if ACTIVE && have "$TABDIR/uniprot_entries.tsv.gz" "$TABDIR/taxons.tsv.gz"; then
 			| umgap buildindex \
 			> "$TABDIR/$KMER_LENGTH-mer.index"
 	log "Finished the construction of the $KMER_LENGTH-mer index."
-fi
+}
+
+# --------------------------------------------------------------------
+# targets
+
+checkdep curl
+checkdep java
+checkdep mvn "Maven"
+checkdep uuidgen
+
+case "$1" in
+database)
+	checkdep pv
+
+	create_taxon_tables
+	download_sources
+	create_most_tables
+	join_equalized_pepts_and_entries
+	join_original_pepts_and_entries
+	number_sequences
+	calculate_equalized_lcas
+	rm "$INTDIR/aa_sequence_taxon_equalized.tsv.gz"
+	calculate_original_lcas
+	rm "$INTDIR/aa_sequence_taxon_original.tsv.gz"
+	substitute_equalized_aas
+	rm "$INTDIR/peptides.tsv.gz"
+	calculate_equalized_fas
+	substitute_original_aas
+	rm "$INTDIR/peptides_by_equalized.tsv.gz"
+	calculate_original_fas
+	sort_peptides
+	rm "$INTDIR/peptides_by_original.tsv.gz"
+	create_sequence_table
+	rm "$INTDIR/LCAs_original.tsv.gz"
+	rm "$INTDIR/LCAs_equalized.tsv.gz"
+	rm "$INTDIR/FAs_original.tsv.gz"
+	rm "$INTDIR/FAs_equalized.tsv.gz"
+	rm "$INTDIR/sequences.tsv.gz"
+	fetch_proteomes
+	rm "$INTDIR/proteomes.tsv.gz"
+	fetch_type_strains
+	join_type_strains_to_proteomes
+	fetch_ec_numbers
+	fetch_go_terms
+	fetch_interpro_entries
+	;;
+static-database)
+	if ! have "$TABDIR/taxons.tsv.gz"; then
+		create_taxon_tables
+	fi
+	fetch_ec_numbers
+	fetch_go_terms
+	fetch_interpro_entries
+	;;
+index)
+	checkdep pv
+	checkdep umgap "umgap crate (for umgap buildindex)"
+
+	if ! have "$TABDIR/taxons.tsv.gz"; then
+		create_taxon_tables
+	fi
+	if ! have "$TABDIR/uniprot_entries.tsv.gz"; then
+		download_sources
+		create_most_tables
+	fi
+	create_kmer_index
+	;;
+esac

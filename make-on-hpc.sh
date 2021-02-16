@@ -6,7 +6,7 @@
 #PBS -l vmem=480gb
 
 # Running:
-# $ module swap cluster/phanpy
+# $ module swap cluster/kirlia
 # $ qsub make-on-hpc.sh
 
 # Loading the required modules
@@ -17,7 +17,7 @@ module load Maven
 pushd "$PBS_O_WORKDIR"
 
 # Running the makefile
-make
+./run.sh database
 
 # Reset the directory
 popd
