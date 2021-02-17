@@ -30,7 +30,19 @@ jobs:
         run: ./run.sh static-database
       - name: Build SQLite database from generated files
         shell: bash
-        run: ./workflows/static_database/build_database.sh
+        run: |
+          # Initialize the database
+          sqlite3 output.db < workflows/static_database/structure.sql 
+          
+          # Read all generated data into this database
+          zcat data/tables/ec_numbers.tsv.gz | sed "s/\t/$/g" | sqlite3 -csv -separator "$" output.db '.import /dev/stdin ec_numbers'
+          zcat data/tables/go_terms.tsv.gz | sed "s/\t/$/g" | sqlite3 -csv -separator "$" output.db '.import /dev/stdin go_terms'
+          zcat data/tables/interpro_entries.tsv.gz | sed "s/\t/$/g" | sqlite3 -csv -separator "$" output.db '.import /dev/stdin interpro_entries'
+          zcat data/tables/taxons.tsv.gz | sed "s/\t/$/g" | sqlite3 -csv -separator "$" output.db '.import /dev/stdin taxons'
+          zcat data/tables/lineages.tsv.gz | sed "s/\t/$/g" | sqlite3 -csv -separator "$" output.db '.import /dev/stdin lineages'
+          
+          # Compress the database before uploading it to a Github release
+          zip output.zip output.db
       - name: Update database versioning
         shell: bash
         run: |
