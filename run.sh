@@ -432,7 +432,6 @@ create_kmer_index() {
 			| gunzip \
 			| cut -f4,7 \
 			| grep "^[0-9]*	[ACDEFGHIKLMNPQRSTVWY]*$" \
-			| tee -a failure \
 			| umgap splitkmers -k"$KMER_LENGTH" \
 			| sed -n "s/^$PREFIX//p" \
 			| LC_ALL=C $CMD_SORT \
@@ -443,6 +442,19 @@ create_kmer_index() {
 			| umgap buildindex \
 			> "$TABDIR/$KMER_LENGTH-mer.index"
 	log "Finished the construction of the $KMER_LENGTH-mer index."
+}
+
+
+create_tryptic_index() {
+	have "$TABDIR/sequences.tsv.gz" || return
+	log "Started the construction of the tryptic index."
+	pv "$TABDIR/sequences.tsv.gz" \
+		| gunzip \
+		| cut -f2,3 \
+		| grep -v "\\N" \
+		| umgap buildindex \
+		> "$TABDIR/tryptic.index"
+	log "Finished the construction of the tryptic index."
 }
 
 # --------------------------------------------------------------------
@@ -497,17 +509,63 @@ static-database)
 	fetch_go_terms
 	fetch_interpro_entries
 	;;
-index)
+kmer-index)
+	checkdep pv
+	checkdep umgap "umgap crate (for umgap buildindex)"
+
+	if ! have "$TABDIR/taxons.tsv.gz"; then
+		create_taxon_tables
+		rm "$TABDIR/lineages.tsv.gz"
+	fi
+	if ! have "$TABDIR/uniprot_entries.tsv.gz"; then
+		download_sources
+		create_most_tables
+		rm "$INTDIR/peptides.tsv.gz"
+		rm "$TABDIR/refseq_cross_references.tsv.gz"
+		rm "$TABDIR/ec_cross_references.tsv.gz"
+		rm "$TABDIR/embl_cross_references.tsv.gz"
+		rm "$TABDIR/go_cross_references.tsv.gz"
+		rm "$TABDIR/interpro_cross_references.tsv.gz"
+		rm "$INTDIR/proteomes.tsv.gz"
+		rm "$TMP/proteome_cross_references.tsv.gz"
+	fi
+	create_kmer_index
+	;;
+tryptic-index)
 	checkdep pv
 	checkdep umgap "umgap crate (for umgap buildindex)"
 
 	if ! have "$TABDIR/taxons.tsv.gz"; then
 		create_taxon_tables
 	fi
-	if ! have "$TABDIR/uniprot_entries.tsv.gz"; then
+	if ! have "$TABDIR/sequences.tsv.gz"; then
 		download_sources
 		create_most_tables
+		rm "$TABDIR/refseq_cross_references.tsv.gz"
+		rm "$TABDIR/ec_cross_references.tsv.gz"
+		rm "$TABDIR/embl_cross_references.tsv.gz"
+		rm "$TABDIR/go_cross_references.tsv.gz"
+		rm "$TABDIR/interpro_cross_references.tsv.gz"
+		rm "$INTDIR/proteomes.tsv.gz"
+		rm "$TMP/proteome_cross_references.tsv.gz"
+		join_equalized_pepts_and_entries
+		join_original_pepts_and_entries
+		rm "$INTDIR/uniprot_entries.tsv.gz"
+		rm "$INTDIR/peptides.tsv.gz"
+		number_sequences
+		calculate_equalized_lcas
+		rm "$INTDIR/aa_sequence_taxon_equalized.tsv.gz"
+		calculate_original_lcas
+		rm "$INTDIR/aa_sequence_taxon_original.tsv.gz"
+		substitute_equalized_aas
+		rm "$INTDIR/peptides.tsv.gz"
+		calculate_equalized_fas
+		substitute_original_aas
+		rm "$INTDIR/peptides_by_equalized.tsv.gz"
+		calculate_original_fas
+		rm "$INTDIR/peptides_by_original.tsv.gz"
+		create_sequence_table
 	fi
-	create_kmer_index
+	create_tryptic_index
 	;;
 esac
