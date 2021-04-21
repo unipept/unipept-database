@@ -25,7 +25,7 @@ readInterface.on('line', function (line) {
   if (row[0] !== curPept) {
     if (curPept !== null) {
       if (m.size !== 0) {
-        writer.write(`${curPept}\t{"num":{"all":${numProt},"EC":${numAnnotatedEC},"GO":${numAnnotatedGO},"IPR":${numAnnotatedInterPro}},"data":{${Array.from(m.entries(), ([k, v]) => `"${k}":${v}`).join(",")}\n`);
+        writer.write(`${curPept}\t{"num":{"all":${numProt},"EC":${numAnnotatedEC},"GO":${numAnnotatedGO},"IPR":${numAnnotatedInterPro}},"data":{${Array.from(m.entries(), ([k, v]) => `"${k}":${v}`).join(",")}}}\n`);
       }
     }
     m.clear();
@@ -42,8 +42,11 @@ readInterface.on('line', function (line) {
     let hasGO = false;
     let hasInterPro = false;
     for (const term of terms) {
+      if (!term) {
+        continue;
+      }
       if (term.startsWith("G")) {
-        hasGo = true;
+        hasGO = true;
       } else if (term.startsWith("E")) {
         hasEC = true;
       } else {
@@ -62,7 +65,7 @@ readInterface.on('line', function (line) {
 });
 readInterface.on('close', function () {
   if (m.size !== 0) {
-    writer.write(`${curPept}\t{"num":{"all":${numProt},"EC":${numAnnotatedEC},"GO":${numAnnotatedGO},"IPR":${numAnnotatedInterPro}},"data":{${Array.from(m.entries(), ([k, v]) => `"${k}":${v}`).join(",")}\n`);
+    writer.write(`${curPept}\t{"num":{"all":${numProt},"EC":${numAnnotatedEC},"GO":${numAnnotatedGO},"IPR":${numAnnotatedInterPro}},"data":{${Array.from(m.entries(), ([k, v]) => `"${k}":${v}`).join(",")}}}\n`);
   }
   writer.end();
   const end = new Date().getTime();
