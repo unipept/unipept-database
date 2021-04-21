@@ -4,16 +4,18 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
+
 import org.unipept.storage.CSV;
 
 /**
  * Creates a list of (peptide. functional JSON)-pairs separated by a \t.
- * 
+ *
  * Assumes the file to be sorted on the first col (peptide).
  */
 public class FunctionAnalysisPeptides {
-
     public static void main(String[] args) throws IOException {
+        var start = System.currentTimeMillis();
+
         if (args.length != 2) {
             throw new RuntimeException("Please provide 2 parameters. (input,output)");
         }
@@ -34,7 +36,6 @@ public class FunctionAnalysisPeptides {
         int numAnnotatedInterPro = 0;
         long done = 0;
         while ((row = reader.read()) != null) {
-
             if (!row[0].equals(curPept)) {
                 if (curPept != null) {
                     if (!m.isEmpty()) {
@@ -76,10 +77,12 @@ public class FunctionAnalysisPeptides {
             writer.write(curPept, extracted(m, numProt, numAnnotatedGO, numAnnotatedEC, numAnnotatedInterPro));
         }
         writer.close();
+        var end = System.currentTimeMillis();
+        System.out.println("Took: " + (end - start) / 1000 + "s");
     }
 
     /**
-     * 
+     *
      * Output of the following form:
      * {
      *   "num": {
@@ -100,7 +103,7 @@ public class FunctionAnalysisPeptides {
      *     "IPR:IPR000001": 1
      *   }
      * }
-     * 
+     *
      * But without spacing:
      * {"num":{"all":1,"EC":1,"GO":1,"IPR":1},"data":{"GO:0016569":1,"GO:0006281":1,"GO:0000781":1,"2.7.11.1":1,"GO:0004674":1,"GO:0005634":1,"GO:0005524":1,"GO:0016301":1,"IPR:IPR000001":1}}
      */

@@ -33,8 +33,9 @@ INTERPRO_URL="http://ftp.ebi.ac.uk/pub/databases/interpro/entry.list"
 # --------------------------------------------------------------------
 # setup directory for temporary files
 
-TMP="$(mktemp -d)"
-trap "rm -rf '$TMP'" EXIT KILL
+# TMP="$(mktemp -d)"
+TMP="data/temp"
+# trap "rm -rf '$TMP'" EXIT KILL
 
 # --------------------------------------------------------------------
 # utility functions
@@ -68,7 +69,7 @@ guz() {
 	fifo="$TMP/$(uuidgen)-$(basename "$1")"
 	mkfifo "$fifo"
 	echo "$fifo"
-	{ zcat "$1" > "$fifo" && rm "$fifo" || kill "$self"; } > /dev/null &
+	{ gzcat "$1" > "$fifo" && rm "$fifo" || kill "$self"; } > /dev/null &
 }
 
 have() {
@@ -88,7 +89,7 @@ create_taxon_tables() {
 
 	curl --create-dirs --silent --output "$TMP/taxdmp.zip" "$TAXON_URL"
 	unzip "$TMP/taxdmp.zip" "names.dmp" "nodes.dmp" -d "$TMP"
-	rm "$TMP/taxdmp.zip"
+	# rm "$TMP/taxdmp.zip"
 
 	sed -i'' -e 's/subcohort/no rank/' -e 's/cohort/no rank/' \
 		-e 's/subsection/no rank/' -e 's/section/no rank/' \
@@ -106,7 +107,7 @@ create_taxon_tables() {
 		--taxons "$(gz "$TABDIR/taxons.tsv.gz")" \
 		--lineages "$(gz "$TABDIR/lineages.tsv.gz")"
 
-	rm "$TMP/names.dmp" "$TMP/nodes.dmp"
+	# rm "$TMP/names.dmp" "$TMP/nodes.dmp"
 	log "Finished creating the taxon tables."
 }
 
@@ -155,9 +156,9 @@ create_most_tables() {
 
 	mkfifo "$TMP/sources"
 	echo "$SOURCES" > "$TMP/sources" &
-	while read name url; do
-		rm "$INTDIR/$name.tsv.gz"
-	done < "$TMP/sources"
+	# while read name url; do
+	# 	rm "$INTDIR/$name.tsv.gz"
+	# done < "$TMP/sources"
 	rm "$TMP/sources"
 
 	log "Finished calculation of most tables."
@@ -167,13 +168,13 @@ create_most_tables() {
 join_equalized_pepts_and_entries() {
 	have "$INTDIR/peptides.tsv.gz" "$TABDIR/uniprot_entries.tsv.gz" || return
 	log "Started the joining of equalized peptides and uniprot entries."
-	mkfifo "$TMP/peptides" "$TMP/entries"
-	zcat "$INTDIR/peptides.tsv.gz" | awk '{ printf("%012d\t%s\n", $4, $2) }' > "$TMP/peptides" &
-	zcat "$TABDIR/uniprot_entries.tsv.gz" | awk '{ printf("%012d\t%s\n", $1, $4) }' > "$TMP/entries" &
-	join -t '	' -o '1.2,2.2' -j 1 "$TMP/peptides" "$TMP/entries" \
+	mkfifo "$TMP/peptides_eq" "$TMP/entries_eq"
+	gzcat "$INTDIR/peptides.tsv.gz" | awk '{ printf("%012d\t%s\n", $4, $2) }' > "$TMP/peptides_eq" &
+	gzcat "$TABDIR/uniprot_entries.tsv.gz" | awk '{ printf("%012d\t%s\n", $1, $4) }' > "$TMP/entries_eq" &
+	join -t '	' -o '1.2,2.2' -j 1 "$TMP/peptides_eq" "$TMP/entries_eq" \
 		| LC_ALL=C $CMD_SORT -k1 \
 		| $CMD_GZIP - > "$INTDIR/aa_sequence_taxon_equalized.tsv.gz"
-	rm "$TMP/peptides" "$TMP/entries"
+	rm "$TMP/peptides_eq" "$TMP/entries_eq"
 	log "Finished the joining of equalized peptides and uniprot entries."
 }
 
@@ -181,13 +182,13 @@ join_equalized_pepts_and_entries() {
 join_original_pepts_and_entries() {
 	have "$INTDIR/peptides.tsv.gz" "$TABDIR/uniprot_entries.tsv.gz" || return
 	log "Started the joining of original peptides and uniprot entries."
-	mkfifo "$TMP/peptides" "$TMP/entries"
-	zcat "$INTDIR/peptides.tsv.gz" | awk '{ printf("%012d\t%s\n", $4, $3) }' > "$TMP/peptides" &
-	zcat "$TABDIR/uniprot_entries.tsv.gz" | awk '{ printf("%012d\t%s\n", $1, $4) }' > "$TMP/entries" &
-	join -t '	' -o '1.2,2.2' -j 1 "$TMP/peptides" "$TMP/entries" \
+	mkfifo "$TMP/peptides_orig" "$TMP/entries_orig"
+	gzcat "$INTDIR/peptides.tsv.gz" | awk '{ printf("%012d\t%s\n", $4, $3) }' > "$TMP/peptides_orig" &
+	gzcat "$TABDIR/uniprot_entries.tsv.gz" | awk '{ printf("%012d\t%s\n", $1, $4) }' > "$TMP/entries_orig" &
+	join -t '	' -o '1.2,2.2' -j 1 "$TMP/peptides_orig" "$TMP/entries_orig" \
 		| LC_ALL=C $CMD_SORT -k1 \
 		| $CMD_GZIP - > "$INTDIR/aa_sequence_taxon_original.tsv.gz"
-	rm "$TMP/peptides" "$TMP/entries"
+	rm "$TMP/peptides_orig" "$TMP/entries_orig"
 	log "Finished the joining of original peptides and uniprot entries."
 }
 
@@ -196,8 +197,8 @@ number_sequences() {
 	have "$INTDIR/aa_sequence_taxon_equalized.tsv.gz" "$INTDIR/aa_sequence_taxon_original.tsv.gz" || return
 	log "Started the numbering of sequences."
 	mkfifo "$TMP/equalized" "$TMP/original"
-	zcat "$INTDIR/aa_sequence_taxon_equalized.tsv.gz" | cut -f1 | uniq > "$TMP/equalized" &
-	zcat "$INTDIR/aa_sequence_taxon_original.tsv.gz" | cut -f1 | uniq > "$TMP/original" &
+	gzcat "$INTDIR/aa_sequence_taxon_equalized.tsv.gz" | cut -f1 | uniq > "$TMP/equalized" &
+	gzcat "$INTDIR/aa_sequence_taxon_original.tsv.gz" | cut -f1 | uniq > "$TMP/original" &
 	LC_ALL=C $CMD_SORT -m "$TMP/equalized" "$TMP/original" | uniq | cat -n \
 		| sed 's/^ *//' | $CMD_GZIP - > "$INTDIR/sequences.tsv.gz"
 	rm "$TMP/equalized" "$TMP/original"
@@ -232,9 +233,11 @@ calculate_original_lcas() {
 substitute_equalized_aas() {
 	have "$INTDIR/peptides.tsv.gz" "$INTDIR/sequences.tsv.gz" || return
 	log "Started the substitution of equalized AA's by ID's for the peptides."
-	zcat "$INTDIR/peptides.tsv.gz" \
+	seq=$(guz "$INTDIR/sequences.tsv.gz")
+	echo "$seq"
+	gzcat "$INTDIR/peptides.tsv.gz" \
 		| LC_ALL=C $CMD_SORT -k 2b,2 \
-		| join -t '	' -o '1.1,2.1,1.3,1.4,1.5' -1 2 -2 2 - "$(guz "$INTDIR/sequences.tsv.gz")" \
+		| join -t '	' -o '1.1,2.1,1.3,1.4,1.5' -1 2 -2 2 - "$seq" \
 		| $CMD_GZIP - > "$INTDIR/peptides_by_equalized.tsv.gz"
 	log "Finished the substitution of equalized AA's by ID's for the peptides."
 }
@@ -243,10 +246,10 @@ substitute_equalized_aas() {
 calculate_equalized_fas() {
 	have "$INTDIR/peptides_by_equalized.tsv.gz" || return
 	log "Started the calculation of equalized FA's."
-	mkfifo "$TMP/peptides"
-	zcat "$INTDIR/peptides_by_equalized.tsv.gz" | cut -f2,5 > "$TMP/peptides" &
-	java_ FunctionAnalysisPeptides "$TMP/peptides" "$(gz "$INTDIR/FAs_equalized.tsv.gz")"
-	rm "$TMP/peptides"
+	mkfifo "$TMP/peptides_eq"
+	gzcat "$INTDIR/peptides_by_equalized.tsv.gz" | cut -f2,5 > "$TMP/peptides_eq" &
+	node  js_tools/FunctionalAnalysisPeptides.js "$TMP/peptides_eq" "$(gz "$INTDIR/FAs_equalized.tsv.gz")"
+	rm "$TMP/peptides_eq"
 	log "Finished the calculation of equalized FA's."
 }
 
@@ -254,9 +257,11 @@ calculate_equalized_fas() {
 substitute_original_aas() {
 	have "$INTDIR/peptides_by_equalized.tsv.gz" "$INTDIR/sequences.tsv.gz" || return
 	log "Started the substitution of original AA's by ID's for the peptides."
-	zcat "$INTDIR/peptides_by_equalized.tsv.gz" \
+	seq=$(guz "$INTDIR/sequences.tsv.gz")
+	echo "$seq"
+	gzcat "$INTDIR/peptides_by_equalized.tsv.gz" \
 		| LC_ALL=C $CMD_SORT -k 3b,3 \
-		| join -t '	' -o '1.1,1.2,2.1,1.4,1.5' -1 3 -2 2 - "$(guz "$INTDIR/sequences.tsv.gz")" \
+		| join -t '	' -o '1.1,1.2,2.1,1.4,1.5' -1 3 -2 2 - "$seq" \
 		| $CMD_GZIP - > "$INTDIR/peptides_by_original.tsv.gz"
 	log "Finished the substitution of equalized AA's by ID's for the peptides."
 }
@@ -265,10 +270,10 @@ substitute_original_aas() {
 calculate_original_fas() {
 	have "$INTDIR/peptides_by_original.tsv.gz" || return
 	log "Started the calculation of original FA's."
-	mkfifo "$TMP/peptides"
-	zcat "$INTDIR/peptides_by_original.tsv.gz" | cut -f3,5 > "$TMP/peptides" &
-	java_ FunctionAnalysisPeptides "$TMP/peptides" "$(gz "$INTDIR/FAs_original.tsv.gz")"
-	rm "$TMP/peptides"
+	mkfifo "$TMP/peptides_orig"
+	gzcat "$INTDIR/peptides_by_original.tsv.gz" | cut -f3,5 > "$TMP/peptides_orig" &
+	node  js_tools/FunctionalAnalysisPeptides.js "$TMP/peptides_orig" "$(gz "$INTDIR/FAs_original.tsv.gz")"
+	rm "$TMP/peptides_orig"
 	log "Finished the calculation of original FA's."
 }
 
@@ -277,7 +282,7 @@ sort_peptides() {
 	have "$INTDIR/peptides_by_original.tsv.gz" || return
 	log "Started sorting the peptides table."
 	mkdir -p "$TABDIR"
-	zcat "$INTDIR/peptides_by_original.tsv.gz" \
+	gzcat "$INTDIR/peptides_by_original.tsv.gz" \
 		| LC_ALL=C $CMD_SORT -n \
 		| $CMD_GZIP - > "$TABDIR/peptides.tsv.gz"
 	log "Finished sorting the peptides table."
@@ -289,11 +294,11 @@ create_sequence_table() {
 	log "Started the creation of the sequences table."
 	mkdir -p "$TABDIR"
 	mkfifo "$TMP/olcas" "$TMP/elcas" "$TMP/ofas" "$TMP/efas"
-	zcat "$INTDIR/LCAs_original.tsv.gz"  | awk '{ printf("%012d\t%s\n", $1, $2) }' > "$TMP/olcas" &
-	zcat "$INTDIR/LCAs_equalized.tsv.gz" | awk '{ printf("%012d\t%s\n", $1, $2) }' > "$TMP/elcas" &
-	zcat "$INTDIR/FAs_original.tsv.gz"   | awk '{ printf("%012d\t%s\n", $1, $2) }' > "$TMP/ofas" &
-	zcat "$INTDIR/FAs_equalized.tsv.gz"  | awk '{ printf("%012d\t%s\n", $1, $2) }' > "$TMP/efas" &
-	zcat "$INTDIR/sequences.tsv.gz"      | awk '{ printf("%012d\t%s\n", $1, $2) }' \
+	gzcat "$INTDIR/LCAs_original.tsv.gz"  | awk '{ printf("%012d\t%s\n", $1, $2) }' > "$TMP/olcas" &
+	gzcat "$INTDIR/LCAs_equalized.tsv.gz" | awk '{ printf("%012d\t%s\n", $1, $2) }' > "$TMP/elcas" &
+	gzcat "$INTDIR/FAs_original.tsv.gz"   | awk '{ printf("%012d\t%s\n", $1, $2) }' > "$TMP/ofas" &
+	gzcat "$INTDIR/FAs_equalized.tsv.gz"  | awk '{ printf("%012d\t%s\n", $1, $2) }' > "$TMP/efas" &
+	gzcat "$INTDIR/sequences.tsv.gz"      | awk '{ printf("%012d\t%s\n", $1, $2) }' \
 		| join --nocheck-order -a1 -e '\N' -t '	' -o "1.1 1.2 2.2" - "$TMP/olcas" \
 		| join --nocheck-order -a1 -e '\N' -t '	' -o "1.1 1.2 1.3 2.2" - "$TMP/elcas" \
 		| join --nocheck-order -a1 -e '\N' -t '	' -o '1.1 1.2 1.3 1.4 2.2' - "$TMP/ofas" \
@@ -466,35 +471,65 @@ checkdep mvn "Maven"
 checkdep uuidgen
 
 case "$1" in
+debug)
+	calculate_equalized_lcas & 
+	pid1=$!
+    calculate_original_lcas &
+	pid2=$!
+	wait $pid1
+	wait $pid2
+	substitute_equalized_aas
+	substitute_original_aas
+	calculate_equalized_fas &
+	pid1=$!
+	calculate_original_fas &
+	pid2=$!
+	wait $pid1
+	wait $pid2
+	;;
+
 database)
 	checkdep pv
 
 	create_taxon_tables
 	download_sources
 	create_most_tables
-	join_equalized_pepts_and_entries
-	join_original_pepts_and_entries
+	join_equalized_pepts_and_entries &
+	pid1=$!
+	join_original_pepts_and_entries &
+	pid2=$!
+	wait $pid1
+	wait $pid2
 	number_sequences
-	calculate_equalized_lcas
-	rm "$INTDIR/aa_sequence_taxon_equalized.tsv.gz"
-	calculate_original_lcas
-	rm "$INTDIR/aa_sequence_taxon_original.tsv.gz"
+    calculate_equalized_lcas & 
+	pid1=$!
+    calculate_original_lcas &
+	pid2=$!
+	wait $pid1
+	wait $pid2
 	substitute_equalized_aas
-	rm "$INTDIR/peptides.tsv.gz"
-	calculate_equalized_fas
 	substitute_original_aas
-	rm "$INTDIR/peptides_by_equalized.tsv.gz"
-	calculate_original_fas
+	calculate_equalized_fas &
+	pid1=$!
+	calculate_original_fas &
+	pid2=$!
+	wait $pid1
+	wait $pid2
+
+	# rm "$INTDIR/aa_sequence_taxon_equalized.tsv.gz"
+	# rm "$INTDIR/aa_sequence_taxon_original.tsv.gz"
+	# rm "$INTDIR/peptides.tsv.gz"
+	# rm "$INTDIR/peptides_by_equalized.tsv.gz"
 	sort_peptides
-	rm "$INTDIR/peptides_by_original.tsv.gz"
+	# rm "$INTDIR/peptides_by_original.tsv.gz"
 	create_sequence_table
-	rm "$INTDIR/LCAs_original.tsv.gz"
-	rm "$INTDIR/LCAs_equalized.tsv.gz"
-	rm "$INTDIR/FAs_original.tsv.gz"
-	rm "$INTDIR/FAs_equalized.tsv.gz"
-	rm "$INTDIR/sequences.tsv.gz"
+	# rm "$INTDIR/LCAs_original.tsv.gz"
+	# rm "$INTDIR/LCAs_equalized.tsv.gz"
+	# rm "$INTDIR/FAs_original.tsv.gz"
+	# rm "$INTDIR/FAs_equalized.tsv.gz"
+	# rm "$INTDIR/sequences.tsv.gz"
 	fetch_proteomes
-	rm "$INTDIR/proteomes.tsv.gz"
+	# rm "$INTDIR/proteomes.tsv.gz"
 	fetch_type_strains
 	join_type_strains_to_proteomes
 	fetch_ec_numbers
