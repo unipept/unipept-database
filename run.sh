@@ -59,7 +59,6 @@ java_() {
 gz() {
 	fifo="$TMP/$(uuidgen)-$(basename "$1")"
 	mkfifo "$fifo"
-	echo "$fifo"
 	mkdir -p "$(dirname "$1")"
 	{ $CMD_GZIP - < "$fifo" > "$1" && rm "$fifo" || kill "$self"; } > /dev/null &
 }
@@ -67,7 +66,6 @@ gz() {
 guz() {
 	fifo="$TMP/$(uuidgen)-$(basename "$1")"
 	mkfifo "$fifo"
-	echo "$fifo"
 	{ zcat "$1" > "$fifo" && rm "$fifo" || kill "$self"; } > /dev/null &
 }
 
@@ -232,11 +230,9 @@ calculate_original_lcas() {
 substitute_equalized_aas() {
 	have "$INTDIR/peptides.tsv.gz" "$INTDIR/sequences.tsv.gz" || return
 	log "Started the substitution of equalized AA's by ID's for the peptides."
-	seq=$(guz "$INTDIR/sequences.tsv.gz")
-	echo "$seq"
 	zcat "$INTDIR/peptides.tsv.gz" \
 		| LC_ALL=C $CMD_SORT -k 2b,2 \
-		| join -t '	' -o '1.1,2.1,1.3,1.4,1.5' -1 2 -2 2 - "$seq" \
+		| join -t '	' -o '1.1,2.1,1.3,1.4,1.5' -1 2 -2 2 - "$(guz "$INTDIR/sequences.tsv.gz")" \
 		| $CMD_GZIP - > "$INTDIR/peptides_by_equalized.tsv.gz"
 	log "Finished the substitution of equalized AA's by ID's for the peptides."
 }
@@ -256,11 +252,9 @@ calculate_equalized_fas() {
 substitute_original_aas() {
 	have "$INTDIR/peptides_by_equalized.tsv.gz" "$INTDIR/sequences.tsv.gz" || return
 	log "Started the substitution of original AA's by ID's for the peptides."
-	seq=$(guz "$INTDIR/sequences.tsv.gz")
-	echo "$seq"
 	zcat "$INTDIR/peptides_by_equalized.tsv.gz" \
 		| LC_ALL=C $CMD_SORT -k 3b,3 \
-		| join -t '	' -o '1.1,1.2,2.1,1.4,1.5' -1 3 -2 2 - "$seq" \
+		| join -t '	' -o '1.1,1.2,2.1,1.4,1.5' -1 3 -2 2 - "$(guz "$INTDIR/sequences.tsv.gz")" \
 		| $CMD_GZIP - > "$INTDIR/peptides_by_original.tsv.gz"
 	log "Finished the substitution of equalized AA's by ID's for the peptides."
 }
