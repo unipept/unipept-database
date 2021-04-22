@@ -478,9 +478,9 @@ database)
 	wait $pid1
 	wait $pid2
 	number_sequences
-    calculate_equalized_lcas & 
+	calculate_equalized_lcas & 
 	pid1=$!
-    calculate_original_lcas &
+	calculate_original_lcas &
 	pid2=$!
 	wait $pid1
 	wait $pid2

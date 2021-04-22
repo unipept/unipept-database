@@ -3,7 +3,7 @@ FROM mysql:5.7
 LABEL maintainer="Pieter Verschaffelt <pieter.verschaffelt@ugent.be>"
 
 RUN mkdir -p /usr/share/man/man1
-RUN apt-get update && apt-get install -y default-jdk git dos2unix maven make wget unzip expect gawk binutils gcc libssl-dev uuid-runtime pv
+RUN apt-get update && apt-get install -y default-jdk git dos2unix maven make wget unzip expect gawk binutils gcc libssl-dev uuid-runtime pv nodejs
 
 # Now, build curl from source to upgrade it to version 7.68.0 (instead of the default 7.52.0 in this image)
 # This fixes https://github.com/curl/curl/issues/3750 which is present in older versions of curl

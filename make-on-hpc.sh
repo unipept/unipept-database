@@ -12,6 +12,7 @@
 # Loading the required modules
 module load Java
 module load Maven
+module load node
 
 # Check the current directory
 pushd "$PBS_O_WORKDIR"
