@@ -16,7 +16,6 @@ JAVA_MEM="6g" # How much memory should Java use?
 ENTREZ_BATCH_SIZE=1000 # Which batch size should I use for communication with Entrez?
 CMD_SORT="sort --buffer-size=80% --parallel=4" # Which sort command should I use?
 CMD_GZIP="gzip -" # Which pipe compression command should I use?
-
 SOURCES='swissprot https://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/complete/uniprot_sprot.xml.gz'
 #trembl https://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/complete/uniprot_trembl.xml.gz'
 
@@ -59,6 +58,7 @@ java_() {
 gz() {
 	fifo="$TMP/$(uuidgen)-$(basename "$1")"
 	mkfifo "$fifo"
+	echo "$fifo"
 	mkdir -p "$(dirname "$1")"
 	{ $CMD_GZIP - < "$fifo" > "$1" && rm "$fifo" || kill "$self"; } > /dev/null &
 }
@@ -66,6 +66,7 @@ gz() {
 guz() {
 	fifo="$TMP/$(uuidgen)-$(basename "$1")"
 	mkfifo "$fifo"
+	echo "$fifo"
 	{ zcat "$1" > "$fifo" && rm "$fifo" || kill "$self"; } > /dev/null &
 }
 
@@ -488,13 +489,13 @@ database)
 	substitute_equalized_aas
 	rm "$INTDIR/peptides.tsv.gz"
 	substitute_original_aas
-	rm "$INTDIR/peptides_by_equalized.tsv.gz"
 	calculate_equalized_fas &
 	pid1=$!
 	calculate_original_fas &
 	pid2=$!
 	wait $pid1
 	wait $pid2
+	rm "$INTDIR/peptides_by_equalized.tsv.gz"
 	sort_peptides
 	rm "$INTDIR/peptides_by_original.tsv.gz"
 	create_sequence_table
