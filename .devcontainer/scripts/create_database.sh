@@ -19,13 +19,7 @@ if test -f "/tables/uniprot_entries.tsv.gz"; then
 else
     echo "Data needs to be regenerated."
     # The generation of umgap-data is not supported at this time by this Docker container.
-    sed -i '/checkdep umgap/d' configure
-    sed -i '/all: makefile database index/d' makefile.in
-    cp /scripts/script.exp script.exp
-    chmod +x script.exp
-    chmod +x configure
-    ./script.exp
-    make
+    ./run.sh database
 
     # Move the data that has been generated to the tables volume. If this file is rerun afterwards, the data does not
     # need to be regenerated.

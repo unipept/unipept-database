@@ -16,7 +16,6 @@ JAVA_MEM="6g" # How much memory should Java use?
 ENTREZ_BATCH_SIZE=1000 # Which batch size should I use for communication with Entrez?
 CMD_SORT="sort --buffer-size=80% --parallel=4" # Which sort command should I use?
 CMD_GZIP="gzip -" # Which pipe compression command should I use?
-
 SOURCES='swissprot https://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/complete/uniprot_sprot.xml.gz'
 #trembl https://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/complete/uniprot_trembl.xml.gz'
 
@@ -167,13 +166,13 @@ create_most_tables() {
 join_equalized_pepts_and_entries() {
 	have "$INTDIR/peptides.tsv.gz" "$TABDIR/uniprot_entries.tsv.gz" || return
 	log "Started the joining of equalized peptides and uniprot entries."
-	mkfifo "$TMP/peptides" "$TMP/entries"
-	zcat "$INTDIR/peptides.tsv.gz" | awk '{ printf("%012d\t%s\n", $4, $2) }' > "$TMP/peptides" &
-	zcat "$TABDIR/uniprot_entries.tsv.gz" | awk '{ printf("%012d\t%s\n", $1, $4) }' > "$TMP/entries" &
-	join -t '	' -o '1.2,2.2' -j 1 "$TMP/peptides" "$TMP/entries" \
+	mkfifo "$TMP/peptides_eq" "$TMP/entries_eq"
+	zcat "$INTDIR/peptides.tsv.gz" | awk '{ printf("%012d\t%s\n", $4, $2) }' > "$TMP/peptides_eq" &
+	zcat "$TABDIR/uniprot_entries.tsv.gz" | awk '{ printf("%012d\t%s\n", $1, $4) }' > "$TMP/entries_eq" &
+	join -t '	' -o '1.2,2.2' -j 1 "$TMP/peptides_eq" "$TMP/entries_eq" \
 		| LC_ALL=C $CMD_SORT -k1 \
 		| $CMD_GZIP - > "$INTDIR/aa_sequence_taxon_equalized.tsv.gz"
-	rm "$TMP/peptides" "$TMP/entries"
+	rm "$TMP/peptides_eq" "$TMP/entries_eq"
 	log "Finished the joining of equalized peptides and uniprot entries."
 }
 
@@ -181,13 +180,13 @@ join_equalized_pepts_and_entries() {
 join_original_pepts_and_entries() {
 	have "$INTDIR/peptides.tsv.gz" "$TABDIR/uniprot_entries.tsv.gz" || return
 	log "Started the joining of original peptides and uniprot entries."
-	mkfifo "$TMP/peptides" "$TMP/entries"
-	zcat "$INTDIR/peptides.tsv.gz" | awk '{ printf("%012d\t%s\n", $4, $3) }' > "$TMP/peptides" &
-	zcat "$TABDIR/uniprot_entries.tsv.gz" | awk '{ printf("%012d\t%s\n", $1, $4) }' > "$TMP/entries" &
-	join -t '	' -o '1.2,2.2' -j 1 "$TMP/peptides" "$TMP/entries" \
+	mkfifo "$TMP/peptides_orig" "$TMP/entries_orig"
+	zcat "$INTDIR/peptides.tsv.gz" | awk '{ printf("%012d\t%s\n", $4, $3) }' > "$TMP/peptides_orig" &
+	zcat "$TABDIR/uniprot_entries.tsv.gz" | awk '{ printf("%012d\t%s\n", $1, $4) }' > "$TMP/entries_orig" &
+	join -t '	' -o '1.2,2.2' -j 1 "$TMP/peptides_orig" "$TMP/entries_orig" \
 		| LC_ALL=C $CMD_SORT -k1 \
 		| $CMD_GZIP - > "$INTDIR/aa_sequence_taxon_original.tsv.gz"
-	rm "$TMP/peptides" "$TMP/entries"
+	rm "$TMP/peptides_orig" "$TMP/entries_orig"
 	log "Finished the joining of original peptides and uniprot entries."
 }
 
@@ -243,10 +242,10 @@ substitute_equalized_aas() {
 calculate_equalized_fas() {
 	have "$INTDIR/peptides_by_equalized.tsv.gz" || return
 	log "Started the calculation of equalized FA's."
-	mkfifo "$TMP/peptides"
-	zcat "$INTDIR/peptides_by_equalized.tsv.gz" | cut -f2,5 > "$TMP/peptides" &
-	java_ FunctionAnalysisPeptides "$TMP/peptides" "$(gz "$INTDIR/FAs_equalized.tsv.gz")"
-	rm "$TMP/peptides"
+	mkfifo "$TMP/peptides_eq"
+	zcat "$INTDIR/peptides_by_equalized.tsv.gz" | cut -f2,5 > "$TMP/peptides_eq" &
+	node  js_tools/FunctionalAnalysisPeptides.js "$TMP/peptides_eq" "$(gz "$INTDIR/FAs_equalized.tsv.gz")"
+	rm "$TMP/peptides_eq"
 	log "Finished the calculation of equalized FA's."
 }
 
@@ -265,10 +264,10 @@ substitute_original_aas() {
 calculate_original_fas() {
 	have "$INTDIR/peptides_by_original.tsv.gz" || return
 	log "Started the calculation of original FA's."
-	mkfifo "$TMP/peptides"
-	zcat "$INTDIR/peptides_by_original.tsv.gz" | cut -f3,5 > "$TMP/peptides" &
-	java_ FunctionAnalysisPeptides "$TMP/peptides" "$(gz "$INTDIR/FAs_original.tsv.gz")"
-	rm "$TMP/peptides"
+	mkfifo "$TMP/peptides_orig"
+	zcat "$INTDIR/peptides_by_original.tsv.gz" | cut -f3,5 > "$TMP/peptides_orig" &
+	node  js_tools/FunctionalAnalysisPeptides.js "$TMP/peptides_orig" "$(gz "$INTDIR/FAs_original.tsv.gz")"
+	rm "$TMP/peptides_orig"
 	log "Finished the calculation of original FA's."
 }
 
@@ -472,19 +471,31 @@ database)
 	create_taxon_tables
 	download_sources
 	create_most_tables
-	join_equalized_pepts_and_entries
-	join_original_pepts_and_entries
+	join_equalized_pepts_and_entries &
+	pid1=$!
+	join_original_pepts_and_entries &
+	pid2=$!
+	wait $pid1
+	wait $pid2
 	number_sequences
-	calculate_equalized_lcas
+	calculate_equalized_lcas & 
+	pid1=$!
+	calculate_original_lcas &
+	pid2=$!
+	wait $pid1
+	wait $pid2
 	rm "$INTDIR/aa_sequence_taxon_equalized.tsv.gz"
-	calculate_original_lcas
 	rm "$INTDIR/aa_sequence_taxon_original.tsv.gz"
 	substitute_equalized_aas
 	rm "$INTDIR/peptides.tsv.gz"
-	calculate_equalized_fas
 	substitute_original_aas
+	calculate_equalized_fas &
+	pid1=$!
+	calculate_original_fas &
+	pid2=$!
+	wait $pid1
+	wait $pid2
 	rm "$INTDIR/peptides_by_equalized.tsv.gz"
-	calculate_original_fas
 	sort_peptides
 	rm "$INTDIR/peptides_by_original.tsv.gz"
 	create_sequence_table
