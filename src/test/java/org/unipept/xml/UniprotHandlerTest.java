@@ -3,6 +3,8 @@ package org.unipept.xml;
 import java.io.IOException;
 import java.io.InputStream;
 
+import java.util.HashSet;
+
 import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.parsers.SAXParser;
 import javax.xml.parsers.SAXParserFactory;
@@ -31,7 +33,9 @@ public class UniprotHandlerTest extends Assert {
     @Test
     public void testHandlerSwissProt_1() {
         Stats s = new Stats();
-        runHandler(new UniprotHandler(5, 50, "swissprot"), s, "../../../uniprot_sprot_1.xml");
+        HashSet<Integer> taxonFilter = new HashSet<Integer>();
+        taxonFilter.add(654924);
+        runHandler(new UniprotHandler(5, 50, "swissprot", taxonFilter), s, "../../../uniprot_sprot_1.xml");
         assertEquals(s.entries, 1);
         assertEquals(s.sequences, 1);
     }
@@ -39,7 +43,10 @@ public class UniprotHandlerTest extends Assert {
     @Test
     public void testHandlerSwissProt_3() {
         Stats s = new Stats();
-        runHandler(new UniprotHandler(5, 50, "swissprot"), s, "../../../uniprot_sprot_3.xml");
+        HashSet<Integer> taxonFilter = new HashSet<Integer>();
+        taxonFilter.add(654924);
+        taxonFilter.add(345201);
+        runHandler(new UniprotHandler(5, 50, "swissprot", taxonFilter), s, "../../../uniprot_sprot_3.xml");
         assertEquals(s.entries, 3);
         assertEquals(s.sequences, 3);
     }
@@ -47,7 +54,9 @@ public class UniprotHandlerTest extends Assert {
     @Test
     public void testHandlerSwissProt_InterPro_1() {
         Stats s = new Stats();
-        runHandler(new UniprotHandler(5, 50, "swissprot"), s, "../../../interpro/uniprot_sprot_interpro_1.xml");
+        HashSet<Integer> taxonFilter = new HashSet<Integer>();
+        taxonFilter.add(349124);
+        runHandler(new UniprotHandler(5, 50, "swissprot", taxonFilter), s, "../../../interpro/uniprot_sprot_interpro_1.xml");
         assertEquals(s.entries, 1);
         assertEquals(s.sequences, 1);
     }
@@ -55,7 +64,9 @@ public class UniprotHandlerTest extends Assert {
     @Test
     public void testHandlerSwissProt_InterPro_2() {
         Stats s = new Stats();
-        runHandler(new UniprotHandler(5, 50, "swissprot"), s, "../../../interpro/uniprot_sprot_interpro_2.xml");
+        HashSet<Integer> taxonFilter = new HashSet<Integer>();
+        taxonFilter.add(343509);
+        runHandler(new UniprotHandler(5, 50, "swissprot", taxonFilter), s, "../../../interpro/uniprot_sprot_interpro_2.xml");
         assertEquals(s.entries, 1);
         assertEquals(s.sequences, 1);
     }

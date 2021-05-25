@@ -19,7 +19,7 @@ RUN wget https://curl.haxx.se/download/curl-7.68.0.zip && \
 RUN ldconfig
 
 # The files needed to build the database are part of the unipept repository
-RUN git clone "https://github.com/unipept/make-database"
+RUN git clone "https://github.com/unipept/make-database" && git checkout "feature/filter-taxa"
 
 COPY "scripts" "scripts"
 COPY "data" "tables"

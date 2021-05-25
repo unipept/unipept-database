@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.xml.sax.Attributes;
 import org.xml.sax.SAXException;
@@ -32,7 +33,7 @@ public class UniprotHandler extends DefaultHandler {
     private Map<String, EndTagWorker> endTagWorkers;
     private Map<String, StartTagWorker> startTagWorkers;
 
-    public UniprotHandler(int peptideMinLength, int peptideMaxLength, String uniprotType) {
+    public UniprotHandler(int peptideMinLength, int peptideMaxLength, String uniprotType, Set<Integer> taxonsToKeep) {
         super();
         this.uniprotType = uniprotType;
         currentItem = new UniprotEntry(uniprotType, peptideMinLength, peptideMaxLength);
@@ -45,12 +46,16 @@ public class UniprotHandler extends DefaultHandler {
         endTagWorkers.put("entry", new EndTagWorker() {
             @Override
             public void handleTag(String data) {
-                emitEntry(currentItem);
-                i++;
-                if (i % 100000 == 0) System.err.println(
-                        new Timestamp(System.currentTimeMillis())
-                                + " Entry " + i + " added"
-                );
+                // We should only emit the current entry if it should not be removed based upon the taxon id that's
+                // associated with it.
+                if (taxonsToKeep.contains(currentItem.getTaxonId())) {
+                    emitEntry(currentItem);
+                    i++;
+                    if (i % 100000 == 0) System.err.println(
+                            new Timestamp(System.currentTimeMillis())
+                                    + " Entry " + i + " added"
+                    );
+                }
             }
         });
         endTagWorkers.put("accession", new EndTagWorker() {
@@ -175,8 +180,9 @@ public class UniprotHandler extends DefaultHandler {
                 }
 
                 if (inOrganism) {
-                    if (atts.getValue("type").equals("NCBI Taxonomy"))
+                    if (atts.getValue("type").equals("NCBI Taxonomy")) {
                         currentItem.setTaxonId(Integer.valueOf(atts.getValue("id")));
+                    }
                 } else if (!inEvidence) {
                     if (atts.getValue("type").equals("EMBL")) {
                         dbRef = new UniprotDbRef("EMBL");

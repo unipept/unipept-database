@@ -2,9 +2,6 @@
 set -e
 self="$$"
 
-# First argument to script = which type of build should be performed?
-# Second argument = list of taxon id's to keep (comma delimited)
-
 # --------------------------------------------------------------------
 # configuration
 
@@ -15,7 +12,7 @@ TABDIR="./data/tables" # Where should I store the final TSV files (large, single
 INTDIR="./data/intermediate" # Where should I store intermediate TSV files (large, single-write, multiple-read?
 TAXDIR="./data/taxon" # Where should I store and extract the downloaded taxon zip (small, single-write, single-read)?
 SRCDIR="./data/sources" # Where should I store the downloaded source xml files (large, single-write, single-read)?
-JAVA_MEM="1g" # How much memory should Java use?
+JAVA_MEM="1G" # How much memory should Java use?
 ENTREZ_BATCH_SIZE=1000 # Which batch size should I use for communication with Entrez?
 CMD_SORT="sort --buffer-size=80% --parallel=4" # Which sort command should I use?
 CMD_GZIP="gzip -" # Which pipe compression command should I use?
@@ -127,9 +124,6 @@ download_sources() {
 	rm "$TMP/sources"
 }
 
-filter_taxa() {
-	gzcat "$TABDIR/lineages.tsv.gz" | node js_tools/FilterByTaxa.js "$1" "$INTDIR/taxa_filter.txt"
-}
 
 create_most_tables() {
 	have "$TABDIR/taxons.tsv.gz" || return
@@ -148,7 +142,6 @@ create_most_tables() {
 		--peptide-min "$PEPTIDE_MIN_LENGTH" \
 		--peptide-max "$PEPTIDE_MAX_LENGTH" \
 		--taxons "$(guz "$TABDIR/taxons.tsv.gz")" \
-		--taxons-filter "$INTDIR/taxa_filter.txt" \
 		--peptides "$(gz "$INTDIR/peptides.tsv.gz")" \
 		--uniprot-entries "$(gz "$TABDIR/uniprot_entries.tsv.gz")" \
 		--refseq "$(gz "$TABDIR/refseq_cross_references.tsv.gz")" \
@@ -215,9 +208,10 @@ number_sequences() {
 calculate_equalized_lcas() {
 	have "$INTDIR/sequences.tsv.gz" "$INTDIR/aa_sequence_taxon_equalized.tsv.gz" "$TABDIR/lineages.tsv.gz" || return
 	log "Started the calculation of equalized LCA's (after substituting AA's by ID's)."
-	join -t '	' -o '1.1,2.2' -1 2 -2 1 \
-			"$(guz "$INTDIR/sequences.tsv.gz")" \
-			"$(guz "$INTDIR/aa_sequence_taxon_equalized.tsv.gz")" \
+	# join -t '	' -o '1.1,2.2' -1 2 -2 1 \
+	# 		"$(guz "$INTDIR/sequences.tsv.gz")" \
+	# 		"$(guz "$INTDIR/aa_sequence_taxon_equalized.tsv.gz")" > "$TMP/cel.tsv"
+    cat "$TMP/cel.tsv" | head -n 100000 \
 		| java_ LineagesSequencesTaxons2LCAs "$(guz "$TABDIR/lineages.tsv.gz")" \
 		| $CMD_GZIP - > "$INTDIR/LCAs_equalized.tsv.gz"
 	log "Finished the calculation of equalized LCA's (after substituting AA's by ID's)."
@@ -476,50 +470,37 @@ case "$1" in
 database)
 	checkdep pv
 
-	create_taxon_tables
-	download_sources
-	filter_taxa $2
-	create_most_tables
-	join_equalized_pepts_and_entries &
-	pid1=$!
-	join_original_pepts_and_entries &
-	pid2=$!
-	wait $pid1
-	wait $pid2
-	number_sequences
-	calculate_equalized_lcas & 
-	pid1=$!
-	calculate_original_lcas &
-	pid2=$!
-	wait $pid1
-	wait $pid2
-	rm "$INTDIR/aa_sequence_taxon_equalized.tsv.gz"
-	rm "$INTDIR/aa_sequence_taxon_original.tsv.gz"
-	substitute_equalized_aas
-	rm "$INTDIR/peptides.tsv.gz"
-	substitute_original_aas
-	calculate_equalized_fas &
-	pid1=$!
-	calculate_original_fas &
-	pid2=$!
-	wait $pid1
-	wait $pid2
-	rm "$INTDIR/peptides_by_equalized.tsv.gz"
-	sort_peptides
-	rm "$INTDIR/peptides_by_original.tsv.gz"
-	create_sequence_table
-	rm "$INTDIR/LCAs_original.tsv.gz"
-	rm "$INTDIR/LCAs_equalized.tsv.gz"
-	rm "$INTDIR/FAs_original.tsv.gz"
-	rm "$INTDIR/FAs_equalized.tsv.gz"
-	rm "$INTDIR/sequences.tsv.gz"
-	fetch_proteomes
-	rm "$INTDIR/proteomes.tsv.gz"
-	fetch_type_strains
-	join_type_strains_to_proteomes
-	fetch_ec_numbers
-	fetch_go_terms
-	fetch_interpro_entries
+	# create_taxon_tables
+	# download_sources
+	# create_most_tables
+	# join_equalized_pepts_and_entries
+	# join_original_pepts_and_entries 
+	# number_sequences
+	calculate_equalized_lcas 
+	# calculate_original_lcas
+	# rm "$INTDIR/aa_sequence_taxon_equalized.tsv.gz"
+	# rm "$INTDIR/aa_sequence_taxon_original.tsv.gz"
+	# substitute_equalized_aas
+	# rm "$INTDIR/peptides.tsv.gz"
+	# substitute_original_aas
+	# calculate_equalized_fas
+	# calculate_original_fas
+	# rm "$INTDIR/peptides_by_equalized.tsv.gz"
+	# sort_peptides
+	# rm "$INTDIR/peptides_by_original.tsv.gz"
+	# create_sequence_table
+	# rm "$INTDIR/LCAs_original.tsv.gz"
+	# rm "$INTDIR/LCAs_equalized.tsv.gz"
+	# rm "$INTDIR/FAs_original.tsv.gz"
+	# rm "$INTDIR/FAs_equalized.tsv.gz"
+	# rm "$INTDIR/sequences.tsv.gz"
+	# fetch_proteomes
+	# rm "$INTDIR/proteomes.tsv.gz"
+	# fetch_type_strains
+	# join_type_strains_to_proteomes
+	# fetch_ec_numbers
+	# fetch_go_terms
+	# fetch_interpro_entries
 	;;
 static-database)
 	if ! have "$TABDIR/taxons.tsv.gz"; then

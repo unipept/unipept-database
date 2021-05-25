@@ -7,6 +7,7 @@ import java.io.FileNotFoundException;
 import java.util.zip.GZIPInputStream;
 import java.util.List;
 import java.util.ArrayList;
+import java.util.Set;
 
 import javax.xml.parsers.SAXParser;
 import javax.xml.parsers.SAXParserFactory;
@@ -19,14 +20,16 @@ import com.beust.jcommander.JCommander;
 
 import org.unipept.xml.UniprotHandler;
 import org.unipept.taxons.TaxonList;
+import org.unipept.taxons.TaxonReader;
 import org.unipept.storage.TableWriter;
 
 public class TaxonsUniprots2Tables {
 
     @Parameter(                           description="Files to be parsed")                   public List<String> files  = new ArrayList<>();
-    @Parameter(names="--peptide-min",    description="Minimum peptide length")                public int peptideMin;
-    @Parameter(names="--peptide-max",    description="Maximum peptide length")                public int peptideMax;
+    @Parameter(names="--peptide-min",     description="Minimum peptide length")               public int peptideMin;
+    @Parameter(names="--peptide-max",     description="Maximum peptide length")               public int peptideMax;
     @Parameter(names="--taxons",          description="Taxons TSV input file")                public String taxonsFile;
+    @Parameter(names="--taxons-filter",   description="Taxon ID's that should be retained")   public String taxonsToKeepFile;
     @Parameter(names="--peptides",        description="Peptides TSV output file")             public String peptidesFile;
     @Parameter(names="--uniprot-entries", description="Uniprot entries TSV output file")      public String uniprotEntriesFile;
     @Parameter(names="--refseq",          description="RefSeq references TSV output file")    public String refseqCrossReferencesFile;
@@ -58,12 +61,15 @@ public class TaxonsUniprots2Tables {
         TableWriter writer = new TableWriter(main);
         SAXParser parser = SAXParserFactory.newInstance().newSAXParser();
 
+        TaxonReader taxonReader = new TaxonReader();
+        Set<Integer> taxonsToKeep = taxonReader.readTaxonList(main.taxonsToKeepFile);
+
         /* Parse each uniprot file. */
         for(String inputfile : main.files) {
             String uniprotFile = inputfile.split("=")[1];
             String uniprotType = inputfile.split("=")[0];
             InputStream uniprotStream = new FileInputStream(uniprotFile);
-            UniprotHandler handler = new UniprotHandler(main.peptideMin, main.peptideMax, uniprotType);
+            UniprotHandler handler = new UniprotHandler(main.peptideMin, main.peptideMax, uniprotType, taxonsToKeep);
             handler.addObserver(writer);
             parser.parse(uniprotStream, handler);
             uniprotStream.close();
