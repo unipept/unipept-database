@@ -2,6 +2,8 @@ FROM mysql:5.7
 
 LABEL maintainer="Pieter Verschaffelt <pieter.verschaffelt@ugent.be>"
 
+ARG TAXA
+
 RUN mkdir -p /usr/share/man/man1
 RUN apt-get update && apt-get install -y default-jdk git dos2unix maven make wget unzip expect gawk binutils gcc libssl-dev uuid-runtime pv nodejs
 
@@ -19,7 +21,7 @@ RUN wget https://curl.haxx.se/download/curl-7.68.0.zip && \
 RUN ldconfig
 
 # The files needed to build the database are part of the unipept repository
-RUN git clone "https://github.com/unipept/make-database"
+RUN git clone "https://github.com/unipept/make-database" && cd make-database && git checkout "feature/filter-taxa-uniprot-api" && cd ..
 
 COPY "scripts" "scripts"
 COPY "data" "tables"
@@ -28,7 +30,7 @@ COPY "data" "tables"
 RUN dos2unix scripts/*.sh scripts/*.exp
 RUN chmod u+x scripts/*.sh
 
-RUN bash ./scripts/create_database.sh
+RUN bash ./scripts/create_database.sh $TAXA
 # The fill-database script should be called right after the structure of the database has been initialized by the
 # create_database-script.
 RUN mv /scripts/fill_database.sh /docker-entrypoint-initdb.d/2.sh

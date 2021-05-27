@@ -1,6 +1,7 @@
 package org.unipept.tools;
 
 import java.io.InputStream;
+import java.io.Writer;
 import java.io.IOException;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
@@ -18,6 +19,7 @@ import com.beust.jcommander.Parameter;
 import com.beust.jcommander.JCommander;
 
 import org.unipept.xml.UniprotHandler;
+import org.unipept.xml.UniprotTabParser;
 import org.unipept.taxons.TaxonList;
 import org.unipept.storage.TableWriter;
 
@@ -56,17 +58,12 @@ public class TaxonsUniprots2Tables {
         new JCommander(main, args);
 
         TableWriter writer = new TableWriter(main);
-        SAXParser parser = SAXParserFactory.newInstance().newSAXParser();
 
         /* Parse each uniprot file. */
         for(String inputfile : main.files) {
             String uniprotFile = inputfile.split("=")[1];
-            String uniprotType = inputfile.split("=")[0];
-            InputStream uniprotStream = new FileInputStream(uniprotFile);
-            UniprotHandler handler = new UniprotHandler(main.peptideMin, main.peptideMax, uniprotType);
-            handler.addObserver(writer);
-            parser.parse(uniprotStream, handler);
-            uniprotStream.close();
+            UniprotTabParser parser = new UniprotTabParser();
+            parser.parse(main.peptideMin, main.peptideMax, uniprotFile, writer);
         }
 
         writer.close();

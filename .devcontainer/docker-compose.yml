@@ -2,7 +2,10 @@ version: '3.7'
 
 services:
   db:
-    build: .
+    build: 
+      context: .
+      args:
+        TAXA: "33090,33208"
     environment:
       MYSQL_ROOT_PASSWORD: unipept
       MYSQL_DATABASE: unipept
