@@ -17,7 +17,7 @@ CMD_SORT="sort --buffer-size=80% --parallel=4" # Which sort command should I use
 CMD_GZIP="gzip -" # Which pipe compression command should I use?
 # SOURCES='swissprot https://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/complete/uniprot_sprot.xml.gz'
 TAXAURLS=$(echo "$2" | sed "s/\([0-9]*\)/taxonomy:\1/g" | sed "s/,/+OR+/")
-SOURCES="swissprot https://www.uniprot.org/uniprot/?query=$TAXAURLS+reviewed:YES&format=tab&force=true&columns=id,entry%20name,protein%20names,genes,organism-id,ec,go-id,database\(InterPro\),sequence,reviewed,version\(entry\)"
+SOURCES="swissprot https://www.uniprot.org/uniprot/?query=($TAXAURLS)+AND+reviewed:YES&format=tab&force=true&columns=id,entry%20name,protein%20names,genes,organism-id,ec,go-id,database\(InterPro\),sequence,reviewed,version\(entry\)"
 echo $SOURCES
 #trembl https://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/complete/uniprot_trembl.xml.gz'
 
