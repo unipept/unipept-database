@@ -125,8 +125,7 @@ download_sources() {
 	mkdir -p "$INTDIR"
 	while read name url; do
 		log "Started downloading $name"
-		size="$(curl -I "$url" -s | grep -i content-length | tr -cd '[0-9]')"
-		curl --continue-at - --create-dirs "$url" --silent | pv -s "$size" --numeric --timer > "$INTDIR/$name.tsv.gz"
+		curl --continue-at - --create-dirs "$url" --silent > "$INTDIR/$name.tsv.gz"
 		log "Finished downloading $name"
 	done < "$TMP/sources"
 	rm "$TMP/sources"
