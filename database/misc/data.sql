@@ -8,4 +8,3 @@ INSERT INTO `unipept`.`users` (`id`, `username`, `admin`) VALUES (2, 'pdawyndt',
 INSERT INTO `unipept`.`users` (`id`, `username`, `admin`) VALUES (3, 'guest', 0);
 
 COMMIT;
-
