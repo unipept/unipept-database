@@ -82,6 +82,15 @@ have() {
 # --------------------------------------------------------------------
 # steps
 
+# extract a dot graph with `sed -n 's/^#dot: //p' run.sh > run.dot`
+#dot: digraph make_database {
+#dot: node [color="#e15759"]
+#dot: i1 -> create_taxon_tables
+#dot: create_taxon_tables [shape=box,color="#4e79a7"]
+#dot: create_taxon_tables -> taxons
+#dot: taxons [color="#f28e2b"]
+#dot: create_taxon_tables -> lineages
+#dot: lineages [color="#f28e2b"]
 create_taxon_tables() {
 	log "Started creating the taxon tables."
 
@@ -109,7 +118,9 @@ create_taxon_tables() {
 	log "Finished creating the taxon tables."
 }
 
-
+#dot: i2 -> download_sources
+#dot: download_sources [shape=box,color="#4e79a7"]
+#dot: download_sources -> sources
 download_sources() {
 	mkfifo "$TMP/sources"
 	echo "$SOURCES" > "$TMP/sources" &
@@ -123,7 +134,25 @@ download_sources() {
 	rm "$TMP/sources"
 }
 
-
+#dot: sources -> create_most_tables
+#dot: taxons -> create_most_tables
+#dot: create_most_tables [shape=box,color="#4e79a7"]
+#dot: create_most_tables -> i_peptides
+#dot: create_most_tables -> uniprot_entries
+#dot: uniprot_entries [color="#f28e2b"]
+#dot: create_most_tables -> refseq_cross_references
+#dot: refseq_cross_references [color="#f28e2b"]
+#dot: create_most_tables -> ec_cross_references
+#dot: ec_cross_references [color="#f28e2b"]
+#dot: create_most_tables -> embl_cross_references
+#dot: embl_cross_references [color="#f28e2b"]
+#dot: create_most_tables -> go_cross_references
+#dot: go_cross_references [color="#f28e2b"]
+#dot: create_most_tables -> interpro_cross_references
+#dot: interpro_cross_references [color="#f28e2b"]
+#dot: create_most_tables -> i_proteomes
+#dot: create_most_tables -> proteome_cross_references
+#dot: proteome_cross_references [color="#f28e2b"]
 create_most_tables() {
 	have "$TABDIR/taxons.tsv.gz" || return
 	log "Started calculation of most tables."
@@ -163,6 +192,10 @@ create_most_tables() {
 }
 
 
+#dot: i_peptides -> join_equalized_pepts_and_entries
+#dot: uniprot_entries -> join_equalized_pepts_and_entries
+#dot: join_equalized_pepts_and_entries [shape=box,color="#4e79a7"]
+#dot: join_equalized_pepts_and_entries -> i_aa_sequence_taxon_equalized
 join_equalized_pepts_and_entries() {
 	have "$INTDIR/peptides.tsv.gz" "$TABDIR/uniprot_entries.tsv.gz" || return
 	log "Started the joining of equalized peptides and uniprot entries."
@@ -177,6 +210,10 @@ join_equalized_pepts_and_entries() {
 }
 
 
+#dot: i_peptides -> join_original_pepts_and_entries
+#dot: uniprot_entries -> join_original_pepts_and_entries
+#dot: join_original_pepts_and_entries [shape=box,color="#4e79a7"]
+#dot: join_original_pepts_and_entries -> i_aa_sequence_taxon_original
 join_original_pepts_and_entries() {
 	have "$INTDIR/peptides.tsv.gz" "$TABDIR/uniprot_entries.tsv.gz" || return
 	log "Started the joining of original peptides and uniprot entries."
@@ -191,6 +228,10 @@ join_original_pepts_and_entries() {
 }
 
 
+#dot: i_aa_sequence_taxon_equalized -> number_sequences
+#dot: i_aa_sequence_taxon_original -> number_sequences
+#dot: number_sequences [shape=box,color="#4e79a7"]
+#dot: number_sequences -> i_sequences
 number_sequences() {
 	have "$INTDIR/aa_sequence_taxon_equalized.tsv.gz" "$INTDIR/aa_sequence_taxon_original.tsv.gz" || return
 	log "Started the numbering of sequences."
@@ -204,6 +245,11 @@ number_sequences() {
 }
 
 
+#dot: i_sequences -> calculate_equalized_lcas
+#dot: i_aa_sequence_taxon_equalized -> calculate_equalized_lcas
+#dot: lineages -> calculate_equalized_lcas
+#dot: calculate_equalized_lcas [shape=box,color="#4e79a7"]
+#dot: calculate_equalized_lcas -> i_lcas_equalized
 calculate_equalized_lcas() {
 	have "$INTDIR/sequences.tsv.gz" "$INTDIR/aa_sequence_taxon_equalized.tsv.gz" "$TABDIR/lineages.tsv.gz" || return
 	log "Started the calculation of equalized LCA's (after substituting AA's by ID's)."
@@ -216,6 +262,11 @@ calculate_equalized_lcas() {
 }
 
 
+#dot: i_sequences -> calculate_original_lcas
+#dot: i_aa_sequence_taxon_original -> calculate_original_lcas
+#dot: lineages -> calculate_original_lcas
+#dot: calculate_original_lcas [shape=box,color="#4e79a7"]
+#dot: calculate_original_lcas -> i_lcas_original
 calculate_original_lcas() {
 	have "$INTDIR/sequences.tsv.gz" "$INTDIR/aa_sequence_taxon_original.tsv.gz" "$TABDIR/lineages.tsv.gz" || return
 	log "Started the calculation of original LCA's (after substituting AA's by ID's)."
@@ -228,6 +279,10 @@ calculate_original_lcas() {
 }
 
 
+#dot: i_peptides -> substitute_equalized_aas
+#dot: i_sequences -> substitute_equalized_aas
+#dot: substitute_equalized_aas [shape=box,color="#4e79a7"]
+#dot: substitute_equalized_aas -> i_peptides_by_equalized
 substitute_equalized_aas() {
 	have "$INTDIR/peptides.tsv.gz" "$INTDIR/sequences.tsv.gz" || return
 	log "Started the substitution of equalized AA's by ID's for the peptides."
@@ -239,6 +294,9 @@ substitute_equalized_aas() {
 }
 
 
+#dot: i_peptides_by_equalized -> calculate_equalized_fas
+#dot: calculate_equalized_fas [shape=box,color="#4e79a7"]
+#dot: calculate_equalized_fas -> i_fas_equalized
 calculate_equalized_fas() {
 	have "$INTDIR/peptides_by_equalized.tsv.gz" || return
 	log "Started the calculation of equalized FA's."
@@ -250,6 +308,10 @@ calculate_equalized_fas() {
 }
 
 
+#dot: i_peptides_by_equalized -> substitute_original_aas
+#dot: i_sequences -> substitute_original_aas
+#dot: substitute_original_aas [shape=box,color="#4e79a7"]
+#dot: substitute_original_aas -> i_peptides_by_original
 substitute_original_aas() {
 	have "$INTDIR/peptides_by_equalized.tsv.gz" "$INTDIR/sequences.tsv.gz" || return
 	log "Started the substitution of original AA's by ID's for the peptides."
@@ -261,6 +323,9 @@ substitute_original_aas() {
 }
 
 
+#dot: i_peptides_by_original -> calculate_original_fas
+#dot: calculate_original_fas [shape=box,color="#4e79a7"]
+#dot: calculate_original_fas -> i_fas_original
 calculate_original_fas() {
 	have "$INTDIR/peptides_by_original.tsv.gz" || return
 	log "Started the calculation of original FA's."
@@ -272,6 +337,10 @@ calculate_original_fas() {
 }
 
 
+#dot: i_peptides_by_original -> sort_peptides
+#dot: sort_peptides [shape=box,color="#4e79a7"]
+#dot: sort_peptides -> peptides
+#dot: peptides [color="#f28e2b"]
 sort_peptides() {
 	have "$INTDIR/peptides_by_original.tsv.gz" || return
 	log "Started sorting the peptides table."
@@ -283,6 +352,14 @@ sort_peptides() {
 }
 
 
+#dot: i_lcas_original -> create_sequence_table
+#dot: i_lcas_equalized -> create_sequence_table
+#dot: i_fas_original -> create_sequence_table
+#dot: i_fas_equalized -> create_sequence_table
+#dot: i_sequences -> create_sequence_table
+#dot: create_sequence_table [shape=box,color="#4e79a7"]
+#dot: create_sequence_table -> sequences
+#dot: sequences [color="#f28e2b"]
 create_sequence_table() {
 	have "$INTDIR/LCAs_original.tsv.gz" "$INTDIR/LCAs_equalized.tsv.gz" "$INTDIR/FAs_original.tsv.gz" "$INTDIR/FAs_equalized.tsv.gz" "$INTDIR/sequences.tsv.gz" || return
 	log "Started the creation of the sequences table."
@@ -303,6 +380,9 @@ create_sequence_table() {
 }
 
 
+#dot: i_proteomes -> fetch_proteomes
+#dot: fetch_proteomes [shape=box,color="#4e79a7"]
+#dot: fetch_proteomes -> i_proteomes_data
 fetch_proteomes() {
 	have "$INTDIR/proteomes.tsv.gz" || return
 	log "Started fetching of proteome data."
@@ -313,7 +393,9 @@ fetch_proteomes() {
 	log "Finished fetching of proteome data."
 }
 
-
+#dot: i3 -> fetch_type_strains
+#dot: fetch_type_strains [shape=box,color="#4e79a7"]
+#dot: fetch_type_strains -> i_proteomes_type_strains
 fetch_type_strains() {
 	log "Started fetching of type strain data."
 	mkdir -p "$INTDIR"
@@ -344,6 +426,11 @@ fetch_type_strains() {
 }
 
 
+#dot: i_proteomes_data -> join_type_strains_to_proteomes
+#dot: i_proteomes_type_strains -> join_type_strains_to_proteomes
+#dot: join_type_strains_to_proteomes [shape=box,color="#4e79a7"]
+#dot: join_type_strains_to_proteomes -> proteomes
+#dot: proteomes [color="#f28e2b"]
 join_type_strains_to_proteomes() {
 	have "$INTDIR/proteomes_data.tsv.gz" "$INTDIR/proteomes_type_strains.tsv.gz" || return
 	log "Started adding type strain boolean to proteome data."
@@ -363,6 +450,10 @@ join_type_strains_to_proteomes() {
 }
 
 
+#dot: i4 -> fetch_ec_numbers
+#dot: fetch_ec_numbers [shape=box,color="#4e79a7"]
+#dot: fetch_ec_numbers -> ec_numbers
+#dot: ec_numbers [color="#f28e2b"]
 fetch_ec_numbers() {
 	log "Started creating EC numbers."
 	mkdir -p "$TABDIR"
@@ -382,6 +473,10 @@ fetch_ec_numbers() {
 }
 
 
+#dot: i5 -> fetch_go_terms
+#dot: fetch_go_terms [shape=box,color="#4e79a7"]
+#dot: fetch_go_terms -> go_terms
+#dot: go_terms [color="#f28e2b"]
 fetch_go_terms() {
 	log "Started creating GO terms."
 	mkdir -p "$TABDIR"
@@ -415,6 +510,10 @@ fetch_go_terms() {
 }
 
 
+#dot: i6 -> fetch_interpro_entries
+#dot: fetch_interpro_entries [shape=box,color="#4e79a7"]
+#dot: fetch_interpro_entries -> interpro_entries
+#dot: interpro_entries [color="#f28e2b"]
 fetch_interpro_entries() {
 	log "Started creating InterPro Entries."
 	mkdir -p "$TABDIR"
@@ -423,6 +522,11 @@ fetch_interpro_entries() {
 }
 
 
+#dot: uniprot_entries -> create_kmer_index
+#dot: taxons -> create_kmer_index
+#dot: create_kmer_index [shape=box,color="#4e79a7"]
+#dot: create_kmer_index -> kmer_index
+#dot: kmer_index [color="#f28e2b"]
 create_kmer_index() {
 	have "$TABDIR/uniprot_entries.tsv.gz" "$TABDIR/taxons.tsv.gz" || return
 	log "Started the construction of the $KMER_LENGTH-mer index."
@@ -444,6 +548,10 @@ create_kmer_index() {
 }
 
 
+#dot: sequences -> create_tryptic_index
+#dot: create_tryptic_index [shape=box,color="#4e79a7"]
+#dot: create_tryptic_index -> tryptic_index
+#dot: tryptic_index [color="#f28e2b"]
 create_tryptic_index() {
 	have "$TABDIR/sequences.tsv.gz" || return
 	log "Started the construction of the tryptic index."
@@ -455,6 +563,8 @@ create_tryptic_index() {
 		> "$TABDIR/tryptic.index"
 	log "Finished the construction of the tryptic index."
 }
+
+#dot: }
 
 # --------------------------------------------------------------------
 # targets
