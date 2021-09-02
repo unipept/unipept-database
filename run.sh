@@ -149,7 +149,7 @@ create_most_tables() {
 		--go "$(gz "$TABDIR/go_cross_references.tsv.gz")" \
 		--interpro "$(gz "$TABDIR/interpro_cross_references.tsv.gz")" \
 		--proteomes "$(gz "$INTDIR/proteomes.tsv.gz")" \
-		--proteomes-ref "$(gz "$TMP/proteome_cross_references.tsv.gz")" \
+		--proteomes-ref "$(gz "$TABDIR/proteome_cross_references.tsv.gz")" \
 		$sources
 
 	mkfifo "$TMP/sources"
@@ -538,7 +538,7 @@ kmer-index)
 		rm "$TABDIR/go_cross_references.tsv.gz"
 		rm "$TABDIR/interpro_cross_references.tsv.gz"
 		rm "$INTDIR/proteomes.tsv.gz"
-		rm "$TMP/proteome_cross_references.tsv.gz"
+		rm "$TABDIR/proteome_cross_references.tsv.gz"
 	fi
 	create_kmer_index
 	;;
@@ -558,7 +558,7 @@ tryptic-index)
 		rm "$TABDIR/go_cross_references.tsv.gz"
 		rm "$TABDIR/interpro_cross_references.tsv.gz"
 		rm "$INTDIR/proteomes.tsv.gz"
-		rm "$TMP/proteome_cross_references.tsv.gz"
+		rm "$TABDIR/proteome_cross_references.tsv.gz"
 		join_equalized_pepts_and_entries
 		join_original_pepts_and_entries
 		rm "$INTDIR/uniprot_entries.tsv.gz"
