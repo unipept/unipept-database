@@ -6,7 +6,7 @@ SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='TRADITIONAL';
 DROP DATABASE IF EXISTS `unipept`;
 
 CREATE SCHEMA IF NOT EXISTS `unipept` DEFAULT CHARACTER SET utf8 COLLATE utf8_general_ci ;
-USE `unipept2` ;
+USE `unipept` ;
 
 -- -----------------------------------------------------
 -- Table `unipept`.`taxons`
