@@ -3,15 +3,15 @@ SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0;
 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='TRADITIONAL';
 
 -- Drop the old database. This database will be recreated further on during this script!
-DROP DATABASE IF EXISTS `unipept2`;
+DROP DATABASE IF EXISTS `unipept`;
 
-CREATE SCHEMA IF NOT EXISTS `unipept2` DEFAULT CHARACTER SET utf8 COLLATE utf8_general_ci ;
+CREATE SCHEMA IF NOT EXISTS `unipept` DEFAULT CHARACTER SET utf8 COLLATE utf8_general_ci ;
 USE `unipept2` ;
 
 -- -----------------------------------------------------
--- Table `unipept2`.`taxons`
+-- Table `unipept`.`taxons`
 -- -----------------------------------------------------
-CREATE  TABLE IF NOT EXISTS `unipept2`.`taxons` (
+CREATE  TABLE IF NOT EXISTS `unipept`.`taxons` (
   `id` MEDIUMINT UNSIGNED NOT NULL ,
   `name` VARCHAR(120) NOT NULL ,
   `rank` ENUM('no rank', 'superkingdom', 'kingdom', 'subkingdom', 'superphylum', 'phylum', 'subphylum', 'superclass', 'class', 'subclass', 'superorder', 'order', 'suborder', 'infraorder', 'superfamily', 'family', 'subfamily', 'tribe', 'subtribe', 'genus', 'subgenus', 'species group', 'species subgroup', 'species', 'subspecies', 'strain', 'varietas', 'forma' ) NULL DEFAULT NULL ,
@@ -24,9 +24,9 @@ COLLATE = utf8_general_ci;
 
 
 -- -----------------------------------------------------
--- Table `unipept2`.`uniprot_entries`
+-- Table `unipept`.`uniprot_entries`
 -- -----------------------------------------------------
-CREATE  TABLE IF NOT EXISTS `unipept2`.`uniprot_entries` (
+CREATE  TABLE IF NOT EXISTS `unipept`.`uniprot_entries` (
   `id` INT UNSIGNED NOT NULL AUTO_INCREMENT ,
   `uniprot_accession_number` CHAR(10) ASCII NOT NULL ,
   `version` SMALLINT UNSIGNED NOT NULL ,
@@ -41,9 +41,9 @@ COLLATE = ascii_general_ci;
 
 
 -- -----------------------------------------------------
--- Table `unipept2`.`ec_numbers`
+-- Table `unipept`.`ec_numbers`
 -- -----------------------------------------------------
-CREATE TABLE IF NOT EXISTS `unipept2`.`ec_numbers` (
+CREATE TABLE IF NOT EXISTS `unipept`.`ec_numbers` (
   `id` SMALLINT UNSIGNED NOT NULL AUTO_INCREMENT,
   `code` VARCHAR(15) NOT NULL,
   `name` VARCHAR(155) NOT NULL,
@@ -54,9 +54,9 @@ COLLATE = utf8_general_ci;
 
 
 -- -----------------------------------------------------
--- Table `unipept2`.`go_terms`
+-- Table `unipept`.`go_terms`
 -- -----------------------------------------------------
-CREATE TABLE IF NOT EXISTS `unipept2`.`go_terms` (
+CREATE TABLE IF NOT EXISTS `unipept`.`go_terms` (
   `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
   `code` VARCHAR(15) NOT NULL,
   `namespace` ENUM('biological process', 'molecular function', 'cellular component') NOT NULL,
@@ -66,9 +66,9 @@ ENGINE = InnoDB;
 
 
 -- -----------------------------------------------------
--- Table `unipept2`.`uniprot_entries`
+-- Table `unipept`.`uniprot_entries`
 -- -----------------------------------------------------
-CREATE  TABLE IF NOT EXISTS `unipept2`.`uniprot_entries` (
+CREATE  TABLE IF NOT EXISTS `unipept`.`uniprot_entries` (
   `id` INT UNSIGNED NOT NULL AUTO_INCREMENT ,
   `uniprot_accession_number` CHAR(10) ASCII NOT NULL ,
   `version` SMALLINT UNSIGNED NOT NULL ,
@@ -83,9 +83,9 @@ COLLATE = utf8_general_ci;
 
 
 -- -----------------------------------------------------
--- Table `unipept2`.`lineages`
+-- Table `unipept`.`lineages`
 -- -----------------------------------------------------
-CREATE  TABLE IF NOT EXISTS `unipept2`.`lineages` (
+CREATE  TABLE IF NOT EXISTS `unipept`.`lineages` (
   `taxon_id` MEDIUMINT UNSIGNED NOT NULL ,
   `superkingdom` MEDIUMINT NULL DEFAULT NULL ,
   `kingdom` MEDIUMINT NULL DEFAULT NULL ,
@@ -121,11 +121,11 @@ COLLATE = ascii_general_ci;
 
 
 -- -----------------------------------------------------
--- Table `unipept2`.`sequences`
+-- Table `unipept`.`sequences`
 -- BLOCKSIZE 16 IS DEFAULT BLOCKSIZE
 -- Only BLOBS will get compressed
 -- -----------------------------------------------------
-CREATE  TABLE IF NOT EXISTS `unipept2`.`sequences` (
+CREATE  TABLE IF NOT EXISTS `unipept`.`sequences` (
   `id` INT UNSIGNED NOT NULL AUTO_INCREMENT ,
   `sequence` VARCHAR(50) NOT NULL ,
   `lca` MEDIUMINT UNSIGNED NULL ,
@@ -140,9 +140,9 @@ COLLATE = ascii_general_ci;
 
 
 -- -----------------------------------------------------
--- Table `unipept2`.`peptides`
+-- Table `unipept`.`peptides`
 -- -----------------------------------------------------
-CREATE  TABLE IF NOT EXISTS `unipept2`.`peptides` (
+CREATE  TABLE IF NOT EXISTS `unipept`.`peptides` (
   `id` INT UNSIGNED NOT NULL AUTO_INCREMENT ,
   `sequence_id` INT UNSIGNED NOT NULL ,
   `original_sequence_id` INT UNSIGNED NOT NULL ,
@@ -154,9 +154,9 @@ COLLATE = ascii_general_ci;
 
 
 -- -----------------------------------------------------
--- Table `unipept2`.`embl_cross_references`
+-- Table `unipept`.`embl_cross_references`
 -- -----------------------------------------------------
-CREATE  TABLE IF NOT EXISTS `unipept2`.`embl_cross_references` (
+CREATE  TABLE IF NOT EXISTS `unipept`.`embl_cross_references` (
   `id` INT UNSIGNED NOT NULL AUTO_INCREMENT ,
   `uniprot_entry_id` INT UNSIGNED NOT NULL ,
   `protein_id` VARCHAR(25) NULL ,
@@ -168,9 +168,9 @@ COLLATE = ascii_general_ci;
 
 
 -- -----------------------------------------------------
--- Table `unipept2`.`datasets`
+-- Table `unipept`.`datasets`
 -- -----------------------------------------------------
-CREATE  TABLE IF NOT EXISTS `unipept2`.`datasets` (
+CREATE  TABLE IF NOT EXISTS `unipept`.`datasets` (
   `id` INT UNSIGNED NOT NULL AUTO_INCREMENT ,
   `environment` VARCHAR(160) NULL ,
   `reference` VARCHAR(500) NULL ,
@@ -183,9 +183,9 @@ COLLATE = utf8_general_ci;
 
 
 -- -----------------------------------------------------
--- Table `unipept2`.`dataset_items`
+-- Table `unipept`.`dataset_items`
 -- -----------------------------------------------------
-CREATE  TABLE IF NOT EXISTS `unipept2`.`dataset_items` (
+CREATE  TABLE IF NOT EXISTS `unipept`.`dataset_items` (
   `id` INT UNSIGNED NOT NULL AUTO_INCREMENT ,
   `dataset_id` INT UNSIGNED NULL ,
   `name` VARCHAR(160) NULL ,
@@ -195,7 +195,7 @@ CREATE  TABLE IF NOT EXISTS `unipept2`.`dataset_items` (
   INDEX `fk_dataset_items_datasets` (`dataset_id` ASC) ,
   CONSTRAINT `fk_dataset_items_datasets`
     FOREIGN KEY (`dataset_id` )
-    REFERENCES `unipept2`.`datasets` (`id` )
+    REFERENCES `unipept`.`datasets` (`id` )
     ON DELETE NO ACTION
     ON UPDATE NO ACTION)
 ENGINE = InnoDB
@@ -204,9 +204,9 @@ COLLATE = utf8_general_ci;
 
 
 -- -----------------------------------------------------
--- Table `unipept2`.`posts`
+-- Table `unipept`.`posts`
 -- -----------------------------------------------------
-CREATE  TABLE IF NOT EXISTS `unipept2`.`posts` (
+CREATE  TABLE IF NOT EXISTS `unipept`.`posts` (
   `id` INT UNSIGNED NOT NULL AUTO_INCREMENT ,
   `title` VARCHAR(100) NOT NULL ,
   `content` TEXT NOT NULL ,
@@ -218,9 +218,9 @@ COLLATE = utf8_general_ci;
 
 
 -- -----------------------------------------------------
--- Table `unipept2`.`refseq_cross_references`
+-- Table `unipept`.`refseq_cross_references`
 -- -----------------------------------------------------
-CREATE  TABLE IF NOT EXISTS `unipept2`.`refseq_cross_references` (
+CREATE  TABLE IF NOT EXISTS `unipept`.`refseq_cross_references` (
   `id` INT UNSIGNED NOT NULL AUTO_INCREMENT ,
   `uniprot_entry_id` INT UNSIGNED NOT NULL ,
   `protein_id` VARCHAR(25) NULL ,
@@ -232,9 +232,9 @@ COLLATE = ascii_general_ci;
 
 
 -- -----------------------------------------------------
--- Table `unipept2`.`go_cross_references`
+-- Table `unipept`.`go_cross_references`
 -- -----------------------------------------------------
-CREATE  TABLE IF NOT EXISTS `unipept2`.`go_cross_references` (
+CREATE  TABLE IF NOT EXISTS `unipept`.`go_cross_references` (
   `id` INT UNSIGNED NOT NULL AUTO_INCREMENT ,
   `uniprot_entry_id` INT UNSIGNED NOT NULL ,
   `go_term_code` VARCHAR(15) NOT NULL ,
@@ -245,9 +245,9 @@ COLLATE = ascii_general_ci;
 
 
 -- -----------------------------------------------------
--- Table `unipept2`.`go_terms`
+-- Table `unipept`.`go_terms`
 -- -----------------------------------------------------
-CREATE TABLE IF NOT EXISTS `unipept2`.`go_terms` (
+CREATE TABLE IF NOT EXISTS `unipept`.`go_terms` (
   `id` INT UNSIGNED NOT NULL AUTO_INCREMENT ,
   `go_term_code` VARCHAR(15) NOT NULL,
   `name` VARCHAR(160) NOT NULL,
@@ -258,9 +258,9 @@ COLLATE = ascii_general_ci;
 
 
 -- -----------------------------------------------------
--- Table `unipept2`.`ec_cross_references`
+-- Table `unipept`.`ec_cross_references`
 -- -----------------------------------------------------
-CREATE  TABLE IF NOT EXISTS `unipept2`.`ec_cross_references` (
+CREATE  TABLE IF NOT EXISTS `unipept`.`ec_cross_references` (
   `id` INT UNSIGNED NOT NULL AUTO_INCREMENT ,
   `uniprot_entry_id` INT UNSIGNED NOT NULL ,
   `ec_number_code` VARCHAR(15) NOT NULL ,
@@ -270,9 +270,9 @@ DEFAULT CHARACTER SET = ascii
 COLLATE = ascii_general_ci;
 
 -- -----------------------------------------------------
--- Table `unipept2`.`interpro_cross_references`
+-- Table `unipept`.`interpro_cross_references`
 -- -----------------------------------------------------
-CREATE  TABLE IF NOT EXISTS `unipept2`.`interpro_cross_references` (
+CREATE  TABLE IF NOT EXISTS `unipept`.`interpro_cross_references` (
   `id` INT UNSIGNED NOT NULL AUTO_INCREMENT ,
   `uniprot_entry_id` INT UNSIGNED NOT NULL ,
   `interpro_entry_code` VARCHAR(9) NOT NULL ,
@@ -283,9 +283,9 @@ COLLATE = ascii_general_ci;
 
 
 -- -----------------------------------------------------
--- Table `unipept2`.`interpro`
+-- Table `unipept`.`interpro`
 -- -----------------------------------------------------
-CREATE TABLE IF NOT EXISTS `unipept2`.`interpro_entries` (
+CREATE TABLE IF NOT EXISTS `unipept`.`interpro_entries` (
   `id` INT UNSIGNED NOT NULL AUTO_INCREMENT ,
   `code` VARCHAR(9) NOT NULL,
   `category` VARCHAR(32) NOT NULL,
@@ -297,9 +297,9 @@ COLLATE = ascii_general_ci;
 
 
 -- -----------------------------------------------------
--- Table `unipept2`.`users`
+-- Table `unipept`.`users`
 -- -----------------------------------------------------
-CREATE TABLE IF NOT EXISTS `unipept2`.`users` (
+CREATE TABLE IF NOT EXISTS `unipept`.`users` (
   `id` INT NOT NULL AUTO_INCREMENT,
   `username` VARCHAR(8) NOT NULL,
   `admin` TINYINT NOT NULL DEFAULT 0,
@@ -307,9 +307,9 @@ CREATE TABLE IF NOT EXISTS `unipept2`.`users` (
 ENGINE = InnoDB;
 
 -- -----------------------------------------------------
--- Table `unipept2`.`proteomes`
+-- Table `unipept`.`proteomes`
 -- -----------------------------------------------------
-CREATE TABLE IF NOT EXISTS `unipept2`.`proteomes` (
+CREATE TABLE IF NOT EXISTS `unipept`.`proteomes` (
   `id` MEDIUMINT UNSIGNED NOT NULL,
   `proteome_accession_number` CHAR(12) NOT NULL,
   `proteome_name` VARCHAR(145) NOT NULL,
@@ -326,9 +326,9 @@ COLLATE = utf8_general_ci;
 
 
 -- -----------------------------------------------------
--- Table `unipept2`.`proteome_cross_references`
+-- Table `unipept`.`proteome_cross_references`
 -- -----------------------------------------------------
-CREATE TABLE IF NOT EXISTS `unipept2`.`proteome_cross_references` (
+CREATE TABLE IF NOT EXISTS `unipept`.`proteome_cross_references` (
   `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
   `uniprot_entry_id` INT UNSIGNED NOT NULL,
   `proteome_id` MEDIUMINT UNSIGNED NOT NULL,
@@ -337,9 +337,9 @@ ENGINE = InnoDB;
 
 
 -- -----------------------------------------------------
--- Table `unipept2`.`proteome_caches`
+-- Table `unipept`.`proteome_caches`
 -- -----------------------------------------------------
-CREATE TABLE IF NOT EXISTS `unipept2`.`proteome_caches` (
+CREATE TABLE IF NOT EXISTS `unipept`.`proteome_caches` (
   `proteome_id` MEDIUMINT UNSIGNED NOT NULL,
   `json_sequences` MEDIUMTEXT NOT NULL,
   PRIMARY KEY (`proteome_id`))
