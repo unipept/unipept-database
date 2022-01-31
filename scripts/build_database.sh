@@ -643,14 +643,14 @@ create_kmer_index() {
 #dot: create_tryptic_index -> tryptic_index
 #dot: tryptic_index [color="#f28e2b"]
 create_tryptic_index() {
-	have "$TABDIR/sequences.tsv.gz" || return
+	have "$OUTPUT_DIR/sequences.tsv.gz" || return
 	log "Started the construction of the tryptic index."
-	pv "$TABDIR/sequences.tsv.gz" \
+	pv "$OUTPUT_DIR/sequences.tsv.gz" \
 		| gunzip \
 		| cut -f2,3 \
 		| grep -v "\\N" \
 		| umgap buildindex \
-		> "$TABDIR/tryptic.index"
+		> "$OUTPUT_DIR/tryptic.index"
 	log "Finished the construction of the tryptic index."
 }
 
@@ -709,7 +709,7 @@ database)
 	echo "Database contains: ##$ENTRIES##"
 	;;
 static-database)
-	if ! have "$TABDIR/taxons.tsv.gz"; then
+	if ! have "$OUTPUT_DIR/taxons.tsv.gz"; then
 		create_taxon_tables
 	fi
 	fetch_ec_numbers
@@ -733,10 +733,10 @@ tryptic-index)
 	checkdep pv
 	checkdep umgap "umgap crate (for umgap buildindex)"
 
-	if ! have "$TABDIR/taxons.tsv.gz"; then
+	if ! have "$OUTPUT_DIR/taxons.tsv.gz"; then
 		create_taxon_tables
 	fi
-	if ! have "$TABDIR/sequences.tsv.gz"; then
+	if ! have "$OUTPUT_DIR/sequences.tsv.gz"; then
 		download_and_convert_all_sources
 		create_tables_and_filter
 		join_equalized_pepts_and_entries
