@@ -27,7 +27,7 @@ jobs:
           sudo apt-get -y install git maven curl unzip gawk sqlite3 libsqlite3-dev
       - name: Generate tsv.gz files
         shell: bash
-        run: ./run.sh static-database
+        run: ./scripts/build_database.sh static-database "swissprot,trembl" "https://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/complete/uniprot_sprot.xml.gz,https://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/complete/uniprot_trembl.xml.gz"
       - name: Build SQLite database from generated files
         shell: bash
         run: |
