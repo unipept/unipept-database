@@ -27,7 +27,7 @@ jobs:
           sudo apt-get -y install git maven curl unzip gawk sqlite3 libsqlite3-dev
       - name: Generate tsv.gz files
         shell: bash
-        run: ./scripts/build_database.sh static-database "swissprot,trembl" "https://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/complete/uniprot_sprot.xml.gz,https://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/complete/uniprot_trembl.xml.gz"
+        run: ./scripts/build_database.sh static-database "swissprot,trembl" "https://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/complete/uniprot_sprot.xml.gz,https://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/complete/uniprot_trembl.xml.gz" "data/tables"
       - name: Build SQLite database from generated files
         shell: bash
         run: |
@@ -80,7 +80,7 @@ jobs:
         with:
           tag_name: database-${{ steps.date.outputs.date }}
           release_name: Static database ${{ steps.date.outputs.date }}
-          draft: false
+          draft: true
           prerelease: false
       - name: Upload Release Asset
         id: upload-release-asset 
