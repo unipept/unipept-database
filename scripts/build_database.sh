@@ -1,5 +1,9 @@
 #! /usr/bin/env bash
 
+# All references to an external script should be relative to the location of this script.
+# See: http://mywiki.wooledge.org/BashFAQ/028
+CURRENT_LOCATION="${BASH_SOURCE%/*}"
+
 self="$$"
 
 UNIPEPT_TEMP_CONSTANT="unipept_temp"
@@ -302,7 +306,7 @@ create_taxon_tables() {
 		-e 's/parvorder/no rank/' "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/nodes.dmp"
 
 	mkdir -p "$OUTPUT_DIR"
-	java -Xms"$JAVA_MEM" -Xmx"$JAVA_MEM" -jar "./helper_scripts/NamesNodes2TaxonsLineages.jar" \
+	java -Xms"$JAVA_MEM" -Xmx"$JAVA_MEM" -jar "$CURRENT_LOCATION/helper_scripts/NamesNodes2TaxonsLineages.jar" \
 		--names "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/names.dmp" --nodes "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/nodes.dmp" \
 		--taxons "$(gz "$OUTPUT_DIR/taxons.tsv.gz")" \
 		--lineages "$(gz "$OUTPUT_DIR/lineages.tsv.gz")"
@@ -353,7 +357,7 @@ download_and_convert_all_sources() {
 
     SIZE="$(curl -I "$DB_SOURCE" -s | grep -i content-length | tr -cd '[0-9]')"
 
-    curl --continue-at - --create-dirs "$DB_SOURCE" --silent | pv -i 5 -n -s "$SIZE" 2> >(reportProgress - "Downloading database index for $DB_TYPE." 2 >&2) | zcat | java -jar "./helper_scripts/XmlToTabConverter.jar" 5 50 "$DB_TYPE" | node ./helper_scripts/WriteToChunk.js "$DB_INDEX_OUTPUT"
+    curl --continue-at - --create-dirs "$DB_SOURCE" --silent | pv -i 5 -n -s "$SIZE" 2> >(reportProgress - "Downloading database index for $DB_TYPE." 2 >&2) | zcat | java -jar "$CURRENT_LOCATION/helper_scripts/XmlToTabConverter.jar" 5 50 "$DB_TYPE" | node "$CURRENT_LOCATION/helper_scripts/WriteToChunk.js" "$DB_INDEX_OUTPUT"
 
     # Now, compress the different chunks
     CHUNKS=$(find "$DB_INDEX_OUTPUT" -name "*.chunk")
@@ -389,7 +393,7 @@ filter_sources_by_taxa() {
 
     mkdir -p "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/filter"
 
-    ./helper_scripts/filter_taxa.sh "$TAXA" "$DB_INDEX_OUTPUT" "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/filter" "$OUTPUT_DIR/lineages.tsv.gz"
+    $CURRENT_LOCATION/helper_scripts/filter_taxa.sh "$TAXA" "$DB_INDEX_OUTPUT" "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/filter" "$OUTPUT_DIR/lineages.tsv.gz"
 
     ((IDX++))
   done
@@ -403,7 +407,7 @@ create_most_tables() {
 
 	mkdir -p "$OUTPUT_DIR" "$INTDIR"
 
-	cat - | java -Xms"$JAVA_MEM" -Xmx"$JAVA_MEM" -jar "./helper_scripts/TaxonsUniprots2Tables.jar" \
+	cat - | java -Xms"$JAVA_MEM" -Xmx"$JAVA_MEM" -jar "$CURRENT_LOCATION/helper_scripts/TaxonsUniprots2Tables.jar" \
 		--peptide-min "$PEPTIDE_MIN_LENGTH" \
 		--peptide-max "$PEPTIDE_MAX_LENGTH" \
 		--taxons "$(guz "$OUTPUT_DIR/taxons.tsv.gz")" \
@@ -467,7 +471,7 @@ calculate_equalized_lcas() {
 	join -t '	' -o '1.1,2.2' -1 2 -2 1 \
 			"$(guz "$INTDIR/sequences.tsv.gz")" \
 			"$(guz "$INTDIR/aa_sequence_taxon_equalized.tsv.gz")" \
-		| java -Xms"$JAVA_MEM" -Xmx"$JAVA_MEM" -jar "./helper_scripts/LineagesSequencesTaxons2LCAs.jar" "$(guz "$OUTPUT_DIR/lineages.tsv.gz")" \
+		| java -Xms"$JAVA_MEM" -Xmx"$JAVA_MEM" -jar "$CURRENT_LOCATION/helper_scripts/LineagesSequencesTaxons2LCAs.jar" "$(guz "$OUTPUT_DIR/lineages.tsv.gz")" \
 		| $CMD_GZIP - > "$INTDIR/LCAs_equalized.tsv.gz"
 	log "Finished the calculation of equalized LCA's (after substituting AA's by ID's)."
 }
@@ -479,7 +483,7 @@ calculate_original_lcas() {
 	join -t '	' -o '1.1,2.2' -1 2 -2 1 \
 			"$(guz "$INTDIR/sequences.tsv.gz")" \
 			"$(guz "$INTDIR/aa_sequence_taxon_original.tsv.gz")" \
-		| java -Xms"$JAVA_MEM" -Xmx"$JAVA_MEM" -jar "./helper_scripts/LineagesSequencesTaxons2LCAs.jar" "$(guz "$OUTPUT_DIR/lineages.tsv.gz")" \
+		| java -Xms"$JAVA_MEM" -Xmx"$JAVA_MEM" -jar "$CURRENT_LOCATION/helper_scripts/LineagesSequencesTaxons2LCAs.jar" "$(guz "$OUTPUT_DIR/lineages.tsv.gz")" \
 		| $CMD_GZIP - > "$INTDIR/LCAs_original.tsv.gz"
 	log "Finished the calculation of original LCA's (after substituting AA's by ID's)."
 }
@@ -501,7 +505,7 @@ calculate_equalized_fas() {
 	log "Started the calculation of equalized FA's."
 	mkfifo "peptides_eq"
 	zcat "$INTDIR/peptides_by_equalized.tsv.gz" | cut -f2,5 > "peptides_eq" &
-	node  ./helper_scripts/FunctionalAnalysisPeptides.js "peptides_eq" "$(gz "$INTDIR/FAs_equalized.tsv.gz")"
+	node  "$CURRENT_LOCATION/helper_scripts/FunctionalAnalysisPeptides.js" "peptides_eq" "$(gz "$INTDIR/FAs_equalized.tsv.gz")"
 	rm "peptides_eq"
 	log "Finished the calculation of equalized FA's."
 }
@@ -522,7 +526,7 @@ calculate_original_fas() {
 	log "Started the calculation of original FA's."
 	mkfifo "peptides_orig"
 	zcat "$INTDIR/peptides_by_original.tsv.gz" | cut -f3,5 > "peptides_orig" &
-	node  "./helper_scripts/FunctionalAnalysisPeptides.js" "peptides_orig" "$(gz "$INTDIR/FAs_original.tsv.gz")"
+	node  "$CURRENT_LOCATION/helper_scripts/FunctionalAnalysisPeptides.js" "peptides_orig" "$(gz "$INTDIR/FAs_original.tsv.gz")"
 	rm "peptides_orig"
 	log "Finished the calculation of original FA's."
 }
@@ -643,14 +647,14 @@ create_kmer_index() {
 #dot: create_tryptic_index -> tryptic_index
 #dot: tryptic_index [color="#f28e2b"]
 create_tryptic_index() {
-	have "$OUTPUT_DIR/sequences.tsv.gz" || return
+	have "$TABDIR/sequences.tsv.gz" || return
 	log "Started the construction of the tryptic index."
-	pv "$OUTPUT_DIR/sequences.tsv.gz" \
+	pv "$TABDIR/sequences.tsv.gz" \
 		| gunzip \
 		| cut -f2,3 \
 		| grep -v "\\N" \
 		| umgap buildindex \
-		> "$OUTPUT_DIR/tryptic.index"
+		> "$TABDIR/tryptic.index"
 	log "Finished the construction of the tryptic index."
 }
 
@@ -709,7 +713,7 @@ database)
 	echo "Database contains: ##$ENTRIES##"
 	;;
 static-database)
-	if ! have "$OUTPUT_DIR/taxons.tsv.gz"; then
+	if ! have "$TABDIR/taxons.tsv.gz"; then
 		create_taxon_tables
 	fi
 	fetch_ec_numbers
@@ -733,10 +737,10 @@ tryptic-index)
 	checkdep pv
 	checkdep umgap "umgap crate (for umgap buildindex)"
 
-	if ! have "$OUTPUT_DIR/taxons.tsv.gz"; then
+	if ! have "$TABDIR/taxons.tsv.gz"; then
 		create_taxon_tables
 	fi
-	if ! have "$OUTPUT_DIR/sequences.tsv.gz"; then
+	if ! have "$TABDIR/sequences.tsv.gz"; then
 		download_and_convert_all_sources
 		create_tables_and_filter
 		join_equalized_pepts_and_entries
