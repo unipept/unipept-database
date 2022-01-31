@@ -4,7 +4,7 @@
 
 # Directory from which the .tsv.gz files should be read and parsed (= first argument to this script).
 dir="$1"
-db=unipept2
+db=unipept
 
 function print {
     echo $(date -u) $1
