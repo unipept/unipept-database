@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+CURRENT_LOCATION="${BASH_SOURCE%/*}"
+
 # First argument to this script is a list delimited by comma's of all taxa that should be retained from the complete
 # database. If the given ID is 1, then we don't apply any filter at all and report all entries from the provided
 # index.
@@ -21,7 +23,7 @@ then
   TAXA=$(filter_taxa "$TAXA")
 
   # This associative array maps a filename upon the taxa that should be queried within this file
-  QUERIES=( $(echo "$TAXA" | tr "," "\n" | node ./helper_scripts/TaxaByChunk.js "$DATABASE_INDEX" "$TMP_DIR") )
+  QUERIES=( $(echo "$TAXA" | tr "," "\n" | node "$CURRENT_LOCATION/TaxaByChunk.js" "$DATABASE_INDEX" "$TMP_DIR") )
 
   if [[ ${#QUERIES[@]} -gt 0 ]]
   then
