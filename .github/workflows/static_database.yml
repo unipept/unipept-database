@@ -1,9 +1,7 @@
 name: Database
 
 on:
-  push:
-    branches:
-      - master
+  workflow_dispatch:
   schedule:
     # * is a special character in YAML so you have to quote this string
     - cron:  '0 0 1 * *'
@@ -16,7 +14,7 @@ jobs:
       - uses: actions/setup-java@v1
         with:
           java-version: '11'
-          java-package: jdk 
+          java-package: jdk
           architecture: x64 
       - name: Get current date
         id: date
@@ -24,10 +22,10 @@ jobs:
       - name: Install required utilities
         run: |
           sudo apt-get update
-          sudo apt-get -y install git maven curl unzip gawk sqlite3 libsqlite3-dev
+          sudo apt-get -y install git maven curl unzip gawk sqlite3 libsqlite3-dev pv nodejs
       - name: Generate tsv.gz files
         shell: bash
-        run: ./run.sh static-database
+        run: ./scripts/build_database.sh static-database "swissprot,trembl" "https://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/complete/uniprot_sprot.xml.gz,https://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/complete/uniprot_trembl.xml.gz" "output"
       - name: Build SQLite database from generated files
         shell: bash
         run: |
@@ -35,11 +33,11 @@ jobs:
           sqlite3 output.db < workflows/static_database/structure.sql 
           
           # Read all generated data into this database
-          zcat data/tables/ec_numbers.tsv.gz | sqlite3 -csv -separator '	' output.db '.import /dev/stdin ec_numbers'
-          zcat data/tables/go_terms.tsv.gz | sqlite3 -csv -separator '	' output.db '.import /dev/stdin go_terms'
-          zcat data/tables/interpro_entries.tsv.gz | sqlite3 -csv -separator '	' output.db '.import /dev/stdin interpro_entries'
-          zcat data/tables/taxons.tsv.gz | sqlite3 -csv -separator '	' output.db '.import /dev/stdin taxons'
-          zcat data/tables/lineages.tsv.gz | sqlite3 -csv -separator '	' output.db '.import /dev/stdin lineages'
+          zcat output/ec_numbers.tsv.gz | sqlite3 -csv -separator '	' output.db '.import /dev/stdin ec_numbers'
+          zcat output/go_terms.tsv.gz | sqlite3 -csv -separator '	' output.db '.import /dev/stdin go_terms'
+          zcat output/interpro_entries.tsv.gz | sqlite3 -csv -separator '	' output.db '.import /dev/stdin interpro_entries'
+          zcat output/taxons.tsv.gz | sqlite3 -csv -separator '	' output.db '.import /dev/stdin taxons'
+          zcat output/lineages.tsv.gz | sqlite3 -csv -separator '	' output.db '.import /dev/stdin lineages'
           
           # Compress the database before uploading it to a Github release
           zip output.zip output.db
@@ -80,7 +78,7 @@ jobs:
         with:
           tag_name: database-${{ steps.date.outputs.date }}
           release_name: Static database ${{ steps.date.outputs.date }}
-          draft: false
+          draft: true
           prerelease: false
       - name: Upload Release Asset
         id: upload-release-asset 
