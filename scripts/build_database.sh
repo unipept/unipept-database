@@ -289,7 +289,7 @@ have() {
 
 create_taxon_tables() {
 	log "Started creating the taxon tables."
-	reportProgress -1 "Creating taxon tables." 0
+	reportProgress -1 "Creating taxon tables." 1
 
 	curl --create-dirs --silent --output "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/taxdmp.zip" "$TAXON_URL"
 	unzip "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/taxdmp.zip" "names.dmp" "nodes.dmp" -d "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT"
@@ -317,10 +317,19 @@ create_taxon_tables() {
 
 download_and_convert_all_sources() {
   IDX=0
-  while [[ "$IDX" -ne "${#DB_TYPES}" ]] && [[ -n $(echo "${DB_TYPES[$IDX]}" | sed "s/\s//g") ]]
+
+  OLDIFS="$IFS"
+  IFS=","
+
+  DB_TYPES_ARRAY=($DB_TYPES)
+  DB_SOURCES_ARRAY=($DB_SOURCES)
+
+  IFS="$OLDIFS"
+
+  while [[ "$IDX" -ne "${#DB_TYPES_ARRAY}" ]] && [[ -n $(echo "${DB_TYPES_ARRAY[$IDX]}" | sed "s/\s//g") ]]
   do
-    DB_TYPE=${DB_TYPES[$IDX]}
-    DB_SOURCE=${DB_SOURCES[$IDX]}
+    DB_TYPE=${DB_TYPES_ARRAY[$IDX]}
+    DB_SOURCE=${DB_SOURCES_ARRAY[$IDX]}
 
     echo "Producing index for $DB_TYPE."
 
@@ -353,11 +362,11 @@ download_and_convert_all_sources() {
       touch "$DB_INDEX_OUTPUT/metadata"
     fi
 
-    reportProgress 0 "Building database index for $DB_TYPE." 1
+    reportProgress 0 "Building database index for $DB_TYPE." 2
 
     SIZE="$(curl -I "$DB_SOURCE" -s | grep -i content-length | tr -cd '[0-9]')"
 
-    curl --continue-at - --create-dirs "$DB_SOURCE" --silent | pv -i 5 -n -s "$SIZE" 2> >(reportProgress - "Downloading database index for $DB_TYPE." 2 >&2) | zcat | java -jar "$CURRENT_LOCATION/helper_scripts/XmlToTabConverter.jar" 5 50 "$DB_TYPE" | node "$CURRENT_LOCATION/helper_scripts/WriteToChunk.js" "$DB_INDEX_OUTPUT"
+    curl --continue-at - --create-dirs "$DB_SOURCE" --silent | pv -i 5 -n -s "$SIZE" 2> >(reportProgress - "Downloading database index for $DB_TYPE." 3 >&2) | zcat | java -jar "$CURRENT_LOCATION/helper_scripts/XmlToTabConverter.jar" 5 50 "$DB_TYPE" | node "$CURRENT_LOCATION/helper_scripts/WriteToChunk.js" "$DB_INDEX_OUTPUT"
 
     # Now, compress the different chunks
     CHUNKS=$(find "$DB_INDEX_OUTPUT" -name "*.chunk")
@@ -368,7 +377,7 @@ download_and_convert_all_sources() {
     for CHUNK in $CHUNKS
     do
       echo "Compressing $CHUNK_IDX of $TOTAL_CHUNKS for $DB_TYPE"
-      pv -i 5 -n "$CHUNK" 2> >(reportProgress - "Processing chunk $CHUNK_IDX of $TOTAL_CHUNKS for $DB_TYPE index." 3 >&2) | pigz > "$CHUNK.gz"
+      pv -i 5 -n "$CHUNK" 2> >(reportProgress - "Processing chunk $CHUNK_IDX of $TOTAL_CHUNKS for $DB_TYPE index." 4 >&2) | pigz > "$CHUNK.gz"
       # Remove the chunk that was just compressed
       rm "$CHUNK"
       ((CHUNK_IDX++))
@@ -384,10 +393,19 @@ download_and_convert_all_sources() {
 
 filter_sources_by_taxa() {
   IDX=0
-  while [[ "$IDX" -ne "${#DB_TYPES}" ]] && [[ -n $(echo "${DB_TYPES[$IDX]}" | sed "s/\s//g") ]]
+
+  OLDIFS="$IFS"
+  IFS=","
+
+  DB_TYPES_ARRAY=($DB_TYPES)
+  DB_SOURCES_ARRAY=($DB_SOURCES)
+
+  IFS="$OLDIFS"
+
+  while [[ "$IDX" -ne "${#DB_TYPES_ARRAY}" ]] && [[ -n $(echo "${DB_TYPES_ARRAY[$IDX]}" | sed "s/\s//g") ]]
   do
-    DB_TYPE=${DB_TYPES[$IDX]}
-    DB_SOURCE=${DB_SOURCES[$IDX]}
+    DB_TYPE=${DB_TYPES_ARRAY[$IDX]}
+    DB_SOURCE=${DB_SOURCES_ARRAY[$IDX]}
 
     DB_INDEX_OUTPUT="$INDEX_DIR/$DB_TYPE"
 
@@ -403,7 +421,7 @@ create_most_tables() {
 	have "$OUTPUT_DIR/taxons.tsv.gz" || return
 	log "Started calculation of most tables."
 
-  	reportProgress "-1" "Started building main database tables." 4
+  	reportProgress "-1" "Started building main database tables." 5
 
 	mkdir -p "$OUTPUT_DIR" "$INTDIR"
 
@@ -672,7 +690,7 @@ database)
 	wait $pid1
 	wait $pid2
 	number_sequences
-	reportProgress "-1" "Calculating lowest common ancestors." 5
+	reportProgress "-1" "Calculating lowest common ancestors." 6
 	calculate_equalized_lcas &
 	pid1=$!
 	calculate_original_lcas &
@@ -684,7 +702,7 @@ database)
 	substitute_equalized_aas
 	rm "$INTDIR/peptides.tsv.gz"
 	substitute_original_aas
-	reportProgress "-1" "Calculating functional annotations." 6
+	reportProgress "-1" "Calculating functional annotations." 7
 	calculate_equalized_fas &
 	pid1=$!
 	calculate_original_fas &
@@ -692,23 +710,23 @@ database)
 	wait $pid1
 	wait $pid2
 	rm "$INTDIR/peptides_by_equalized.tsv.gz"
-	reportProgress "-1" "Sorting peptides." 7
+	reportProgress "-1" "Sorting peptides." 8
 	sort_peptides
 	rm "$INTDIR/peptides_by_original.tsv.gz"
-	reportProgress "-1" "Creating sequence table." 8
+	reportProgress "-1" "Creating sequence table." 9
 	create_sequence_table
 	rm "$INTDIR/LCAs_original.tsv.gz"
 	rm "$INTDIR/LCAs_equalized.tsv.gz"
 	rm "$INTDIR/FAs_original.tsv.gz"
 	rm "$INTDIR/FAs_equalized.tsv.gz"
 	rm "$INTDIR/sequences.tsv.gz"
-	reportProgress "-1" "Fetching EC numbers." 9
+	reportProgress "-1" "Fetching EC numbers." 10
 	fetch_ec_numbers
-	reportProgress "-1" "Fetching GO terms." 10
+	reportProgress "-1" "Fetching GO terms." 11
 	fetch_go_terms
-	reportProgress "-1" "Fetching InterPro entries." 11
+	reportProgress "-1" "Fetching InterPro entries." 12
 	fetch_interpro_entries
-	reportProgress "-1" "Computing database indices" 12
+	reportProgress "-1" "Computing database indices" 13
 	ENTRIES=$(zcat "$OUTPUT_DIR/uniprot_entries.tsv.gz" | wc -l)
 	echo "Database contains: ##$ENTRIES##"
 	;;
