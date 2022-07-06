@@ -7,9 +7,14 @@ import java.util.stream.Collectors;
 
 public class TabWriter implements UniprotObserver {
     private final BufferedWriter out;
+    private final boolean verbose;
 
-    public TabWriter(OutputStream out) throws IOException {
+    public TabWriter(
+            OutputStream out,
+            boolean verbose
+    ) throws IOException {
         this.out = new BufferedWriter(new OutputStreamWriter(out));
+        this.verbose = verbose;
 
         // Write header to output file
         this.out.write(String.join("\t", new String[]{
@@ -28,7 +33,7 @@ public class TabWriter implements UniprotObserver {
     @Override
     public void handleEntry(UniprotEntry entry) {
         try {
-            this.out.write(String.join("\t", new String[]{
+            String line = String.join("\t", new String[]{
                     entry.getUniprotAccessionNumber(),
                     entry.getSequence(),
                     entry.getName(),
@@ -38,7 +43,13 @@ public class TabWriter implements UniprotObserver {
                     entry.getInterProReferences().stream().map(UniprotInterProRef::getId).collect(Collectors.joining(";")),
                     "siwssprot",
                     String.valueOf(entry.getTaxonId()),
-            }) + "\n");
+            });
+
+            if (verbose) {
+                System.err.println("INFO: Writing tabular line: " + line);
+            }
+
+            this.out.write(line + "\n");
         } catch (IOException e) {
             System.err.println("Could not write to output stream.");
         }

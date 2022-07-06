@@ -18,6 +18,7 @@ public class TaxonsUniprots2Tables {
     @Parameter(names="--ec",              description="EC references TSV output file")        public String ecCrossReferencesFile;
     @Parameter(names="--go",              description="GO references TSV output file")        public String goCrossReferencesFile;
     @Parameter(names="--interpro",        description="InterPro references TSV output file")  public String interProCrossReferencesFile;
+    @Parameter(names="--verbose",         description="Enable verbose mode")                  public boolean verboseMode;
 
     /**
      * Parse the UniProt TSV-file into TSV tables.
@@ -35,7 +36,7 @@ public class TaxonsUniprots2Tables {
         TableWriter writer = new TableWriter(main);
 
         UniprotTabParser parser = new UniprotTabParser();
-        parser.parse(main.peptideMin, main.peptideMax, System.in, writer);
+        parser.parse(main.peptideMin, main.peptideMax, System.in, writer, main.verboseMode);
 
         writer.close();
     }

@@ -12,7 +12,8 @@ public class UniprotTabParser {
         int peptideMinLength,
         int peptideMaxLength,
         InputStream input,
-        UniprotObserver observer
+        UniprotObserver observer,
+        boolean verbose
     ) throws IOException {
         BufferedReader reader = new BufferedReader(new InputStreamReader(input));
 
@@ -27,6 +28,10 @@ public class UniprotTabParser {
         line = reader.readLine();
 
         while (line != null) {
+            if (verbose) {
+                System.err.println("INFO: Parse line from TSV: " + line);
+            }
+
             String[] fields = line.trim().split("\t");
 
             // We need to emit one new UniprotEntry per line in the input

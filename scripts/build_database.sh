@@ -12,6 +12,7 @@ UNIPEPT_TEMP_CONSTANT="unipept_temp"
 TEMP_DIR="/tmp"
 INDEX_DIR="/tmp/unipept_index"
 TAXA="1"
+VERBOSE="false"
 
 
 printHelp() {
@@ -22,25 +23,28 @@ Build Unipept database from a specific collection of UniProt resources.
 Required parameters:
 	* BUILD_TYPE: One of database, static-database, kmer-index, tryptic-index.
 
-    * DB_NAMES: List with all names of the different databases that should be parsed. Every name in this list 
+  * DB_NAMES: List with all names of the different databases that should be parsed. Every name in this list
 	corresponds with the respective database source given for the DB_SOURCES parameter. The items in this list should be
-	 delimited by comma's.
+	delimited by comma's.
 
-    * DB_SOURCES: List of UniProt source URLs. The items in this list should be delimited by comma's. Commonly used 
+  * DB_SOURCES: List of UniProt source URLs. The items in this list should be delimited by comma's. Commonly used
 	databases and their corresponding sources are:
-      - swissprot: https://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/complete/uniprot_sprot.xml.gz
-      - trembl: https://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/complete/uniprot_trembl.xml.gz
+    - swissprot: https://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/complete/uniprot_sprot.xml.gz
+    - trembl: https://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/complete/uniprot_trembl.xml.gz
 
-    * OUTPUT_DIR: Directory in which the tsv.gz-files that are produced by this script will be stored.
+  * OUTPUT_DIR: Directory in which the tsv.gz-files that are produced by this script will be stored.
 
 Options:
-	* -h 
+	* -h
 	Display help for this script.
 
+	* -v
+	Enable verbose mode. Print more detailed information about what's going on under the hood to stderr.
+
 	* -f [TAXA_IDS]
-	Filter by taxa. List of taxa for which all corresponding UniProt entries should be retained. First, for each of the 
+	Filter by taxa. List of taxa for which all corresponding UniProt entries should be retained. First, for each of the
 	taxa from the given list, we look up all of the direct and indirect child nodes in the NCBI taxonomy tree. Then, all
-	UniProt-entries from the database sources are filtered in such a way that only entries that are associated with one 
+	UniProt-entries from the database sources are filtered in such a way that only entries that are associated with one
 	of the taxa (or it's children) provided here are retained. These items must be delimited by comma's. If 1 is passed,
 	no filtering will be performed (since 1 corresponds to the NCBI ID of the root node).
 
@@ -83,7 +87,7 @@ terminateAndExit() {
 	exit 1
 }
 
-# Can be called when an error has occurred during the execution of the script. This function will inform the user that 
+# Can be called when an error has occurred during the execution of the script. This function will inform the user that
 # an error has occurred and will properly exit the script.
 errorAndExit() {
 	echo "Error: the script experienced an error while trying to build the requested database." 1>&2
@@ -160,10 +164,10 @@ trap clean EXIT
 
 ### Process all options for this script and make sure that everything is alright.
 
-while getopts ":hf:i:d:" opt 
+while getopts ":hvf:i:d:" opt
 do
-	case $opt in 
-		h) 
+	case $opt in
+		h)
 			printHelp
 			exit 0
 			;;
@@ -184,13 +188,16 @@ do
 			checkDirectoryAndCreate "$OPTARG/$UNIPEPT_TEMP_CONSTANT"
 			TEMP_DIR="$OPTARG"
 			;;
+	  v)
+	    VERBOSE="true"
+	    ;;
 		\? )
 			printUsageAndExit
 			;;
 	esac
 done
 
-shift $((OPTIND - 1)) 
+shift $((OPTIND - 1))
 
 # Now, we need to check if 4 positional arguments are provided to this script by the user.
 if [[ "$#" -ne 4 ]]
@@ -366,7 +373,7 @@ download_and_convert_all_sources() {
 
     SIZE="$(curl -I "$DB_SOURCE" -s | grep -i content-length | tr -cd '[0-9]')"
 
-    curl --continue-at - --create-dirs "$DB_SOURCE" --silent | pv -i 5 -n -s "$SIZE" 2> >(reportProgress - "Downloading database index for $DB_TYPE." 3 >&2) | zcat | java -jar "$CURRENT_LOCATION/helper_scripts/XmlToTabConverter.jar" 5 50 "$DB_TYPE" | node "$CURRENT_LOCATION/helper_scripts/WriteToChunk.js" "$DB_INDEX_OUTPUT"
+    curl --continue-at - --create-dirs "$DB_SOURCE" --silent | pv -i 5 -n -s "$SIZE" 2> >(reportProgress - "Downloading database index for $DB_TYPE." 3 >&2) | zcat | java -jar "$CURRENT_LOCATION/helper_scripts/XmlToTabConverter.jar" 5 50 "$DB_TYPE" "$VERBOSE" | node "$CURRENT_LOCATION/helper_scripts/WriteToChunk.js" "$DB_INDEX_OUTPUT" "$VERBOSE"
 
     # Now, compress the different chunks
     CHUNKS=$(find "$DB_INDEX_OUTPUT" -name "*.chunk")
@@ -434,6 +441,7 @@ create_most_tables() {
 		--ec "$(gz "$OUTPUT_DIR/ec_cross_references.tsv.gz")" \
 		--go "$(gz "$OUTPUT_DIR/go_cross_references.tsv.gz")" \
 		--interpro "$(gz "$OUTPUT_DIR/interpro_cross_references.tsv.gz")"
+		--verbose "$VERBOSE"
 
 	log "Finished calculation of most tables."
 }

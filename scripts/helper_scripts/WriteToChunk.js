@@ -4,6 +4,8 @@ const path = require("path");
 
 const outputDir = process.argv[2];
 
+const verbose = process.argv[3] === "true";
+
 const rl = readline.createInterface({
     input: process.stdin
 });
@@ -22,6 +24,10 @@ const fileObjects = [...Object.keys(taxaBounds)].slice(0, -1).map(idx => Number.
 let headerSkipped = false;
 
 rl.on("line", (line) => {
+    if (verbose) {
+        console.error("INFO: writing line to chunk: " + line);
+    }
+
     if (!headerSkipped) {
         headerSkipped = true;
         const writeStream = fs.createWriteStream(path.join(outputDir, 'db.header'));
