@@ -199,6 +199,11 @@ done
 
 shift $((OPTIND - 1))
 
+if [ "$VERBOSE" = "true" ]
+then
+  echo "INFO: Verbose mode enabled. Printing debug information." 1>&2
+fi
+
 # Now, we need to check if 4 positional arguments are provided to this script by the user.
 if [[ "$#" -ne 4 ]]
 then
@@ -440,7 +445,7 @@ create_most_tables() {
 		--uniprot-entries "$(gz "$OUTPUT_DIR/uniprot_entries.tsv.gz")" \
 		--ec "$(gz "$OUTPUT_DIR/ec_cross_references.tsv.gz")" \
 		--go "$(gz "$OUTPUT_DIR/go_cross_references.tsv.gz")" \
-		--interpro "$(gz "$OUTPUT_DIR/interpro_cross_references.tsv.gz")"
+		--interpro "$(gz "$OUTPUT_DIR/interpro_cross_references.tsv.gz")" \
 		--verbose "$VERBOSE"
 
 	log "Finished calculation of most tables."
