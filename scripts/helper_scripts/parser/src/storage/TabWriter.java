@@ -41,12 +41,12 @@ public class TabWriter implements UniprotObserver {
                     entry.getECReferences().stream().map(UniprotECRef::getId).collect(Collectors.joining(";")),
                     entry.getGOReferences().stream().map(UniprotGORef::getId).collect(Collectors.joining(";")),
                     entry.getInterProReferences().stream().map(UniprotInterProRef::getId).collect(Collectors.joining(";")),
-                    "siwssprot",
+                    "swissprot",
                     String.valueOf(entry.getTaxonId()),
             });
 
             if (verbose) {
-                System.err.println("INFO: Writing tabular line: " + line);
+                System.err.println("INFO VERBOSE: Writing tabular line: " + line);
             }
 
             this.out.write(line + "\n");

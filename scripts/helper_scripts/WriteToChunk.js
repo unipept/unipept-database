@@ -25,7 +25,7 @@ let headerSkipped = false;
 
 rl.on("line", (line) => {
     if (verbose) {
-        console.error("INFO: writing line to chunk: " + line);
+        console.error("INFO VERBOSE: writing line to chunk: " + line);
     }
 
     if (!headerSkipped) {

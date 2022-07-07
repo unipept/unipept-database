@@ -201,7 +201,7 @@ shift $((OPTIND - 1))
 
 if [ "$VERBOSE" = "true" ]
 then
-  echo "INFO: Verbose mode enabled. Printing debug information." 1>&2
+  echo "INFO VERBOSE: Verbose mode enabled. Printing debug information." 1>&2
 fi
 
 # Now, we need to check if 4 positional arguments are provided to this script by the user.

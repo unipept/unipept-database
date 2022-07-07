@@ -29,7 +29,7 @@ public class UniprotTabParser {
 
         while (line != null) {
             if (verbose) {
-                System.err.println("INFO: Parse line from TSV: " + line);
+                System.err.println("INFO VERBOSE: TSV line parsed: " + line);
             }
 
             String[] fields = line.trim().split("\t");
