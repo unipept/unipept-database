@@ -30,8 +30,6 @@ public class TaxonsUniprots2Tables {
      * This program reads input from stdin and writes output to the files indicated by the parameters given above.
      */
     public static void main(String[] args) throws IOException {
-        System.out.println("Arguments: " + String.join(", ", args));
-
         TaxonsUniprots2Tables main = new TaxonsUniprots2Tables();
         new JCommander(main, args);
 

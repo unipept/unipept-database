@@ -12,7 +12,7 @@ UNIPEPT_TEMP_CONSTANT="unipept_temp"
 TEMP_DIR="/tmp"
 INDEX_DIR="/tmp/unipept_index"
 TAXA="1"
-VERBOSE="false"
+VERBOSE=""
 
 
 printHelp() {
@@ -189,7 +189,7 @@ do
 			TEMP_DIR="$OPTARG"
 			;;
 	  v)
-	    VERBOSE="true"
+	    VERBOSE="--verbose"
 	    ;;
 		\? )
 			printUsageAndExit
@@ -199,7 +199,7 @@ done
 
 shift $((OPTIND - 1))
 
-if [ "$VERBOSE" = "true" ]
+if [ "$VERBOSE" = "--verbose" ]
 then
   echo "INFO VERBOSE: Verbose mode enabled. Printing debug information." 1>&2
 fi
@@ -446,7 +446,7 @@ create_most_tables() {
 		--ec "$(gz "$OUTPUT_DIR/ec_cross_references.tsv.gz")" \
 		--go "$(gz "$OUTPUT_DIR/go_cross_references.tsv.gz")" \
 		--interpro "$(gz "$OUTPUT_DIR/interpro_cross_references.tsv.gz")" \
-		--verbose $VERBOSE
+		$VERBOSE
 
 	log "Finished calculation of most tables."
 }
