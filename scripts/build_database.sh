@@ -433,7 +433,7 @@ create_most_tables() {
 	have "$OUTPUT_DIR/taxons.tsv.gz" || return
 	log "Started calculation of most tables."
 
-  	reportProgress "-1" "Started building main database tables." 5
+  reportProgress "-1" "Started building main database tables." 5
 
 	mkdir -p "$OUTPUT_DIR" "$INTDIR"
 
