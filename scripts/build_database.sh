@@ -12,7 +12,7 @@ UNIPEPT_TEMP_CONSTANT="unipept_temp"
 TEMP_DIR="/tmp"
 INDEX_DIR="/tmp/unipept_index"
 TAXA="1"
-VERBOSE=""
+VERBOSE="false"
 
 
 printHelp() {
@@ -189,7 +189,7 @@ do
 			TEMP_DIR="$OPTARG"
 			;;
 	  v)
-	    VERBOSE="--verbose"
+	    VERBOSE="true"
 	    ;;
 		\? )
 			printUsageAndExit
@@ -199,7 +199,7 @@ done
 
 shift $((OPTIND - 1))
 
-if [ "$VERBOSE" = "--verbose" ]
+if [ "$VERBOSE" = "true" ]
 then
   echo "INFO VERBOSE: Verbose mode enabled. Printing debug information." 1>&2
 fi
@@ -437,6 +437,11 @@ create_most_tables() {
 
 	mkdir -p "$OUTPUT_DIR" "$INTDIR"
 
+	if [ $VERBOSE = "true" ]
+	then
+	  $VERBOSE_FLAG="--verbose"
+  fi
+
 	cat - | java -Xms"$JAVA_MEM" -Xmx"$JAVA_MEM" -jar "$CURRENT_LOCATION/helper_scripts/TaxonsUniprots2Tables.jar" \
 		--peptide-min "$PEPTIDE_MIN_LENGTH" \
 		--peptide-max "$PEPTIDE_MAX_LENGTH" \
@@ -446,7 +451,7 @@ create_most_tables() {
 		--ec "$(gz "$OUTPUT_DIR/ec_cross_references.tsv.gz")" \
 		--go "$(gz "$OUTPUT_DIR/go_cross_references.tsv.gz")" \
 		--interpro "$(gz "$OUTPUT_DIR/interpro_cross_references.tsv.gz")" \
-		$VERBOSE
+		$VERBOSE_FLAG
 
 	log "Finished calculation of most tables."
 }
