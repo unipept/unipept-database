@@ -24,9 +24,9 @@ const fileObjects = [...Object.keys(taxaBounds)].slice(0, -1).map(idx => Number.
 let headerSkipped = false;
 
 rl.on("line", (line) => {
-    if (verbose) {
+    // if (verbose) {
         console.error("INFO VERBOSE: writing line to chunk: " + line);
-    }
+    // }
 
     if (!headerSkipped) {
         headerSkipped = true;

@@ -33,6 +33,10 @@ public class TaxonsUniprots2Tables {
         TaxonsUniprots2Tables main = new TaxonsUniprots2Tables();
         new JCommander(main, args);
 
+        if (main.verboseMode) {
+            System.err.println("INFO: TaxonsUniprots2Tables - Verbose mode enabled.");
+        }
+
         TableWriter writer = new TableWriter(main);
 
         UniprotTabParser parser = new UniprotTabParser();
