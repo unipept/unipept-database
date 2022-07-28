@@ -5,9 +5,9 @@
 -- First we have to create a new virtual table. Afterwards we can populate this table with content from the pre-existing
 -- taxon table.
 CREATE VIRTUAL TABLE `virtual_taxons` USING fts5 (
-    id UNINDEXED,
+    id,
     name
 );
 
 -- Now, populate this table using the data that's already present in the taxons table.
-INSERT INTO `virtual_taxons` SELECT id, namei FROM `taxons`;
+INSERT INTO `virtual_taxons` SELECT id, name FROM `taxons`;
