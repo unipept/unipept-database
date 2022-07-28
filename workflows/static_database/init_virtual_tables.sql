@@ -7,8 +7,8 @@
 CREATE VIRTUAL TABLE `virtual_taxons` USING fts5 (
     id,
     name,
-    rank
+    rank_name
 );
 
 -- Now, populate this table using the data that's already present in the taxons table.
-INSERT INTO `virtual_taxons` SELECT id, name, rank FROM `taxons`;
+INSERT INTO `virtual_taxons` SELECT id, name, rank as rank_name FROM `taxons`;
