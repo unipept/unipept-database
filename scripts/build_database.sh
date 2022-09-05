@@ -250,10 +250,10 @@ CMD_GZIP="gzip -" # Which pipe compression command should I use?
 ENTREZ_BATCH_SIZE=1000 # Which batch size should I use for communication with Entrez?
 
 TAXON_URL="https://ftp.ncbi.nih.gov/pub/taxonomy/taxdmp.zip"
-EC_CLASS_URL="http://ftp.ebi.ac.uk/pub/databases/enzyme/enzclass.txt"
-EC_NUMBER_URL="http://ftp.ebi.ac.uk/pub/databases/enzyme/enzyme.dat"
+EC_CLASS_URL="https://ftp.expasy.org/databases/enzyme/enzclass.txt"
+EC_NUMBER_URL="https://ftp.expasy.org/databases/enzyme/enzyme.dat"
 GO_TERM_URL="http://geneontology.org/ontology/go-basic.obo"
-INTERPRO_URL="http://ftp.ebi.ac.uk/pub/databases/interpro/entry.list"
+INTERPRO_URL="http://ftp.ebi.ac.uk/pub/databases/interpro/current_release/entry.list"
 
 ### Utility functions required for the database construction process.
 
