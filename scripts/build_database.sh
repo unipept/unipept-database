@@ -705,12 +705,14 @@ database)
 	create_taxon_tables
 	download_and_convert_all_sources
 	create_tables_and_filter
-	join_equalized_pepts_and_entries &
-	pid1=$!
-	join_original_pepts_and_entries &
-	pid2=$!
-	wait $pid1
-	wait $pid2
+#	join_equalized_pepts_and_entries &
+#	pid1=$!
+#	join_original_pepts_and_entries &
+#	pid2=$!
+#	wait $pid1
+#	wait $pid2
+	join_equalized_pepts_and_entries
+	join_original_pepts_and_entries
 	number_sequences
 	reportProgress "-1" "Calculating lowest common ancestors." 6
 	calculate_equalized_lcas &
