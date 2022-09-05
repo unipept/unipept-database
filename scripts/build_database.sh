@@ -403,6 +403,8 @@ download_and_convert_all_sources() {
 
     echo "Index for $DB_TYPE has been produced."
   done
+
+  return 0
 }
 
 filter_sources_by_taxa() {
