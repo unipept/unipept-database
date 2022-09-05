@@ -34,35 +34,41 @@ public class UniprotTabParser {
 
             String[] fields = line.trim().split("\t");
 
-            // We need to emit one new UniprotEntry per line in the input
-            UniprotEntry entry = new UniprotEntry(fields[headerMap.get("Status")].trim(), peptideMinLength, peptideMaxLength);
+            try {
+                // We need to emit one new UniprotEntry per line in the input
+                UniprotEntry entry = new UniprotEntry(fields[headerMap.get("Status")].trim(), peptideMinLength, peptideMaxLength);
 
-            // Now convert all fields into the correct Uniprot entry properties
-            entry.setUniprotAccessionNumber(fields[headerMap.get("Entry")]);
-            entry.setSequence(fields[headerMap.get("Sequence")].trim());
+                // Now convert all fields into the correct Uniprot entry properties
+                entry.setUniprotAccessionNumber(fields[headerMap.get("Entry")]);
+                entry.setSequence(fields[headerMap.get("Sequence")].trim());
 
-            entry.setRecommendedName(fields[headerMap.get("Protein names")].trim());
-            // Todo, does not always need to be set?
-            // entry.setSubmittedName("name");
+                entry.setRecommendedName(fields[headerMap.get("Protein names")].trim());
+                // Todo, does not always need to be set?
+                // entry.setSubmittedName("name");
 
-            entry.setVersion(Integer.parseInt(fields[headerMap.get("Version (entry)")].trim()));
+                entry.setVersion(Integer.parseInt(fields[headerMap.get("Version (entry)")].trim()));
 
-            for (String ecNumber : fields[headerMap.get("EC number")].split(";")) {
-                entry.addECRef(new UniprotECRef(ecNumber.trim()));
+                for (String ecNumber : fields[headerMap.get("EC number")].split(";")) {
+                    entry.addECRef(new UniprotECRef(ecNumber.trim()));
+                }
+
+                for (String goTerm : fields[headerMap.get("Gene ontology IDs")].split(";")) {
+                    entry.addGORef(new UniprotGORef(goTerm.trim()));
+                }
+
+                for (String interpro : fields[headerMap.get("Cross-reference (InterPro)")].split(";")) {
+                    entry.addInterProRef(new UniprotInterProRef(interpro.trim()));
+                }
+
+                entry.setTaxonId(Integer.parseInt(fields[headerMap.get("Organism ID")]));
+
+                // Emit entry that's finished and handle it...
+                observer.handleEntry(entry);
+            } catch (Exception e) {
+                System.err.println("Invalid entry ignored: " + line);
+                System.err.println("Invalid entry error details: " + e.getMessage());
             }
 
-            for (String goTerm : fields[headerMap.get("Gene ontology IDs")].split(";")) {
-                entry.addGORef(new UniprotGORef(goTerm.trim()));
-            }
-
-            for (String interpro : fields[headerMap.get("Cross-reference (InterPro)")].split(";")) {
-                entry.addInterProRef(new UniprotInterProRef(interpro.trim()));
-            }
-
-            entry.setTaxonId(Integer.parseInt(fields[headerMap.get("Organism ID")]));
-
-            // Emit entry that's finished and handle it...
-            observer.handleEntry(entry);
             line = reader.readLine();
         }
 
