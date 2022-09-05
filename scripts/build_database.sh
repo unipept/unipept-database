@@ -458,10 +458,12 @@ create_most_tables() {
 		$VERBOSE_FLAG
 
 	log "Finished calculation of most tables with status $?"
+	return 0
 }
 
 create_tables_and_filter() {
   filter_sources_by_taxa | create_most_tables
+  return 0
 }
 
 join_equalized_pepts_and_entries() {
