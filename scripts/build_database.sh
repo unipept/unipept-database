@@ -367,6 +367,7 @@ download_and_convert_all_sources() {
     if [[ -n "$CURRENT_ETAG" ]] && [[ "$CURRENT_ETAG" == "$PREVIOUS_ETAG" ]]
     then
       echo "Index for $DB_TYPE is already present and can be reused."
+      return 0
     else
       echo "Index for $DB_TYPE is not yet present and needs to be created."
       # Remove old database version and continue building the new database.
