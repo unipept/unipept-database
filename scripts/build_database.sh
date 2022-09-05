@@ -367,7 +367,7 @@ download_and_convert_all_sources() {
     if [[ -n "$CURRENT_ETAG" ]] && [[ "$CURRENT_ETAG" == "$PREVIOUS_ETAG" ]]
     then
       echo "Index for $DB_TYPE is already present and can be reused."
-      return
+      return 0
     else
       echo "Index for $DB_TYPE is not yet present and needs to be created."
       # Remove old database version and continue building the new database.
@@ -455,7 +455,7 @@ create_most_tables() {
 		--interpro "$(gz "$OUTPUT_DIR/interpro_cross_references.tsv.gz")" \
 		$VERBOSE_FLAG
 
-	log "Finished calculation of most tables."
+	log "Finished calculation of most tables with status $?"
 }
 
 create_tables_and_filter() {
@@ -472,7 +472,7 @@ join_equalized_pepts_and_entries() {
 		| LC_ALL=C $CMD_SORT -k1 \
 		| $CMD_GZIP - > "$INTDIR/aa_sequence_taxon_equalized.tsv.gz"
 	rm "peptides_eq" "entries_eq"
-	log "Finished the joining of equalized peptides and uniprot entries."
+	log "Finished the joining of equalized peptides and uniprot entries with status $?."
 }
 
 
@@ -486,7 +486,7 @@ join_original_pepts_and_entries() {
 		| LC_ALL=C $CMD_SORT -k1 \
 		| $CMD_GZIP - > "$INTDIR/aa_sequence_taxon_original.tsv.gz"
 	rm "peptides_orig" "entries_orig"
-	log "Finished the joining of original peptides and uniprot entries."
+	log "Finished the joining of original peptides and uniprot entries with status $?."
 }
 
 
@@ -499,7 +499,7 @@ number_sequences() {
 	LC_ALL=C $CMD_SORT -m "equalized" "original" | uniq | cat -n \
 		| sed 's/^ *//' | $CMD_GZIP - > "$INTDIR/sequences.tsv.gz"
 	rm "equalized" "original"
-	log "Finished the numbering of sequences."
+	log "Finished the numbering of sequences with status $?."
 }
 
 
@@ -511,7 +511,7 @@ calculate_equalized_lcas() {
 			"$(guz "$INTDIR/aa_sequence_taxon_equalized.tsv.gz")" \
 		| java -Xms"$JAVA_MEM" -Xmx"$JAVA_MEM" -jar "$CURRENT_LOCATION/helper_scripts/LineagesSequencesTaxons2LCAs.jar" "$(guz "$OUTPUT_DIR/lineages.tsv.gz")" \
 		| $CMD_GZIP - > "$INTDIR/LCAs_equalized.tsv.gz"
-	log "Finished the calculation of equalized LCA's (after substituting AA's by ID's)."
+	log "Finished the calculation of equalized LCA's (after substituting AA's by ID's) with status $?."
 }
 
 
@@ -523,7 +523,7 @@ calculate_original_lcas() {
 			"$(guz "$INTDIR/aa_sequence_taxon_original.tsv.gz")" \
 		| java -Xms"$JAVA_MEM" -Xmx"$JAVA_MEM" -jar "$CURRENT_LOCATION/helper_scripts/LineagesSequencesTaxons2LCAs.jar" "$(guz "$OUTPUT_DIR/lineages.tsv.gz")" \
 		| $CMD_GZIP - > "$INTDIR/LCAs_original.tsv.gz"
-	log "Finished the calculation of original LCA's (after substituting AA's by ID's)."
+	log "Finished the calculation of original LCA's (after substituting AA's by ID's) with status $?."
 }
 
 
@@ -534,7 +534,7 @@ substitute_equalized_aas() {
 		| LC_ALL=C $CMD_SORT -k 2b,2 \
 		| join -t '	' -o '1.1,2.1,1.3,1.4,1.5' -1 2 -2 2 - "$(guz "$INTDIR/sequences.tsv.gz")" \
 		| $CMD_GZIP - > "$INTDIR/peptides_by_equalized.tsv.gz"
-	log "Finished the substitution of equalized AA's by ID's for the peptides."
+	log "Finished the substitution of equalized AA's by ID's for the peptides with status $?."
 }
 
 
@@ -545,7 +545,7 @@ calculate_equalized_fas() {
 	zcat "$INTDIR/peptides_by_equalized.tsv.gz" | cut -f2,5 > "peptides_eq" &
 	node  "$CURRENT_LOCATION/helper_scripts/FunctionalAnalysisPeptides.js" "peptides_eq" "$(gz "$INTDIR/FAs_equalized.tsv.gz")"
 	rm "peptides_eq"
-	log "Finished the calculation of equalized FA's."
+	log "Finished the calculation of equalized FA's with status $?."
 }
 
 
@@ -556,7 +556,7 @@ substitute_original_aas() {
 		| LC_ALL=C $CMD_SORT -k 3b,3 \
 		| join -t '	' -o '1.1,1.2,2.1,1.4,1.5' -1 3 -2 2 - "$(guz "$INTDIR/sequences.tsv.gz")" \
 		| $CMD_GZIP - > "$INTDIR/peptides_by_original.tsv.gz"
-	log "Finished the substitution of equalized AA's by ID's for the peptides."
+	log "Finished the substitution of equalized AA's by ID's for the peptides with status $?."
 }
 
 calculate_original_fas() {
