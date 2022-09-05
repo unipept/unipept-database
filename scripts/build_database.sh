@@ -1,6 +1,6 @@
 #! /usr/bin/env bash
 
-set -exo pipefail
+#set -exo pipefail
 
 # All references to an external script should be relative to the location of this script.
 # See: http://mywiki.wooledge.org/BashFAQ/028
@@ -367,7 +367,6 @@ download_and_convert_all_sources() {
     if [[ -n "$CURRENT_ETAG" ]] && [[ "$CURRENT_ETAG" == "$PREVIOUS_ETAG" ]]
     then
       echo "Index for $DB_TYPE is already present and can be reused."
-      return 0
     else
       echo "Index for $DB_TYPE is not yet present and needs to be created."
       # Remove old database version and continue building the new database.
@@ -403,8 +402,6 @@ download_and_convert_all_sources() {
 
     echo "Index for $DB_TYPE has been produced."
   done
-
-  return 0
 }
 
 filter_sources_by_taxa() {
@@ -458,12 +455,10 @@ create_most_tables() {
 		$VERBOSE_FLAG
 
 	log "Finished calculation of most tables with status $?"
-	return 0
 }
 
 create_tables_and_filter() {
   filter_sources_by_taxa | create_most_tables
-  return 0
 }
 
 join_equalized_pepts_and_entries() {
