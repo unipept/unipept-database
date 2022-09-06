@@ -1,6 +1,6 @@
 #! /usr/bin/env bash
 
-#set -exo pipefail
+set -exo pipefail
 
 # All references to an external script should be relative to the location of this script.
 # See: http://mywiki.wooledge.org/BashFAQ/028
@@ -463,6 +463,7 @@ create_tables_and_filter() {
 }
 
 join_equalized_pepts_and_entries() {
+  echo "Test if files for joining peptides are available."
 	have "$INTDIR/peptides.tsv.gz" "$OUTPUT_DIR/uniprot_entries.tsv.gz" || return
 	log "Started the joining of equalized peptides and uniprot entries."
 	mkfifo "peptides_eq" "entries_eq"
@@ -703,14 +704,13 @@ database)
 	create_taxon_tables
 	download_and_convert_all_sources
 	create_tables_and_filter
-#	join_equalized_pepts_and_entries &
-#	pid1=$!
-#	join_original_pepts_and_entries &
-#	pid2=$!
-#	wait $pid1
-#	wait $pid2
-	join_equalized_pepts_and_entries
-	join_original_pepts_and_entries
+	echo "Created tables!"
+	join_equalized_pepts_and_entries &
+	pid1=$!
+	join_original_pepts_and_entries &
+	pid2=$!
+	wait $pid1
+	wait $pid2
 	number_sequences
 	reportProgress "-1" "Calculating lowest common ancestors." 6
 	calculate_equalized_lcas &
