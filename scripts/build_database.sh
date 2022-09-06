@@ -394,12 +394,12 @@ download_and_convert_all_sources() {
       pv -i 5 -n "$CHUNK" 2> >(reportProgress - "Processing chunk $CHUNK_IDX of $TOTAL_CHUNKS for $DB_TYPE index." 4 >&2) | pigz > "$CHUNK.gz"
       # Remove the chunk that was just compressed
       rm "$CHUNK"
-      ((CHUNK_IDX++))
+      CHUNK_IDX=$((CHUNK_IDX + 1))
     done
 
     echo "$CURRENT_ETAG" > "$DB_INDEX_OUTPUT/metadata"
 
-    ((IDX++))
+    IDX=$((IDX + 1))
 
     echo "Index for $DB_TYPE has been produced."
   done
@@ -427,7 +427,7 @@ filter_sources_by_taxa() {
 
     $CURRENT_LOCATION/helper_scripts/filter_taxa.sh "$TAXA" "$DB_INDEX_OUTPUT" "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/filter" "$OUTPUT_DIR/lineages.tsv.gz"
 
-    ((IDX++))
+    IDX=$((IDX + 1))
   done
 }
 
