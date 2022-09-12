@@ -32,7 +32,6 @@ then
 else
 
   # If the root ID has been passed to this script, we simply print out all database items (without filtering).
-  cat "$DATABASE_INDEX/db.header"
   find "$DATABASE_INDEX" -name "*.chunk.gz" | xargs zcat
 fi
 
