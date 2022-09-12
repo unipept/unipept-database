@@ -27,8 +27,6 @@ then
 
   if [[ ${#QUERIES[@]} -gt 0 ]]
   then
-    # First echo the header that's supposed to be part of all files.
-    cat "$DATABASE_INDEX/db.header"
     parallel --jobs 8 --max-args 2 "cat {2} | zcat | sed 's/$/$/' | grep -F -f {1} | sed 's/\$$//'" ::: "${QUERIES[@]}"
   fi
 else

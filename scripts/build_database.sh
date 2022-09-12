@@ -1,6 +1,6 @@
 #! /usr/bin/env bash
 
-set -eox pipefail
+set -eo pipefail
 
 # All references to an external script should be relative to the location of this script.
 # See: http://mywiki.wooledge.org/BashFAQ/028
@@ -415,6 +415,9 @@ filter_sources_by_taxa() {
   DB_SOURCES_ARRAY=($DB_SOURCES)
 
   IFS="$OLDIFS"
+
+  # First echo the header that's supposed to be part of all files.
+  cat "$INDEX_DIR/db.header"
 
   while [[ "$IDX" -ne "${#DB_TYPES_ARRAY}" ]] && [[ -n $(echo "${DB_TYPES_ARRAY[$IDX]}" | sed "s/\s//g") ]]
   do
