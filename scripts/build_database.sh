@@ -367,41 +367,40 @@ download_and_convert_all_sources() {
     if [[ -n "$CURRENT_ETAG" ]] && [[ "$CURRENT_ETAG" == "$PREVIOUS_ETAG" ]]
     then
       echo "Index for $DB_TYPE is already present and can be reused."
-      return 0
     else
       echo "Index for $DB_TYPE is not yet present and needs to be created."
       # Remove old database version and continue building the new database.
       rm -rf "$DB_INDEX_OUTPUT"
       mkdir -p "$DB_INDEX_OUTPUT"
       touch "$DB_INDEX_OUTPUT/metadata"
+
+      reportProgress 0 "Building database index for $DB_TYPE." 2
+
+      SIZE="$(curl -I "$DB_SOURCE" -s | grep -i content-length | tr -cd '[0-9]')"
+
+      curl --continue-at - --create-dirs "$DB_SOURCE" --silent | pv -i 5 -n -s "$SIZE" 2> >(reportProgress - "Downloading database index for $DB_TYPE." 3 >&2) | zcat | java -jar "$CURRENT_LOCATION/helper_scripts/XmlToTabConverter.jar" 5 50 "$DB_TYPE" "$VERBOSE" | node "$CURRENT_LOCATION/helper_scripts/WriteToChunk.js" "$DB_INDEX_OUTPUT" "$VERBOSE"
+
+      # Now, compress the different chunks
+      CHUNKS=$(find "$DB_INDEX_OUTPUT" -name "*.chunk")
+      TOTAL_CHUNKS=$(echo "$CHUNKS" | wc -l)
+
+      CHUNK_IDX=1
+
+      for CHUNK in $CHUNKS
+      do
+        echo "Compressing $CHUNK_IDX of $TOTAL_CHUNKS for $DB_TYPE"
+        pv -i 5 -n "$CHUNK" 2> >(reportProgress - "Processing chunk $CHUNK_IDX of $TOTAL_CHUNKS for $DB_TYPE index." 4 >&2) | pigz > "$CHUNK.gz"
+        # Remove the chunk that was just compressed
+        rm "$CHUNK"
+        CHUNK_IDX=$((CHUNK_IDX + 1))
+      done
+
+      echo "$CURRENT_ETAG" > "$DB_INDEX_OUTPUT/metadata"
+
+      echo "Index for $DB_TYPE has been produced."
     fi
 
-    reportProgress 0 "Building database index for $DB_TYPE." 2
-
-    SIZE="$(curl -I "$DB_SOURCE" -s | grep -i content-length | tr -cd '[0-9]')"
-
-    curl --continue-at - --create-dirs "$DB_SOURCE" --silent | pv -i 5 -n -s "$SIZE" 2> >(reportProgress - "Downloading database index for $DB_TYPE." 3 >&2) | zcat | java -jar "$CURRENT_LOCATION/helper_scripts/XmlToTabConverter.jar" 5 50 "$DB_TYPE" "$VERBOSE" | node "$CURRENT_LOCATION/helper_scripts/WriteToChunk.js" "$DB_INDEX_OUTPUT" "$VERBOSE"
-
-    # Now, compress the different chunks
-    CHUNKS=$(find "$DB_INDEX_OUTPUT" -name "*.chunk")
-    TOTAL_CHUNKS=$(echo "$CHUNKS" | wc -l)
-
-    CHUNK_IDX=1
-
-    for CHUNK in $CHUNKS
-    do
-      echo "Compressing $CHUNK_IDX of $TOTAL_CHUNKS for $DB_TYPE"
-      pv -i 5 -n "$CHUNK" 2> >(reportProgress - "Processing chunk $CHUNK_IDX of $TOTAL_CHUNKS for $DB_TYPE index." 4 >&2) | pigz > "$CHUNK.gz"
-      # Remove the chunk that was just compressed
-      rm "$CHUNK"
-      CHUNK_IDX=$((CHUNK_IDX + 1))
-    done
-
-    echo "$CURRENT_ETAG" > "$DB_INDEX_OUTPUT/metadata"
-
     IDX=$((IDX + 1))
-
-    echo "Index for $DB_TYPE has been produced."
   done
 }
 
