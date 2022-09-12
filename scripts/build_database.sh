@@ -1,6 +1,6 @@
 #! /usr/bin/env bash
 
-set -eo pipefail
+set -eox pipefail
 
 # All references to an external script should be relative to the location of this script.
 # See: http://mywiki.wooledge.org/BashFAQ/028
