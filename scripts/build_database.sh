@@ -416,7 +416,8 @@ filter_sources_by_taxa() {
   IFS="$OLDIFS"
 
   # First echo the header that's supposed to be part of all files.
-  cat "$INDEX_DIR/db.header"
+  FIRST_DB_TYPE=${DB_TYPES_ARRAY[0]}
+  cat "$INDEX_DIR/$FIRST_DB_TYPE/db.header"
 
   while [[ "$IDX" -ne "${#DB_TYPES_ARRAY}" ]] && [[ -n $(echo "${DB_TYPES_ARRAY[$IDX]}" | sed "s/\s//g") ]]
   do
