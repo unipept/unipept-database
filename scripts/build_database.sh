@@ -245,7 +245,7 @@ TABDIR="$OUTPUT_DIR" # Where should I store the final TSV files (large, single-w
 INTDIR="$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT" # Where should I store intermediate TSV files (large, single-write, multiple-read?
 KMER_LENGTH=9 # What is the length (k) of the K-mer peptides?
 JAVA_MEM="2g" # How much memory should Java use?
-CMD_SORT="sort --buffer-size=80% --parallel=4" # Which sort command should I use?
+CMD_SORT="sort --buffer-size=2G --parallel=4" # Which sort command should I use?
 CMD_GZIP="gzip -" # Which pipe compression command should I use?
 ENTREZ_BATCH_SIZE=1000 # Which batch size should I use for communication with Entrez?
 
