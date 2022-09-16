@@ -7,21 +7,30 @@
  * temporary folder that can be used by the script to store temporary files.
  */
 
-const fs = require("fs/promises");
+const readline = require("readline");
+const fs = require("fs");
 const path = require("path");
 
 const args = process.argv;
 
 if (args.length !== 4) {
-	console.error("This script expects exactly two parameters: unipept_db_chunk_folder temporary_folder");
-	process.exit(1);
+    console.error("This script expects exactly two parameters: unipept_db_chunk_folder temporary_folder");
+    process.exit(1);
 }
 
-(async() => {
-    const allTaxa = (await fs.readFile("/dev/stdin")).toString().split("\n").map(l => parseInt(l.trim()));
+const rl = readline.createInterface({
+    input: process.stdin
+});
 
-    // In this hook we should start to link input files with the taxa that need to be looked up in there.
-    for (const file of (await fs.readdir(args[2]))) {
+const allTaxa = [];
+
+rl.on("line", (line) => {
+    allTaxa.push(parseInt(line.trim()));
+});
+
+// In this hook we should start to link input files with the taxa that need to be looked up in there.
+rl.on("close", () => {
+    for (const file of fs.readdirSync(args[2])) {
         const baseFile = path.basename(file);
         if (baseFile.match(/unipept\..*\.gz/)) {
             const range = baseFile.replace(/unipept\.|\.gz/g, '').split("-");
@@ -31,12 +40,11 @@ if (args.length !== 4) {
             const matchedTaxa = allTaxa.filter(t => startRange <= t && t <= endRange);
 
             if (matchedTaxa && matchedTaxa.length > 0) {
-                await fs.writeFile(path.join(args[3], baseFile + ".pattern"), matchedTaxa.map(t => "\t" + t + "$").join("\n"));
+                fs.writeFileSync(path.join(args[3], baseFile + ".pattern"), matchedTaxa.map(t => "\t" + t + "$").join("\n"));
 
                 console.log(path.join(args[3], baseFile + ".pattern"));
                 console.log(path.join(args[2], file));
             }
         }
     }
-})();
-
+});
