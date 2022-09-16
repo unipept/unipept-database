@@ -13,9 +13,9 @@ LINEAGE_ARCHIVE="$4"
 mkdir -p "$TMP_DIR"
 
 filter_taxa() {
-	QUERY=$(echo "\s$1\s" | sed "s/,/\\\s\\\|\\\s/")
+	QUERY=$(echo "\s$1\s" | sed "s/,/\\\s\\\|\\\s/g")
 	RESULT=$(cat "$LINEAGE_ARCHIVE" | zcat  | grep "$QUERY" | cut -f1 | sort -n | uniq | tr '\n' ',')
-	echo "$RESULT,$1"
+	echo "$RESULT"
 }
 
 if [[ $TAXA != "1" ]]
