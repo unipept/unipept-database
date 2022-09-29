@@ -171,7 +171,7 @@ trap clean EXIT
 
 ### Process all options for this script and make sure that everything is alright.
 
-while getopts ":hvf:i:d:" opt
+while getopts ":hvm:f:i:d:" opt
 do
 	case $opt in
 		h)
