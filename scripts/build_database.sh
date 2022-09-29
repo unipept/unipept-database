@@ -15,7 +15,7 @@ TEMP_DIR="/tmp"
 INDEX_DIR="/tmp/unipept_index"
 TAXA="1"
 VERBOSE="false"
-
+SORT_MEMORY="2g"
 
 printHelp() {
 	cat << END
@@ -59,6 +59,11 @@ Options:
 	* -d [TEMP_DIR]
 	Specify the temporary directory that can be used by this script to temporary store files that are required to build
 	the requested Unipept tables. If the given directory does not exist, it will be created by this script.
+
+	* -m [MAX_SORTING_MEMORY_PER_THREAD]
+	Specify how much memory the sorting processes are allowed to use. This parameter needs to be formatted according to
+	the specifications required by the linux sort command (for example: 2G for 2 gigabytes). Note that two sorting
+	processes will be executed in parallel, so keep that in mind when setting this parameter. The default value is 2G.
 
 Dependencies:
 	This script requires some non-standard dependencies to be installed before it can be used. This is a list of these
@@ -190,6 +195,9 @@ do
 			checkDirectoryAndCreate "$OPTARG/$UNIPEPT_TEMP_CONSTANT"
 			TEMP_DIR="$OPTARG"
 			;;
+	  m)
+	    SORT_MEMORY="$OPTARG"
+	    ;;
 	  v)
 	    VERBOSE="true"
 	    ;;
@@ -245,7 +253,7 @@ TABDIR="$OUTPUT_DIR" # Where should I store the final TSV files (large, single-w
 INTDIR="$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT" # Where should I store intermediate TSV files (large, single-write, multiple-read?
 KMER_LENGTH=9 # What is the length (k) of the K-mer peptides?
 JAVA_MEM="2g" # How much memory should Java use?
-CMD_SORT="sort --buffer-size=2G --parallel=4" # Which sort command should I use?
+CMD_SORT="sort --buffer-size=$SORT_MEMORY --parallel=4" # Which sort command should I use?
 CMD_GZIP="gzip -" # Which pipe compression command should I use?
 ENTREZ_BATCH_SIZE=1000 # Which batch size should I use for communication with Entrez?
 
