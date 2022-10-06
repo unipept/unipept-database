@@ -372,7 +372,7 @@ download_and_convert_all_sources() {
       rm -rf "$DB_INDEX_OUTPUT"
       mkdir -p "$DB_INDEX_OUTPUT"
 
-      reportProgress -1 "Building database index for $DB_TYPE." 2
+      reportProgress -1 "Downloading database index for $DB_TYPE." 3
 
       curl --continue-at - --create-dirs "$DB_SOURCE" --silent | zcat | java -jar "$CURRENT_LOCATION/helper_scripts/XmlToTabConverter.jar" 5 50 "$DB_TYPE" "$VERBOSE" | node "$CURRENT_LOCATION/helper_scripts/WriteToChunk.js" "$DB_INDEX_OUTPUT" "$VERBOSE"
 
