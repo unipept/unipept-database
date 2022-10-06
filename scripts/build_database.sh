@@ -362,31 +362,19 @@ download_and_convert_all_sources() {
 
     mkdir -p "$DB_INDEX_OUTPUT"
 
-    # Check for this database if the database index is already present
-    CURRENT_ETAG=$(curl --head --silent "$DB_SOURCE" | grep "ETag" | cut -d " " -f2 | tr -d "\"")
-
-    if [[ ! -e "$DB_INDEX_OUTPUT/metadata" ]]
+    # No ETags or other header requests are available if a database is requested from the UniProt REST API. That's why
+    # we always need to reprocess the database in that case.
+    if [[ $DB_SOURCE =~ "rest" ]]
     then
-      touch "$DB_INDEX_OUTPUT/metadata"
-    fi
+      echo "Index for $DB_TYPE is requested over UniProt REST API and needs to be recreated."
 
-    PREVIOUS_ETAG=$([[ -r "$DB_INDEX_OUTPUT/metadata" ]] && cat "$DB_INDEX_OUTPUT/metadata" 2> /dev/null)
-
-    if [[ -n "$CURRENT_ETAG" ]] && [[ "$CURRENT_ETAG" == "$PREVIOUS_ETAG" ]]
-    then
-      echo "Index for $DB_TYPE is already present and can be reused."
-    else
-      echo "Index for $DB_TYPE is not yet present and needs to be created."
       # Remove old database version and continue building the new database.
       rm -rf "$DB_INDEX_OUTPUT"
       mkdir -p "$DB_INDEX_OUTPUT"
-      touch "$DB_INDEX_OUTPUT/metadata"
 
-      reportProgress 0 "Building database index for $DB_TYPE." 2
+      reportProgress -1 "Building database index for $DB_TYPE." 2
 
-      SIZE="$(curl -I "$DB_SOURCE" -s | grep -i content-length | tr -cd '[0-9]')"
-
-      curl --continue-at - --create-dirs "$DB_SOURCE" --silent | pv -i 5 -n -s "$SIZE" 2> >(reportProgress - "Downloading database index for $DB_TYPE." 3 >&2) | zcat | java -jar "$CURRENT_LOCATION/helper_scripts/XmlToTabConverter.jar" 5 50 "$DB_TYPE" "$VERBOSE" | node "$CURRENT_LOCATION/helper_scripts/WriteToChunk.js" "$DB_INDEX_OUTPUT" "$VERBOSE"
+      curl --continue-at - --create-dirs "$DB_SOURCE" --silent | zcat | java -jar "$CURRENT_LOCATION/helper_scripts/XmlToTabConverter.jar" 5 50 "$DB_TYPE" "$VERBOSE" | node "$CURRENT_LOCATION/helper_scripts/WriteToChunk.js" "$DB_INDEX_OUTPUT" "$VERBOSE"
 
       # Now, compress the different chunks
       CHUNKS=$(find "$DB_INDEX_OUTPUT" -name "*.chunk")
@@ -403,9 +391,54 @@ download_and_convert_all_sources() {
         CHUNK_IDX=$((CHUNK_IDX + 1))
       done
 
-      echo "$CURRENT_ETAG" > "$DB_INDEX_OUTPUT/metadata"
-
       echo "Index for $DB_TYPE has been produced."
+    else
+
+      # Check for this database if the database index is already present
+      CURRENT_ETAG=$(curl --head --silent "$DB_SOURCE" | grep "ETag" | cut -d " " -f2 | tr -d "\"")
+
+      if [[ ! -e "$DB_INDEX_OUTPUT/metadata" ]]
+      then
+        touch "$DB_INDEX_OUTPUT/metadata"
+      fi
+
+      PREVIOUS_ETAG=$([[ -r "$DB_INDEX_OUTPUT/metadata" ]] && cat "$DB_INDEX_OUTPUT/metadata" 2> /dev/null)
+
+      if [[ -n "$CURRENT_ETAG" ]] && [[ "$CURRENT_ETAG" == "$PREVIOUS_ETAG" ]]
+      then
+        echo "Index for $DB_TYPE is already present and can be reused."
+      else
+        echo "Index for $DB_TYPE is not yet present and needs to be created."
+        # Remove old database version and continue building the new database.
+        rm -rf "$DB_INDEX_OUTPUT"
+        mkdir -p "$DB_INDEX_OUTPUT"
+        touch "$DB_INDEX_OUTPUT/metadata"
+
+        reportProgress 0 "Building database index for $DB_TYPE." 2
+
+        SIZE="$(curl -I "$DB_SOURCE" -s | grep -i content-length | tr -cd '[0-9]')"
+
+        curl --continue-at - --create-dirs "$DB_SOURCE" --silent | pv -i 5 -n -s "$SIZE" 2> >(reportProgress - "Downloading database index for $DB_TYPE." 3 >&2) | zcat | java -jar "$CURRENT_LOCATION/helper_scripts/XmlToTabConverter.jar" 5 50 "$DB_TYPE" "$VERBOSE" | node "$CURRENT_LOCATION/helper_scripts/WriteToChunk.js" "$DB_INDEX_OUTPUT" "$VERBOSE"
+
+        # Now, compress the different chunks
+        CHUNKS=$(find "$DB_INDEX_OUTPUT" -name "*.chunk")
+        TOTAL_CHUNKS=$(echo "$CHUNKS" | wc -l)
+
+        CHUNK_IDX=1
+
+        for CHUNK in $CHUNKS
+        do
+          echo "Compressing $CHUNK_IDX of $TOTAL_CHUNKS for $DB_TYPE"
+          pv -i 5 -n "$CHUNK" 2> >(reportProgress - "Processing chunk $CHUNK_IDX of $TOTAL_CHUNKS for $DB_TYPE index." 4 >&2) | pigz > "$CHUNK.gz"
+          # Remove the chunk that was just compressed
+          rm "$CHUNK"
+          CHUNK_IDX=$((CHUNK_IDX + 1))
+        done
+
+        echo "$CURRENT_ETAG" > "$DB_INDEX_OUTPUT/metadata"
+
+        echo "Index for $DB_TYPE has been produced."
+      fi
     fi
 
     IDX=$((IDX + 1))
