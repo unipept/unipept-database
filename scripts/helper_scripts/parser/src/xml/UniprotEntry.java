@@ -147,6 +147,20 @@ public class UniprotEntry {
         if (length - start >= peptideMin && length - start <= peptideMax) {
             sequences.add(sequence.substring(start, length));
         }
+
+        List<String> missedCleavageSeqs = new ArrayList<>();
+
+        // First, now also add all sequences with up to 1 missed cleavage
+        for (int i = 0; i < sequences.size() - 1; i++) {
+            missedCleavageSeqs.add(sequences.get(i) + sequences.get(i + 1));
+        }
+
+        // Then, add all sequences with up to 2 missed cleavages
+        for (int i = 0; i < sequences.size() - 2; i++) {
+            missedCleavageSeqs.add(sequences.get(i) + sequences.get(i + 1) + sequences.get(i + 2));
+        }
+
+        sequences.addAll(missedCleavageSeqs);
         return sequences;
     }
 
