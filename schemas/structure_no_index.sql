@@ -127,7 +127,7 @@ COLLATE = ascii_general_ci;
 -- -----------------------------------------------------
 CREATE  TABLE IF NOT EXISTS `unipept`.`sequences` (
   `id` INT UNSIGNED NOT NULL AUTO_INCREMENT ,
-  `sequence` VARCHAR(50) NOT NULL ,
+  `sequence` VARCHAR(150) NOT NULL ,
   `lca` MEDIUMINT UNSIGNED NULL ,
   `lca_il` MEDIUMINT UNSIGNED NULL ,
   `fa`  MEDIUMBLOB NULL ,
