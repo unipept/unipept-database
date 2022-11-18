@@ -25,16 +25,16 @@ Build Unipept database from a specific collection of UniProt resources.
 Required parameters:
 	* BUILD_TYPE: One of database, static-database, kmer-index, tryptic-index.
 
-  * DB_NAMES: List with all names of the different databases that should be parsed. Every name in this list
+        * DB_NAMES: List with all names of the different databases that should be parsed. Every name in this list
 	corresponds with the respective database source given for the DB_SOURCES parameter. The items in this list should be
 	delimited by comma's.
 
-  * DB_SOURCES: List of UniProt source URLs. The items in this list should be delimited by comma's. Commonly used
+        * DB_SOURCES: List of UniProt source URLs. The items in this list should be delimited by comma's. Commonly used
 	databases and their corresponding sources are:
-    - swissprot: https://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/complete/uniprot_sprot.xml.gz
-    - trembl: https://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/complete/uniprot_trembl.xml.gz
+        - swissprot: https://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/complete/uniprot_sprot.xml.gz
+        - trembl: https://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/complete/uniprot_trembl.xml.gz
 
-  * OUTPUT_DIR: Directory in which the tsv.gz-files that are produced by this script will be stored.
+        * OUTPUT_DIR: Directory in which the tsv.gz-files that are produced by this script will be stored.
 
 Options:
 	* -h
