@@ -224,7 +224,7 @@ then
 fi
 
 # This is required for the sort command to use the correct temp directory
-EXPORT TMPDIR="$TEMP_DIR"
+export TMPDIR="$TEMP_DIR"
 
 BUILD_TYPE="$1"
 
