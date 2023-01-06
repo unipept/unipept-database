@@ -17,6 +17,8 @@ TAXA="1"
 VERBOSE="false"
 SORT_MEMORY="2g"
 
+OLD_TMPDIR="$TMPDIR"
+
 printHelp() {
 	cat << END
 Usage: $(basename "$0") [OPTIONS] BUILD_TYPE DB_NAMES DB_SOURCES OUTPUT_DIR
@@ -84,6 +86,7 @@ END
 clean() {
 	# Clean contents of temporary directory
 	rm -rf "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT"
+	export TMPDIR="$OLD_TMPDIR"
 }
 
 # Stop the script and remove all temporary files that are created by this script.
@@ -201,9 +204,9 @@ do
 	  v)
 	    VERBOSE="true"
 	    ;;
-		\? )
-			printUsageAndExit
-			;;
+	  \? )
+	    printUsageAndExit
+	    ;;
 	esac
 done
 
@@ -219,6 +222,9 @@ if [[ "$#" -ne 4 ]]
 then
 	printUnknownOptionAndExit
 fi
+
+# This is required for the sort command to use the correct temp directory
+EXPORT TMPDIR="$TEMP_DIR"
 
 BUILD_TYPE="$1"
 
