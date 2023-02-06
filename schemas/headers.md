@@ -2,9 +2,6 @@
 Headers
 =======
 
-Proteome Caches
--------------
-
 Taxons
 ------
  - ***id***: The taxon's identifier, as assigned by the NCBI. An
@@ -102,26 +99,6 @@ The JSON summary has 2 fields:
    - `all`: The total number of matched proteins
    - `EC` : The number of matched proteins with ≥ 1 EC annotation
    - `GO` : The number of matched proteins with ≥ 1 GO annotation
-
-Proteomes
----------
-
-- ***id***: A self-assigned id. Integral, incremental, no gaps.
-- ***proteome_accession_number***: The Uniprot Proteome Accession number.
-- ***proteome_name***: Name of the proteome
-- ***taxon _***: The taxon to which this proteome is attributed (calculated in rails).
-- ***type_strain***: Is this a type strain?
-- ***reference_proteome***: Is this a reference proteome?
-- ***strain***: The strain number (might be null)
-- ***assembly***: The coresponding assembly accession number number (might be null)
-- ***name***: Full name (calculated in rails).
-
-Proteome Cross Reference
-------------------
-
- - ***id***: A self-assigned id. Integral, incremental, no gaps.
- - ***uniprot_entry_id***: Which uniprot entry we are referencing.
- - ***proteome_id***: Which proteome we are referencing.
 
 EC Cross References
 -------------------
