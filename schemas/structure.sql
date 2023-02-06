@@ -149,7 +149,7 @@ CREATE  TABLE IF NOT EXISTS `unipept`.`sequences` (
     ON UPDATE NO ACTION)
 ENGINE = InnoDB
 DEFAULT CHARACTER SET = ascii
-ROW_FORMAT=COMPRESSED KEY_BLOCK_SIZE=16 
+ROW_FORMAT=COMPRESSED KEY_BLOCK_SIZE=16
 COLLATE = ascii_general_ci;
 
 
@@ -335,72 +335,6 @@ CREATE TABLE IF NOT EXISTS `unipept`.`users` (
   `admin` TINYINT NOT NULL DEFAULT 0,
   PRIMARY KEY (`id`))
 ENGINE = InnoDB;
-
-
--- -----------------------------------------------------
--- Table `unipept`.`proteomes`
--- -----------------------------------------------------
-CREATE TABLE IF NOT EXISTS `unipept`.`proteomes` (
-  `id` MEDIUMINT UNSIGNED NOT NULL,
-  `proteome_accession_number` CHAR(12) NOT NULL,
-  `proteome_name` VARCHAR(145) NOT NULL,
-  `taxon_id` MEDIUMINT UNSIGNED NULL,
-  `type_strain` BIT(1) NOT NULL DEFAULT b'0',
-  `reference_proteome` BIT(1) NOT NULL DEFAULT b'0',
-  `strain` VARCHAR(120) NULL,
-  `assembly` VARCHAR(45) NULL,
-  `name` VARCHAR(225) NULL,
-  PRIMARY KEY (`id`),
-  INDEX `fk_taxons_proteomes` (`taxon_id` ASC),
-  CONSTRAINT `fk_taxons_proteomes`
-    FOREIGN KEY (`taxon_id`)
-    REFERENCES `unipept`.`taxons` (`id`)
-    ON DELETE NO ACTION
-    ON UPDATE NO ACTION)
-ENGINE = InnoDB
-DEFAULT CHARACTER SET = utf8
-COLLATE = utf8_general_ci;
-
-
--- -----------------------------------------------------
--- Table `unipept`.`proteome_cross_references`
--- -----------------------------------------------------
-CREATE TABLE IF NOT EXISTS `unipept`.`proteome_cross_references` (
-  `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
-  `uniprot_entry_id` INT UNSIGNED NOT NULL,
-  `proteome_id` MEDIUMINT UNSIGNED NOT NULL,
-  PRIMARY KEY (`id`),
-  INDEX `fk_proteome_cross_references_uniprot_entries` (`uniprot_entry_id` ASC),
-  INDEX `fk_proteome_cross_references` (`proteome_id` ASC),
-  CONSTRAINT `fk_proteome_cross_references_uniprot_entries`
-    FOREIGN KEY (`uniprot_entry_id`)
-    REFERENCES `unipept`.`uniprot_entries` (`id`)
-    ON DELETE NO ACTION
-    ON UPDATE NO ACTION,
-  CONSTRAINT `fk_proteome_cross_references`
-    FOREIGN KEY (`proteome_id`)
-    REFERENCES `unipept`.`proteomes` (`id`)
-    ON DELETE NO ACTION
-    ON UPDATE NO ACTION)
-ENGINE = InnoDB;
-
-
--- -----------------------------------------------------
--- Table `unipept`.`proteome_caches`
--- -----------------------------------------------------
-CREATE TABLE IF NOT EXISTS `unipept`.`proteome_caches` (
-  `proteome_id` MEDIUMINT UNSIGNED NOT NULL,
-  `json_sequences` MEDIUMTEXT NOT NULL,
-  PRIMARY KEY (`proteome_id`),
-  CONSTRAINT `fk_proteomes_proteome_caches`
-    FOREIGN KEY (`proteome_id`)
-    REFERENCES `unipept`.`proteomes` (`id`)
-    ON DELETE NO ACTION
-    ON UPDATE NO ACTION)
-ENGINE = InnoDB
-DEFAULT CHARACTER SET = ascii
-COLLATE = ascii_general_ci;
-
 
 SET SQL_MODE=@OLD_SQL_MODE;
 SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS;

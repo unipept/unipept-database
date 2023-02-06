@@ -2,7 +2,6 @@ target/
 .devcontainer/data/*.tsv.gz
 .devcontainer/data/*.sh
 makefile
-proteomes.sh
 createEcNumbers.sh
 createGoTerms.sh
 createInterProEntries.sh

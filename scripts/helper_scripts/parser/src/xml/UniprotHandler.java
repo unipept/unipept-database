@@ -19,7 +19,6 @@ public class UniprotHandler extends DefaultHandler {
     private UniprotGORef goRef;
     private UniprotECRef ecRef;
     private UniprotInterProRef interProRef;
-    private UniprotProteomeRef protRef;
     private StringBuilder charData;
     private int i;
     private boolean inComment = false;
@@ -103,9 +102,6 @@ public class UniprotHandler extends DefaultHandler {
                     } else if (interProRef != null) {
                         currentItem.addInterProRef(interProRef);
                         interProRef = null;
-                    } else if (protRef != null) {
-                        currentItem.addProtRef(protRef);
-                        protRef = null;
                     }
                 }
             }
@@ -184,8 +180,6 @@ public class UniprotHandler extends DefaultHandler {
                         ecRef = new UniprotECRef(atts.getValue("id"));
                     } else if (atts.getValue("type").equals("InterPro")) {
                         interProRef = new UniprotInterProRef(atts.getValue("id"));
-                    } else if (atts.getValue("type").equals("Proteomes")) {
-                        protRef = new UniprotProteomeRef(atts.getValue("id"));
                     }
                 }
             }

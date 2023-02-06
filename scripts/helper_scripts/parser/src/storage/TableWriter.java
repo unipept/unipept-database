@@ -35,7 +35,6 @@ public class TableWriter implements UniprotObserver {
         }
     }
 
-    private Map<String, Integer> proteomeIds;
     private TaxonList taxonList;
     private Set<Integer> wrongTaxonIds;
 
@@ -47,15 +46,12 @@ public class TableWriter implements UniprotObserver {
     private CSV.IndexedWriter goCrossReferences;
     private CSV.IndexedWriter ecCrossReferences;
     private CSV.IndexedWriter interProCrossReferences;
-    private CSV.IndexedWriter proteomeCrossReferences;
-    private CSV.IndexedWriter proteomes;
 
     /**
      * Creates a new data object
      */
     public TableWriter(TaxonsUniprots2Tables args) {
         wrongTaxonIds = new HashSet<Integer>();
-        proteomeIds = new HashMap<>();
 
         /* Opening CSV files for writing. */
         try {
