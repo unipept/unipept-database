@@ -47,19 +47,6 @@ ALTER TABLE peptides ADD INDEX fk_peptides_sequences (sequence_id ASC), ADD INDE
 
 
 -- -----------------------------------------------------
--- Table `unipept`.`embl_cross_references`
--- -----------------------------------------------------
-ALTER TABLE embl_cross_references ADD INDEX fk_embl_reference_uniprot_entries (uniprot_entry_id ASC);
--- ALTER TABLE embl_cross_references ADD INDEX idx_sequence_id (sequence_id ASC);
-
-
--- -----------------------------------------------------
--- Table `unipept`.`refseq_cross_references`
--- -----------------------------------------------------
-ALTER TABLE refseq_cross_references ADD INDEX fk_refseq_reference_uniprot_entries (uniprot_entry_id ASC);
-
-
--- -----------------------------------------------------
 -- Table `unipept`.`go_cross_references`
 -- -----------------------------------------------------
 ALTER TABLE go_cross_references ADD INDEX fk_go_reference_uniprot_entries (uniprot_entry_id ASC);
