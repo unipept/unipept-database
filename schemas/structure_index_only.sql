@@ -65,6 +65,10 @@ ALTER TABLE ec_cross_references ADD INDEX fk_ec_reference_uniprot_entries (unipr
 -- -----------------------------------------------------
 ALTER TABLE interpro_cross_references ADD INDEX fk_interpro_reference_uniprot_entries (uniprot_entry_id ASC);
 
+-- -----------------------------------------------------
+-- Table `unipept`.`taxon_cross_references`
+-- -----------------------------------------------------
+ALTER TABLE taxon_cross_references ADD INDEX `fk_taxon_reference_sequences` (`sequence_id` ASC);
 
 SET SQL_MODE=@OLD_SQL_MODE;
 SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS;
