@@ -1,4 +1,4 @@
-const readline = require("readline");
+ const readline = require("readline");
 const fs = require("fs");
 const path = require("path");
 
@@ -36,7 +36,7 @@ rl.on("line", (line) => {
         return;
     }
 
-    const taxonId = Number.parseInt(line.split("\t")[8].trim());
+    const taxonId = Number.parseInt(line.split("\t")[9].trim());
 
     let idx = 0;
     while (taxonId > taxaBounds[idx]) {

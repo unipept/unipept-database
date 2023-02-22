@@ -60,6 +60,10 @@ public class UniprotTabParser {
                     entry.addInterProRef(new UniprotInterProRef(interpro.trim()));
                 }
 
+                for (String kegg : fields[headerMap.get("Cross-reference (KEGG)")].split(";")) {
+                    entry.addKeggRef(new UniprotKeggRef(kegg.trim()));
+                }
+
                 entry.setTaxonId(Integer.parseInt(fields[headerMap.get("Organism ID")]));
 
                 // Emit entry that's finished and handle it...

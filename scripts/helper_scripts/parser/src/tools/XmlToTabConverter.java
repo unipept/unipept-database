@@ -24,7 +24,7 @@ public class XmlToTabConverter {
         InputStream uniprotStream = System.in;
         UniprotHandler handler = new UniprotHandler(Integer.parseInt(args[0]), Integer.parseInt(args[1]), args[2]);
 
-        TabWriter writer = new TabWriter(System.out, Boolean.parseBoolean(args[3]));
+        TabWriter writer = new TabWriter(System.out, args[2], Boolean.parseBoolean(args[3]));
         handler.addObserver(writer);
 
         parser.parse(uniprotStream, handler);

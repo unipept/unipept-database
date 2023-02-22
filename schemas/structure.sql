@@ -80,6 +80,20 @@ COLLATE = utf8_general_ci;
 
 
 -- -----------------------------------------------------
+-- Table `unipept`.`kegg_identifiers`
+-- -----------------------------------------------------
+CREATE TABLE IF NOT EXISTS `unipept`.`kegg_identifiers` (
+    `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `ko_number` VARCHAR(20) NOT NULL,
+    `name` VARCHAR(200) NOT NULL,
+    PRIMARY KEY (`id`),
+    UNIQUE INDEX `idx_ko_number` (`ko_number` ASC))
+ENGINE = InnoDB
+DEFAULT CHARACTER SET = utf8
+COLLATE = utf8_general_ci;
+
+
+-- -----------------------------------------------------
 -- Table `unipept`.`interpro`
 -- -----------------------------------------------------
 CREATE TABLE IF NOT EXISTS `unipept`.`interpro_entries` (
@@ -309,6 +323,20 @@ CREATE  TABLE IF NOT EXISTS `unipept`.`interpro_cross_references` (
     `interpro_entry_code` VARCHAR(9) NOT NULL ,
     PRIMARY KEY (`id`),
     INDEX `fk_interpro_reference_uniprot_entries` (`uniprot_entry_id` ASC))
+ENGINE = InnoDB
+DEFAULT CHARACTER SET = ascii
+COLLATE = ascii_general_ci;
+
+
+-- -----------------------------------------------------
+-- Table `unipept`.`kegg_cross_references`
+-- -----------------------------------------------------
+CREATE  TABLE IF NOT EXISTS `unipept`.`kegg_cross_references` (
+    `id` INT UNSIGNED NOT NULL AUTO_INCREMENT ,
+    `uniprot_entry_id` INT UNSIGNED NOT NULL ,
+    `ko_number` VARCHAR(9) NOT NULL ,
+    PRIMARY KEY (`id`),
+    INDEX `fk_kegg_reference_uniprot_entries` (`uniprot_entry_id` ASC))
 ENGINE = InnoDB
 DEFAULT CHARACTER SET = ascii
 COLLATE = ascii_general_ci;

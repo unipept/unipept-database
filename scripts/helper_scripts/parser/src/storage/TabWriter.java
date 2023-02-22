@@ -8,12 +8,15 @@ import java.util.stream.Collectors;
 public class TabWriter implements UniprotObserver {
     private final BufferedWriter out;
     private final boolean verbose;
+    private final String dbType;
 
     public TabWriter(
             OutputStream out,
+            String dbType,
             boolean verbose
     ) throws IOException {
         this.out = new BufferedWriter(new OutputStreamWriter(out));
+        this.dbType = dbType;
         this.verbose = verbose;
 
         // Write header to output file
@@ -25,6 +28,7 @@ public class TabWriter implements UniprotObserver {
                 "EC number",
                 "Gene ontology IDs",
                 "Cross-reference (InterPro)",
+                "Cross-reference (KEGG)",
                 "Status",
                 "Organism ID"
         }) + "\n");
@@ -41,7 +45,8 @@ public class TabWriter implements UniprotObserver {
                     entry.getECReferences().stream().map(UniprotECRef::getId).collect(Collectors.joining(";")),
                     entry.getGOReferences().stream().map(UniprotGORef::getId).collect(Collectors.joining(";")),
                     entry.getInterProReferences().stream().map(UniprotInterProRef::getId).collect(Collectors.joining(";")),
-                    "swissprot",
+                    entry.getKeggReferences().stream().map(UniprotKeggRef::getId).collect(Collectors.joining(";")),
+                    this.dbType,
                     String.valueOf(entry.getTaxonId()),
             });
 

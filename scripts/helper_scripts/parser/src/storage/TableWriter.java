@@ -41,11 +41,10 @@ public class TableWriter implements UniprotObserver {
     // csv files
     private CSV.IndexedWriter peptides;
     private CSV.IndexedWriter uniprotEntries;
-    private CSV.IndexedWriter refseqCrossReferences;
-    private CSV.IndexedWriter emblCrossReferences;
     private CSV.IndexedWriter goCrossReferences;
     private CSV.IndexedWriter ecCrossReferences;
     private CSV.IndexedWriter interProCrossReferences;
+    private CSV.IndexedWriter keggCrossReferences;
 
     /**
      * Creates a new data object
@@ -61,6 +60,7 @@ public class TableWriter implements UniprotObserver {
             ecCrossReferences = new CSV.IndexedWriter(args.ecCrossReferencesFile);
             goCrossReferences = new CSV.IndexedWriter(args.goCrossReferencesFile);
             interProCrossReferences = new CSV.IndexedWriter(args.interProCrossReferencesFile);
+            keggCrossReferences = new CSV.IndexedWriter(args.keggCrossReferencesFile);
         } catch(IOException e) {
             System.err.println(new Timestamp(System.currentTimeMillis())
                     + " Error creating tsv files");
@@ -85,20 +85,21 @@ public class TableWriter implements UniprotObserver {
             String faSummary = Stream.of(
                     entry.getGOReferences().stream().map(UniprotGORef::getId),
                     entry.getECReferences().stream().map(x->"EC:"+x.getId()),
-                    entry.getInterProReferences().stream().map(x->"IPR:"+x.getId())
+                    entry.getInterProReferences().stream().map(x->"IPR:"+x.getId()),
+                    entry.getKeggReferences().stream().map(UniprotKeggRef::getId)
             ).flatMap(i -> i).collect(Collectors.joining(";"));
 
             for(String sequence : entry.digest()) {
                 addData(sequence.replace('I', 'L'), uniprotEntryId, sequence, faSummary);
             }
-            for (UniprotDbRef ref : entry.getDbReferences())
-                addDbRef(ref, uniprotEntryId);
             for (UniprotGORef ref : entry.getGOReferences())
                 addGORef(ref, uniprotEntryId);
             for (UniprotECRef ref : entry.getECReferences())
                 addECRef(ref, uniprotEntryId);
             for (UniprotInterProRef ref : entry.getInterProReferences())
                 addInterProRef(ref, uniprotEntryId);
+            for (UniprotKeggRef ref: entry.getKeggReferences())
+                addKeggRef(ref, uniprotEntryId);
         }
     }
 
@@ -119,8 +120,14 @@ public class TableWriter implements UniprotObserver {
      *            The full sequence of the peptide.
      * @return The database ID of the uniprot entry.
      */
-    public long addUniprotEntry(String uniprotAccessionNumber, int version, int taxonId,
-            String type, String name, String sequence) {
+    public long addUniprotEntry(
+            String uniprotAccessionNumber,
+            int version,
+            int taxonId,
+            String type,
+            String name,
+            String sequence
+    ) {
         if(0 <= taxonId && taxonId < taxonList.size() && taxonList.get(taxonId) != null) {
             try {
                 uniprotEntries.write(
@@ -158,7 +165,7 @@ public class TableWriter implements UniprotObserver {
      * @param originalSequence
      *            The original sequence of the peptide.
      * @param functionalAnnotations
-     *            A semicollon separated list of allocated functional analysis terms
+     *            A semicolon separated list of allocated functional analysis terms
      */
     public void addData(String unifiedSequence, long uniprotEntryId, String originalSequence, String functionalAnnotations) {
         try {
@@ -175,28 +182,6 @@ public class TableWriter implements UniprotObserver {
         }
     }
 
-    /**
-     * Adds a uniprot entry cross reference to the database
-     *
-     * @param ref
-     *            The uniprot cross reference to add
-     * @param uniprotEntryId
-     *            The uniprotEntry of the cross reference
-     */
-    public void addDbRef(UniprotDbRef ref, long uniprotEntryId) {
-        try {
-            CSV.Writer w = (ref.getType().equals("EMBL"))
-                ? emblCrossReferences
-                : refseqCrossReferences;
-            w.write(Long.toString(uniprotEntryId),
-                    ref.getProteinId(),
-                    ref.getSequenceId());
-        } catch (IOException e) {
-            System.err.println(new Timestamp(System.currentTimeMillis())
-                    + " Error adding this cross reference to the database.");
-            e.printStackTrace();
-        }
-    }
 
     /**
      * Adds a uniprot entry GO reference to the database
@@ -254,6 +239,16 @@ public class TableWriter implements UniprotObserver {
         }
     }
 
+    public void addKeggRef(UniprotKeggRef ref, long uniprotEntryId) {
+        try {
+            keggCrossReferences.write(Long.toString(uniprotEntryId), ref.getId());
+        } catch (IOException e) {
+            System.err.println(new Timestamp(System.currentTimeMillis())
+                    + " Error adding this KEGG reference to the database.");
+            e.printStackTrace();
+        }
+    }
+
     @Override
     public void handleEntry(UniprotEntry entry) {
         store(entry);
@@ -267,6 +262,7 @@ public class TableWriter implements UniprotObserver {
             goCrossReferences.close();
             ecCrossReferences.close();
             interProCrossReferences.close();
+            keggCrossReferences.close();
         } catch(IOException e) {
             System.err.println(new Timestamp(System.currentTimeMillis())
                     + " Something closing the csv files.");
