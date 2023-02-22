@@ -80,6 +80,20 @@ COLLATE = utf8_general_ci;
 
 
 -- -----------------------------------------------------
+-- Table `unipept`.`kegg_identifiers`
+-- -----------------------------------------------------
+CREATE TABLE IF NOT EXISTS `unipept`.`kegg_identifiers` (
+    `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `ko_number` VARCHAR(20) NOT NULL,
+    `name` VARCHAR(200) NOT NULL,
+    PRIMARY KEY (`id`),
+    UNIQUE INDEX `uidx_code` (`code` ASC))
+ENGINE = InnoDB
+DEFAULT CHARACTER SET = utf8
+COLLATE = utf8_general_ci;
+
+
+-- -----------------------------------------------------
 -- Table `unipept`.`lineages`
 -- -----------------------------------------------------
 CREATE TABLE IF NOT EXISTS `unipept`.`lineages` (
