@@ -66,6 +66,12 @@ ALTER TABLE ec_cross_references ADD INDEX fk_ec_reference_uniprot_entries (unipr
 ALTER TABLE interpro_cross_references ADD INDEX fk_interpro_reference_uniprot_entries (uniprot_entry_id ASC);
 
 
+-- -----------------------------------------------------
+-- Table `unipept`.`kegg_cross_references`
+-- -----------------------------------------------------
+ALTER TABLE kegg_cross_references ADD INDEX `fk_kegg_reference_uniprot_entries` (`uniprot_entry_id` ASC);
+
+
 SET SQL_MODE=@OLD_SQL_MODE;
 SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS;
 SET UNIQUE_CHECKS=@OLD_UNIQUE_CHECKS;

@@ -503,6 +503,7 @@ create_most_tables() {
 		--ec "$(gz "$OUTPUT_DIR/ec_cross_references.tsv.gz")" \
 		--go "$(gz "$OUTPUT_DIR/go_cross_references.tsv.gz")" \
 		--interpro "$(gz "$OUTPUT_DIR/interpro_cross_references.tsv.gz")" \
+		--kegg "$(gz "$OUTPUT_DIR/kegg_cross_references.tsv.gz")" \
 		$VERBOSE_FLAG
 
 	log "Finished calculation of most tables with status $?"

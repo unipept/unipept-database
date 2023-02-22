@@ -18,6 +18,7 @@ public class TaxonsUniprots2Tables {
     @Parameter(names="--ec",              description="EC references TSV output file")        public String ecCrossReferencesFile;
     @Parameter(names="--go",              description="GO references TSV output file")        public String goCrossReferencesFile;
     @Parameter(names="--interpro",        description="InterPro references TSV output file")  public String interProCrossReferencesFile;
+    @Parameter(names="--kegg",            description="KEGG references TSV output file")      public String keggCrossReferencesFile;
     @Parameter(names="--verbose",         description="Enable verbose mode")                  public boolean verboseMode;
 
     /**

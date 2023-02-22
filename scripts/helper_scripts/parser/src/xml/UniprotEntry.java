@@ -26,6 +26,7 @@ public class UniprotEntry {
     private List<UniprotGORef> goReferences;
     private List<UniprotECRef> ecReferences;
     private List<UniprotInterProRef> interProReferences;
+    private List<UniprotKeggRef> keggReferences;
     private List<String> sequences;
 
     public UniprotEntry(String type, int peptideMin, int peptideMax) {
@@ -36,6 +37,7 @@ public class UniprotEntry {
         goReferences = new ArrayList<UniprotGORef>();
         ecReferences = new ArrayList<UniprotECRef>();
         interProReferences = new ArrayList<UniprotInterProRef>();
+        keggReferences = new ArrayList<UniprotKeggRef>();
         sequences = new ArrayList<String>();
     }
 
@@ -51,6 +53,7 @@ public class UniprotEntry {
         goReferences.clear();
         ecReferences.clear();
         interProReferences.clear();
+        keggReferences.clear();
         sequences.clear();
     }
 
@@ -119,6 +122,10 @@ public class UniprotEntry {
 
     public void addInterProRef(UniprotInterProRef ref) { interProReferences.add(ref); }
 
+    public void addKeggRef(UniprotKeggRef ref) {
+        keggReferences.add(ref);
+    }
+
     public List<String> digest() {
         sequences.clear();
         int start = 0;
@@ -138,10 +145,6 @@ public class UniprotEntry {
         return sequences;
     }
 
-    public List<UniprotDbRef> getDbReferences() {
-        return dbReferences;
-    }
-
     public List<UniprotGORef> getGOReferences() {
         return goReferences;
     }
@@ -152,6 +155,9 @@ public class UniprotEntry {
 
     public List<UniprotInterProRef> getInterProReferences(){ return interProReferences; }
 
+    public List<UniprotKeggRef> getKeggReferences() {
+        return keggReferences;
+    }
 
     @Override
     public String toString() {

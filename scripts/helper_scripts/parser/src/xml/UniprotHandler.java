@@ -19,6 +19,7 @@ public class UniprotHandler extends DefaultHandler {
     private UniprotGORef goRef;
     private UniprotECRef ecRef;
     private UniprotInterProRef interProRef;
+    private UniprotKeggRef keggRef;
     private StringBuilder charData;
     private int i;
     private boolean inComment = false;
@@ -90,10 +91,7 @@ public class UniprotHandler extends DefaultHandler {
                 }
 
                 if (!inOrganism) {
-                    if (dbRef != null) {
-                        currentItem.addDbRef(dbRef);
-                        dbRef = null;
-                    } else if (goRef != null) {
+                    if (goRef != null) {
                         currentItem.addGORef(goRef);
                         goRef = null;
                     } else if (ecRef != null) {
@@ -102,6 +100,9 @@ public class UniprotHandler extends DefaultHandler {
                     } else if (interProRef != null) {
                         currentItem.addInterProRef(interProRef);
                         interProRef = null;
+                    } else if (keggRef != null) {
+                        currentItem.addKeggRef(keggRef);
+                        keggRef = null;
                     }
                 }
             }
@@ -168,18 +169,14 @@ public class UniprotHandler extends DefaultHandler {
                     if (atts.getValue("type").equals("NCBI Taxonomy"))
                         currentItem.setTaxonId(Integer.valueOf(atts.getValue("id")));
                 } else if (!inEvidence) {
-                    if (atts.getValue("type").equals("EMBL")) {
-                        dbRef = new UniprotDbRef("EMBL");
-                        dbRef.setSequenceId(atts.getValue("id"));
-                    } else if (atts.getValue("type").equals("RefSeq")) {
-                        dbRef = new UniprotDbRef("RefSeq");
-                        dbRef.setProteinId(atts.getValue("id"));
-                    } else if (atts.getValue("type").equals("GO")) {
+                    if (atts.getValue("type").equals("GO")) {
                         goRef = new UniprotGORef(atts.getValue("id"));
                     } else if (atts.getValue("type").equals("EC")) {
                         ecRef = new UniprotECRef(atts.getValue("id"));
                     } else if (atts.getValue("type").equals("InterPro")) {
                         interProRef = new UniprotInterProRef(atts.getValue("id"));
+                    } else if (atts.getValue("type").equals("KEGG")) {
+                        keggRef = new UniprotKeggRef(atts.getValue("id"));
                     }
                 }
             }

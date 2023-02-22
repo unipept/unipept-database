@@ -329,6 +329,20 @@ COLLATE = ascii_general_ci;
 
 
 -- -----------------------------------------------------
+-- Table `unipept`.`kegg_cross_references`
+-- -----------------------------------------------------
+CREATE  TABLE IF NOT EXISTS `unipept`.`kegg_cross_references` (
+    `id` INT UNSIGNED NOT NULL AUTO_INCREMENT ,
+    `uniprot_entry_id` INT UNSIGNED NOT NULL ,
+    `ko_number` VARCHAR(9) NOT NULL ,
+    PRIMARY KEY (`id`),
+    INDEX `fk_kegg_reference_uniprot_entries` (`uniprot_entry_id` ASC))
+ENGINE = InnoDB
+DEFAULT CHARACTER SET = ascii
+COLLATE = ascii_general_ci;
+
+
+-- -----------------------------------------------------
 -- Table `unipept`.`users`
 -- -----------------------------------------------------
 CREATE TABLE IF NOT EXISTS `unipept`.`users` (
