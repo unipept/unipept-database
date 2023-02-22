@@ -268,6 +268,7 @@ EC_CLASS_URL="https://ftp.expasy.org/databases/enzyme/enzclass.txt"
 EC_NUMBER_URL="https://ftp.expasy.org/databases/enzyme/enzyme.dat"
 GO_TERM_URL="http://geneontology.org/ontology/go-basic.obo"
 INTERPRO_URL="http://ftp.ebi.ac.uk/pub/databases/interpro/current_release/entry.list"
+KO_URL="https://rest.kegg.jp/list/ko"
 
 ### Utility functions required for the database construction process.
 
@@ -701,10 +702,17 @@ fetch_go_terms() {
 }
 
 fetch_interpro_entries() {
-	log "Started creating InterPro Entries."
+	log "Started creating InterPro entries."
 	mkdir -p "$OUTPUT_DIR"
 	curl -s "$INTERPRO_URL" | grep '^IPR' | cat -n | sed 's/^ *//' | $CMD_GZIP - > "$OUTPUT_DIR/interpro_entries.tsv.gz"
-	log "Finished creating InterPro Entries."
+	log "Finished creating InterPro entries."
+}
+
+fetch_kegg_identifiers() {
+  log "Started creating KEGG identifiers"
+  mkdir -p "$OUTPUT_DIR"
+  curl -s "$KEGG_URL" | cat -n | $CMD_GZIP - > "$OUTPUT_DIR/kegg_identifiers.tsv.gz"
+  log "Finished creating KEGG identifiers"
 }
 
 #dot: uniprot_entries -> create_kmer_index
@@ -799,7 +807,9 @@ database)
 	fetch_go_terms
 	reportProgress "-1" "Fetching InterPro entries." 12
 	fetch_interpro_entries
-	reportProgress "-1" "Computing database indices" 13
+	reportProgress "-1" "Fetching KEGG identifiers." 13
+	fetch_kegg_identifiers
+	reportProgress "-1" "Computing database indices" 14
 	ENTRIES=$(zcat "$OUTPUT_DIR/uniprot_entries.tsv.gz" | wc -l)
 	echo "Database contains: ##$ENTRIES##"
 	;;
