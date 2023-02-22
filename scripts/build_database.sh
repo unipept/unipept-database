@@ -25,60 +25,60 @@ Usage: $(basename "$0") [OPTIONS] BUILD_TYPE DB_NAMES DB_SOURCES OUTPUT_DIR
 Build Unipept database from a specific collection of UniProt resources.
 
 Required parameters:
-	* BUILD_TYPE: One of database, static-database, kmer-index, tryptic-index.
+  * BUILD_TYPE: One of database, static-database, kmer-index, tryptic-index.
 
-        * DB_NAMES: List with all names of the different databases that should be parsed. Every name in this list
-	corresponds with the respective database source given for the DB_SOURCES parameter. The items in this list should be
-	delimited by comma's.
+  * DB_NAMES: List with all names of the different databases that should be parsed. Every name in this list
+  corresponds with the respective database source given for the DB_SOURCES parameter. The items in this list should be
+  delimited by comma's.
 
-        * DB_SOURCES: List of UniProt source URLs. The items in this list should be delimited by comma's. Commonly used
-	databases and their corresponding sources are:
-        - swissprot: https://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/complete/uniprot_sprot.xml.gz
-        - trembl: https://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/complete/uniprot_trembl.xml.gz
+  * DB_SOURCES: List of UniProt source URLs. The items in this list should be delimited by comma's. Commonly used
+  databases and their corresponding sources are:
+    - swissprot: https://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/complete/uniprot_sprot.xml.gz
+    - trembl: https://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/complete/uniprot_trembl.xml.gz
 
-        * OUTPUT_DIR: Directory in which the tsv.gz-files that are produced by this script will be stored.
+  * OUTPUT_DIR: Directory in which the tsv.gz-files that are produced by this script will be stored.
 
 Options:
-	* -h
-	Display help for this script.
+  * -h
+  Display help for this script.
 
-	* -v
-	Enable verbose mode. Print more detailed information about what's going on under the hood to stderr.
+  * -v
+  Enable verbose mode. Print more detailed information about what's going on under the hood to stderr.
 
-	* -f [TAXA_IDS]
-	Filter by taxa. List of taxa for which all corresponding UniProt entries should be retained. First, for each of the
-	taxa from the given list, we look up all of the direct and indirect child nodes in the NCBI taxonomy tree. Then, all
-	UniProt-entries from the database sources are filtered in such a way that only entries that are associated with one
-	of the taxa (or it's children) provided here are retained. These items must be delimited by comma's. If 1 is passed,
-	no filtering will be performed (since 1 corresponds to the NCBI ID of the root node).
+  * -f [TAXA_IDS]
+  Filter by taxa. List of taxa for which all corresponding UniProt entries should be retained. First, for each of the
+  taxa from the given list, we look up all of the direct and indirect child nodes in the NCBI taxonomy tree. Then, all
+  UniProt-entries from the database sources are filtered in such a way that only entries that are associated with one
+  of the taxa (or it's children) provided here are retained. These items must be delimited by comma's. If 1 is passed,
+  no filtering will be performed (since 1 corresponds to the NCBI ID of the root node).
 
-	* -i [INDEX_DIR]
-	Specify the directory in which the Unipept lookup index files will be stored. This index will be automatically built
-	the first time this script is executed and is being used to speed up computations. If, in the future, this script is
-	used again, the index can be reused to compute the database tables faster. If the given directory does not exist,
-	it will be created by this script.
+  * -i [INDEX_DIR]
+  Specify the directory in which the Unipept lookup index files will be stored. This index will be automatically built
+  the first time this script is executed and is being used to speed up computations. If, in the future, this script is
+  used again, the index can be reused to compute the database tables faster. If the given directory does not exist,
+  it will be created by this script.
 
-	* -d [TEMP_DIR]
-	Specify the temporary directory that can be used by this script to temporary store files that are required to build
-	the requested Unipept tables. If the given directory does not exist, it will be created by this script.
+  * -d [TEMP_DIR]
+  Specify the temporary directory that can be used by this script to temporary store files that are required to build
+  the requested Unipept tables. If the given directory does not exist, it will be created by this script.
 
-	* -m [MAX_SORTING_MEMORY_PER_THREAD]
-	Specify how much memory the sorting processes are allowed to use. This parameter needs to be formatted according to
-	the specifications required by the linux sort command (for example: 2G for 2 gigabytes). Note that two sorting
-	processes will be executed in parallel, so keep that in mind when setting this parameter. The default value is 2G.
+  * -m [MAX_SORTING_MEMORY_PER_THREAD]
+  Specify how much memory the sorting processes are allowed to use. This parameter needs to be formatted according to
+  the specifications required by the linux sort command (for example: 2G for 2 gigabytes). Note that two sorting
+  processes will be executed in parallel, so keep that in mind when setting this parameter. The default value is 2G.
 
 Dependencies:
-	This script requires some non-standard dependencies to be installed before it can be used. This is a list of these
-	items (which can normally be installed through your package manager):
+  This script requires some non-standard dependencies to be installed before it can be used. This is a list of these
+  items (which can normally be installed through your package manager):
 
-	* maven
-	* node-js
-	* curl
-	* pv
-	* pigz
-	* java
-	* uuidgen
-	* parallel
+  * maven
+  * node-js
+  * curl
+  * pv
+  * pigz
+  * java
+  * uuidgen
+  * parallel
 END
 }
 
