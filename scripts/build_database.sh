@@ -628,7 +628,7 @@ sort_peptides() {
 
 create_sequence_tables() {
 	have "$INTDIR/LCAs_original.tsv.gz" "$INTDIR/LCAs_equalized.tsv.gz" "$INTDIR/FAs_original.tsv.gz" "$INTDIR/FAs_equalized.tsv.gz" "$INTDIR/sequences.tsv.gz" || return
-	log "Started the creation of the sequences table."
+	log "Started the creation of the sequence tables."
 	mkdir -p "$OUTPUT_DIR"
 	mkfifo "olcas" "elcas" "ofas" "efas"
 	zcat "$INTDIR/LCAs_original.tsv.gz"  | gawk '{ printf("%012d\t%s\n", $1, $2) }' > "olcas" &
@@ -646,6 +646,20 @@ create_sequence_tables() {
 		| join --nocheck-order -a1 -e '\N' -t '	' -o "1.1 2.2" - "efas" \
 		| sed 's/^0*//' | awk '{print NR, "\t", $0}' | $CMD_GZIP - > "$OUTPUT_DIR/seq_fa_il_cross_references.tsv.gz"
 
+	# Create cross references between sequences and taxa (original sequences)
+	# First, we join the sequences with the original LCAs
+  join -t '	' -o '1.1,2.2' -1 2 -2 1 \
+			"$(guz "$INTDIR/sequences.tsv.gz")" \
+			"$(guz "$INTDIR/aa_sequence_taxon_original.tsv.gz")" \
+			| awk '{print NR, "\t", $0}' | $CMD_GZIP - > "$OUTPUT_DIR/seq_taxa_cross_references.tsv.gz"
+
+	# Create cross references between sequences and taxa (equalized)
+  # Then, we join the sequences with the equalized LCAs
+    join -t '	' -o '1.1,2.2' -1 2 -2 1 \
+  			"$(guz "$INTDIR/sequences.tsv.gz")" \
+  			"$(guz "$INTDIR/aa_sequence_taxon_equalized.tsv.gz")" \
+  			| awk '{print NR, "\t", $0}' | $CMD_GZIP - > "$OUTPUT_DIR/seq_taxa_il_cross_references.tsv.gz"
+
   # Create sequence table (containing all sequences) and the matching original and equalized LCAs
   zcat "$INTDIR/sequences.tsv.gz"      | gawk '{ printf("%012d\t%s\n", $1, $2) }' \
 		| join --nocheck-order -a1 -e '\N' -t '	' -o "1.1 1.2 2.2" - "olcas" \
@@ -653,7 +667,7 @@ create_sequence_tables() {
 		| sed 's/^0*//' | $CMD_GZIP - > "$OUTPUT_DIR/sequences.tsv.gz"
 
 	rm "olcas" "elcas" "ofas" "efas"
-	log "Finished the creation of the sequences table."
+	log "Finished the creation of the sequence tables."
 }
 
 fetch_ec_numbers() {
@@ -793,7 +807,7 @@ database)
 	sort_peptides
 	rm "$INTDIR/peptides_by_original.tsv.gz"
 	reportProgress "-1" "Creating sequence table." 9
-	create_sequence_table
+	create_sequence_tables
 	rm "$INTDIR/LCAs_original.tsv.gz"
 	rm "$INTDIR/LCAs_equalized.tsv.gz"
 	rm "$INTDIR/FAs_original.tsv.gz"
@@ -849,7 +863,7 @@ tryptic-index)
 		calculate_equalized_fas
 		substitute_original_aas
 		calculate_original_fas
-		create_sequence_table
+		create_sequence_tables
 	fi
 	create_tryptic_index
 	;;
