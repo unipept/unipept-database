@@ -47,6 +47,32 @@ ALTER TABLE peptides ADD INDEX fk_peptides_sequences (sequence_id ASC), ADD INDE
 
 
 -- -----------------------------------------------------
+-- Table `unipept`.`seq_fa_cross_references`
+-- -----------------------------------------------------
+ALTER TABLE seq_fa_cross_references ADD INDEX fk_seq_fa_cross_reference_seq_idx (seq_id ASC);
+
+
+-- -----------------------------------------------------
+-- Table `unipept`.`seq_fa_il_cross_references`
+-- -----------------------------------------------------
+ALTER TABLE seq_fa_il_cross_references ADD INDEX fk_seq_fa_il_cross_reference_seq_idx (seq_id ASC);
+
+
+-- -----------------------------------------------------
+-- Table `unipept`.`seq_taxa_cross_references`
+-- -----------------------------------------------------
+ALTER TABLE seq_taxa_cross_references ADD INDEX fk_seq_taxa_cross_reference_seq_idx (seq_id ASC);
+ALTER TABLE seq_taxa_cross_references ADD INDEX fk_seq_taxa_cross_reference_taxa_idx (taxon_id ASC);
+
+
+-- -----------------------------------------------------
+-- Table `unipept`.`seq_taxa_il_cross_references`
+-- -----------------------------------------------------
+ALTER TABLE seq_taxa_il_cross_references ADD INDEX fk_seq_taxa_il_cross_reference_seq_idx (seq_id ASC);
+ALTER TABLE seq_taxa_il_cross_references ADD INDEX fk_seq_taxa_il_cross_reference_taxa_idx (taxon_id ASC);
+
+
+-- -----------------------------------------------------
 -- Table `unipept`.`go_cross_references`
 -- -----------------------------------------------------
 ALTER TABLE go_cross_references ADD INDEX fk_go_reference_uniprot_entries (uniprot_entry_id ASC);
