@@ -146,8 +146,6 @@ CREATE  TABLE IF NOT EXISTS `unipept`.`sequences` (
   `sequence` VARCHAR(50) NOT NULL ,
   `lca` MEDIUMINT UNSIGNED NULL ,
   `lca_il` MEDIUMINT UNSIGNED NULL ,
-  `fa` BLOB NULL ,
-  `fa_il` BLOB NULL ,
   PRIMARY KEY (`id`) ,
   UNIQUE INDEX `uidx_sequence` (`sequence` ASC) ,
   INDEX `fk_sequences_taxons` (`lca` ASC) ,
@@ -249,6 +247,93 @@ ENGINE = InnoDB
 DEFAULT CHARACTER SET = utf8
 COLLATE = utf8_general_ci;
 
+
+-- -----------------------------------------------------
+-- Table `unipept`.`seq_fa_cross_references
+-- -----------------------------------------------------
+CREATE TABLE IF NOT EXISTS `unipept`.`seq_fa_cross_references` (
+    `id` INT UNSIGNED NOT NULL AUTO_INCREMENT ,
+    `seq_id` INT UNSIGNED NOT NULL,
+    `fa` BLOB NULL,
+    PRIMARY KEY (`id`),
+    INDEX `fk_seq_fa_cross_reference_seq_idx` (`seq_id` ASC),
+    CONSTRAINT `fk_seq_fa_cross_reference_seq_id`
+       FOREIGN KEY (`seq_id`)
+           REFERENCES `unipept`.`sequences` (`id`)
+           ON DELETE NO ACTION
+           ON UPDATE NO ACTION)
+ENGINE = InnoDB
+DEFAULT CHARACTER SET = ascii
+COLLATE = ascii_general_ci;
+
+
+-- -----------------------------------------------------
+-- Table `unipept`.`seq_fa_il_cross_references
+-- -----------------------------------------------------
+CREATE TABLE IF NOT EXISTS `unipept`.`seq_fa_il_cross_references` (
+    `id` INT UNSIGNED NOT NULL AUTO_INCREMENT ,
+    `seq_id` INT UNSIGNED NOT NULL,
+    `fa_il` BLOB NULL,
+    PRIMARY KEY (`id`),
+    INDEX `fk_seq_fa_il_cross_reference_seq_idx` (`seq_id` ASC),
+    CONSTRAINT `fk_seq_fa_il_cross_reference_seq_id`
+       FOREIGN KEY (`seq_id`)
+           REFERENCES `unipept`.`sequences` (`id`)
+           ON DELETE NO ACTION
+           ON UPDATE NO ACTION)
+ENGINE = InnoDB
+DEFAULT CHARACTER SET = ascii
+COLLATE = ascii_general_ci;
+
+
+-- -----------------------------------------------------
+-- Table `unipept`.`seq_taxa_cross_references
+-- -----------------------------------------------------
+CREATE TABLE IF NOT EXISTS `unipept`.`seq_taxa_cross_references` (
+    `id` INT UNSIGNED NOT NULL AUTO_INCREMENT ,
+    `seq_id` INT UNSIGNED NOT NULL,
+    `taxon_id` BLOB NULL,
+    PRIMARY KEY (`id`),
+    INDEX `fk_seq_taxa_cross_reference_seq_idx` (`seq_id` ASC),
+    CONSTRAINT `fk_seq_taxa_cross_reference_seq_id`
+      FOREIGN KEY (`seq_id`)
+          REFERENCES `unipept`.`sequences` (`id`)
+          ON DELETE NO ACTION
+          ON UPDATE NO ACTION,
+    INDEX `fk_seq_taxa_cross_reference_taxa_idx` (`taxon_id` ASC),
+    CONSTRAINT `fk_seq_taxa_cross_reference_taxa_id`
+        FOREIGN KEY (`taxon_id`)
+            REFERENCES `unipept`.`taxons` (`id`)
+            ON DELETE NO ACTION
+            ON UPDATE NO ACTION)
+ENGINE = InnoDB
+DEFAULT CHARACTER SET = ascii
+COLLATE = ascii_general_ci;
+
+
+-- -----------------------------------------------------
+-- Table `unipept`.`seq_taxa_cross_references
+-- -----------------------------------------------------
+CREATE TABLE IF NOT EXISTS `unipept`.`seq_taxa_il_cross_references` (
+    `id` INT UNSIGNED NOT NULL AUTO_INCREMENT ,
+    `seq_id` INT UNSIGNED NOT NULL,
+    `taxon_id` BLOB NULL,
+    PRIMARY KEY (`id`),
+    INDEX `fk_seq_taxa_il_cross_reference_seq_idx` (`seq_id` ASC),
+    CONSTRAINT `fk_seq_taxa_il_cross_reference_seq_id`
+     FOREIGN KEY (`seq_id`)
+         REFERENCES `unipept`.`sequences` (`id`)
+         ON DELETE NO ACTION
+         ON UPDATE NO ACTION,
+    INDEX `fk_seq_taxa_il_cross_reference_taxa_idx` (`taxon_id` ASC),
+    CONSTRAINT `fk_seq_taxa_il_cross_reference_taxa_id`
+     FOREIGN KEY (`taxon_id`)
+         REFERENCES `unipept`.`taxons` (`id`)
+         ON DELETE NO ACTION
+         ON UPDATE NO ACTION)
+ENGINE = InnoDB
+DEFAULT CHARACTER SET = ascii
+COLLATE = ascii_general_ci;
 
 -- -----------------------------------------------------
 -- Table `unipept`.`go_cross_references`
