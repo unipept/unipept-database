@@ -626,7 +626,7 @@ sort_peptides() {
 	log "Finished sorting the peptides table."
 }
 
-create_sequence_table() {
+create_sequence_tables() {
 	have "$INTDIR/LCAs_original.tsv.gz" "$INTDIR/LCAs_equalized.tsv.gz" "$INTDIR/FAs_original.tsv.gz" "$INTDIR/FAs_equalized.tsv.gz" "$INTDIR/sequences.tsv.gz" || return
 	log "Started the creation of the sequences table."
 	mkdir -p "$OUTPUT_DIR"
@@ -635,12 +635,23 @@ create_sequence_table() {
 	zcat "$INTDIR/LCAs_equalized.tsv.gz" | gawk '{ printf("%012d\t%s\n", $1, $2) }' > "elcas" &
 	zcat "$INTDIR/FAs_original.tsv.gz"   | gawk '{ printf("%012d\t%s\n", $1, $2) }' > "ofas" &
 	zcat "$INTDIR/FAs_equalized.tsv.gz"  | gawk '{ printf("%012d\t%s\n", $1, $2) }' > "efas" &
+
+  # Create cross references between original sequence and functional annotations
 	zcat "$INTDIR/sequences.tsv.gz"      | gawk '{ printf("%012d\t%s\n", $1, $2) }' \
+		| join --nocheck-order -a1 -e '\N' -t '	' -o "1.1 2.2" - "ofas" \
+		| sed 's/^0*//' | awk '{print NR, "\t", $0}' | $CMD_GZIP - > "$OUTPUT_DIR/seq_fa_cross_references.tsv.gz"
+
+  # Create cross references between equalized sequence and functional annotations
+	zcat "$INTDIR/sequences.tsv.gz"      | gawk '{ printf("%012d\t%s\n", $1, $2) }' \
+		| join --nocheck-order -a1 -e '\N' -t '	' -o "1.1 2.2" - "efas" \
+		| sed 's/^0*//' | awk '{print NR, "\t", $0}' | $CMD_GZIP - > "$OUTPUT_DIR/seq_fa_il_cross_references.tsv.gz"
+
+  # Create sequence table (containing all sequences) and the matching original and equalized LCAs
+  zcat "$INTDIR/sequences.tsv.gz"      | gawk '{ printf("%012d\t%s\n", $1, $2) }' \
 		| join --nocheck-order -a1 -e '\N' -t '	' -o "1.1 1.2 2.2" - "olcas" \
 		| join --nocheck-order -a1 -e '\N' -t '	' -o "1.1 1.2 1.3 2.2" - "elcas" \
-		| join --nocheck-order -a1 -e '\N' -t '	' -o '1.1 1.2 1.3 1.4 2.2' - "ofas" \
-		| join --nocheck-order -a1 -e '\N' -t '	' -o '1.1 1.2 1.3 1.4 1.5 2.2' - "efas" \
 		| sed 's/^0*//' | $CMD_GZIP - > "$OUTPUT_DIR/sequences.tsv.gz"
+
 	rm "olcas" "elcas" "ofas" "efas"
 	log "Finished the creation of the sequences table."
 }
