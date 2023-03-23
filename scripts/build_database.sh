@@ -790,8 +790,6 @@ database)
 	pid2=$!
 	wait $pid1
 	wait $pid2
-	rm "$INTDIR/aa_sequence_taxon_equalized.tsv.gz"
-	rm "$INTDIR/aa_sequence_taxon_original.tsv.gz"
 	substitute_equalized_aas
 	rm "$INTDIR/peptides.tsv.gz"
 	substitute_original_aas
@@ -808,6 +806,8 @@ database)
 	rm "$INTDIR/peptides_by_original.tsv.gz"
 	reportProgress "-1" "Creating sequence table." 9
 	create_sequence_tables
+	rm "$INTDIR/aa_sequence_taxon_equalized.tsv.gz"
+  rm "$INTDIR/aa_sequence_taxon_original.tsv.gz"
 	rm "$INTDIR/LCAs_original.tsv.gz"
 	rm "$INTDIR/LCAs_equalized.tsv.gz"
 	rm "$INTDIR/FAs_original.tsv.gz"
