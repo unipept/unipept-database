@@ -292,7 +292,7 @@ COLLATE = ascii_general_ci;
 CREATE TABLE IF NOT EXISTS `unipept`.`seq_taxa_cross_references` (
     `id` INT UNSIGNED NOT NULL AUTO_INCREMENT ,
     `seq_id` INT UNSIGNED NOT NULL,
-    `taxon_id` BLOB NULL,
+    `taxon_id` INT UNSIGNED NOT NULL,
     PRIMARY KEY (`id`),
     INDEX `fk_seq_taxa_cross_reference_seq_idx` (`seq_id` ASC),
     CONSTRAINT `fk_seq_taxa_cross_reference_seq_id`
@@ -317,7 +317,7 @@ COLLATE = ascii_general_ci;
 CREATE TABLE IF NOT EXISTS `unipept`.`seq_taxa_il_cross_references` (
     `id` INT UNSIGNED NOT NULL AUTO_INCREMENT ,
     `seq_id` INT UNSIGNED NOT NULL,
-    `taxon_id` BLOB NULL,
+    `taxon_id` INT UNSIGNED NOT NULL,
     PRIMARY KEY (`id`),
     INDEX `fk_seq_taxa_il_cross_reference_seq_idx` (`seq_id` ASC),
     CONSTRAINT `fk_seq_taxa_il_cross_reference_seq_id`
