@@ -236,7 +236,8 @@ DB_SOURCES=$( (echo "$3") )
 
 IFS="$OLDIFS"
 
-OUTPUT_DIR="$4"
+OUTPUT_DIR="$4" # Where should I store the final TSV files (large, single-write)?
+INTDIR="$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT" # Where should I store intermediate TSV files (large, single-write, multiple-read?
 
 checkDirectoryAndCreate "$4"
 
@@ -255,8 +256,6 @@ checkdep pigz
 ### Default configuration for this script
 PEPTIDE_MIN_LENGTH=5 # What is the minimum length (inclusive) for tryptic peptides?"
 PEPTIDE_MAX_LENGTH=50 # What is the maximum length (inclusive) for tryptic peptides?"
-TABDIR="$OUTPUT_DIR" # Where should I store the final TSV files (large, single-write)?
-INTDIR="$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT" # Where should I store intermediate TSV files (large, single-write, multiple-read?
 KMER_LENGTH=9 # What is the length (k) of the K-mer peptides?
 JAVA_MEM="2g" # How much memory should Java use?
 CMD_SORT="sort --buffer-size=$SORT_MEMORY --parallel=4" # Which sort command should I use?
@@ -458,7 +457,6 @@ filter_sources_by_taxa() {
   IFS=","
 
   DB_TYPES_ARRAY=($DB_TYPES)
-  DB_SOURCES_ARRAY=($DB_SOURCES)
 
   IFS="$OLDIFS"
 
@@ -469,7 +467,6 @@ filter_sources_by_taxa() {
   while [[ "$IDX" -ne "${#DB_TYPES_ARRAY}" ]] && [[ -n $(echo "${DB_TYPES_ARRAY[$IDX]}" | sed "s/\s//g") ]]
   do
     DB_TYPE=${DB_TYPES_ARRAY[$IDX]}
-    DB_SOURCE=${DB_SOURCES_ARRAY[$IDX]}
 
     DB_INDEX_OUTPUT="$INDEX_DIR/$DB_TYPE"
 
@@ -513,7 +510,6 @@ create_tables_and_filter() {
 }
 
 join_equalized_pepts_and_entries() {
-  echo "Test if files for joining peptides are available."
 	have "$INTDIR/peptides.tsv.gz" "$OUTPUT_DIR/uniprot_entries.tsv.gz" || return
 	log "Started the joining of equalized peptides and uniprot entries."
 	mkfifo "peptides_eq" "entries_eq"
@@ -630,23 +626,48 @@ sort_peptides() {
 	log "Finished sorting the peptides table."
 }
 
-create_sequence_table() {
+create_sequence_tables() {
 	have "$INTDIR/LCAs_original.tsv.gz" "$INTDIR/LCAs_equalized.tsv.gz" "$INTDIR/FAs_original.tsv.gz" "$INTDIR/FAs_equalized.tsv.gz" "$INTDIR/sequences.tsv.gz" || return
-	log "Started the creation of the sequences table."
+	log "Started the creation of the sequence tables."
 	mkdir -p "$OUTPUT_DIR"
 	mkfifo "olcas" "elcas" "ofas" "efas"
 	zcat "$INTDIR/LCAs_original.tsv.gz"  | gawk '{ printf("%012d\t%s\n", $1, $2) }' > "olcas" &
 	zcat "$INTDIR/LCAs_equalized.tsv.gz" | gawk '{ printf("%012d\t%s\n", $1, $2) }' > "elcas" &
 	zcat "$INTDIR/FAs_original.tsv.gz"   | gawk '{ printf("%012d\t%s\n", $1, $2) }' > "ofas" &
 	zcat "$INTDIR/FAs_equalized.tsv.gz"  | gawk '{ printf("%012d\t%s\n", $1, $2) }' > "efas" &
+
+  # Create cross references between original sequence and functional annotations
 	zcat "$INTDIR/sequences.tsv.gz"      | gawk '{ printf("%012d\t%s\n", $1, $2) }' \
+		| join --nocheck-order -a1 -e '\N' -t '	' -o "1.1 2.2" - "ofas" \
+		| sed 's/^0*//' | awk '{print NR, "\t", $0}' | $CMD_GZIP - > "$OUTPUT_DIR/seq_fa_cross_references.tsv.gz"
+
+  # Create cross references between equalized sequence and functional annotations
+	zcat "$INTDIR/sequences.tsv.gz"      | gawk '{ printf("%012d\t%s\n", $1, $2) }' \
+		| join --nocheck-order -a1 -e '\N' -t '	' -o "1.1 2.2" - "efas" \
+		| sed 's/^0*//' | awk '{print NR, "\t", $0}' | $CMD_GZIP - > "$OUTPUT_DIR/seq_fa_il_cross_references.tsv.gz"
+
+	# Create cross references between sequences and taxa (original sequences)
+	# First, we join the sequences with the original LCAs
+  join -t '	' -o '1.1,2.2' -1 2 -2 1 \
+			"$(guz "$INTDIR/sequences.tsv.gz")" \
+			"$(guz "$INTDIR/aa_sequence_taxon_original.tsv.gz")" \
+			| awk '{print NR, "\t", $0}' | $CMD_GZIP - > "$OUTPUT_DIR/seq_taxa_cross_references.tsv.gz"
+
+	# Create cross references between sequences and taxa (equalized)
+  # Then, we join the sequences with the equalized LCAs
+    join -t '	' -o '1.1,2.2' -1 2 -2 1 \
+  			"$(guz "$INTDIR/sequences.tsv.gz")" \
+  			"$(guz "$INTDIR/aa_sequence_taxon_equalized.tsv.gz")" \
+  			| awk '{print NR, "\t", $0}' | $CMD_GZIP - > "$OUTPUT_DIR/seq_taxa_il_cross_references.tsv.gz"
+
+  # Create sequence table (containing all sequences) and the matching original and equalized LCAs
+  zcat "$INTDIR/sequences.tsv.gz"      | gawk '{ printf("%012d\t%s\n", $1, $2) }' \
 		| join --nocheck-order -a1 -e '\N' -t '	' -o "1.1 1.2 2.2" - "olcas" \
 		| join --nocheck-order -a1 -e '\N' -t '	' -o "1.1 1.2 1.3 2.2" - "elcas" \
-		| join --nocheck-order -a1 -e '\N' -t '	' -o '1.1 1.2 1.3 1.4 2.2' - "ofas" \
-		| join --nocheck-order -a1 -e '\N' -t '	' -o '1.1 1.2 1.3 1.4 1.5 2.2' - "efas" \
 		| sed 's/^0*//' | $CMD_GZIP - > "$OUTPUT_DIR/sequences.tsv.gz"
+
 	rm "olcas" "elcas" "ofas" "efas"
-	log "Finished the creation of the sequences table."
+	log "Finished the creation of the sequence tables."
 }
 
 fetch_ec_numbers() {
@@ -736,14 +757,14 @@ create_kmer_index() {
 #dot: create_tryptic_index -> tryptic_index
 #dot: tryptic_index [color="#f28e2b"]
 create_tryptic_index() {
-	have "$TABDIR/sequences.tsv.gz" || return
+	have "$OUTPUT_DIR/sequences.tsv.gz" || return
 	log "Started the construction of the tryptic index."
-	pv "$TABDIR/sequences.tsv.gz" \
+	pv "$OUTPUT_DIR/sequences.tsv.gz" \
 		| gunzip \
 		| cut -f2,3 \
 		| grep -v "\\N" \
 		| umgap buildindex \
-		> "$TABDIR/tryptic.index"
+		> "$OUTPUT_DIR/tryptic.index"
 	log "Finished the construction of the tryptic index."
 }
 
@@ -769,8 +790,6 @@ database)
 	pid2=$!
 	wait $pid1
 	wait $pid2
-	rm "$INTDIR/aa_sequence_taxon_equalized.tsv.gz"
-	rm "$INTDIR/aa_sequence_taxon_original.tsv.gz"
 	substitute_equalized_aas
 	rm "$INTDIR/peptides.tsv.gz"
 	substitute_original_aas
@@ -786,7 +805,9 @@ database)
 	sort_peptides
 	rm "$INTDIR/peptides_by_original.tsv.gz"
 	reportProgress "-1" "Creating sequence table." 9
-	create_sequence_table
+	create_sequence_tables
+	rm "$INTDIR/aa_sequence_taxon_equalized.tsv.gz"
+  rm "$INTDIR/aa_sequence_taxon_original.tsv.gz"
 	rm "$INTDIR/LCAs_original.tsv.gz"
 	rm "$INTDIR/LCAs_equalized.tsv.gz"
 	rm "$INTDIR/FAs_original.tsv.gz"
@@ -803,7 +824,7 @@ database)
 	echo "Database contains: ##$ENTRIES##"
 	;;
 static-database)
-	if ! have "$TABDIR/taxons.tsv.gz"; then
+	if ! have "$OUTPUT_DIR/taxons.tsv.gz"; then
 		create_taxon_tables
 	fi
 	fetch_ec_numbers
@@ -827,10 +848,10 @@ tryptic-index)
 	checkdep pv
 	checkdep umgap "umgap crate (for umgap buildindex)"
 
-	if ! have "$TABDIR/taxons.tsv.gz"; then
+	if ! have "$OUTPUT_DIR/taxons.tsv.gz"; then
 		create_taxon_tables
 	fi
-	if ! have "$TABDIR/sequences.tsv.gz"; then
+	if ! have "$OUTPUT_DIR/sequences.tsv.gz"; then
 		download_and_convert_all_sources
 		create_tables_and_filter
 		join_equalized_pepts_and_entries
@@ -842,7 +863,7 @@ tryptic-index)
 		calculate_equalized_fas
 		substitute_original_aas
 		calculate_original_fas
-		create_sequence_table
+		create_sequence_tables
 	fi
 	create_tryptic_index
 	;;

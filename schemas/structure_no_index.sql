@@ -127,8 +127,6 @@ CREATE  TABLE IF NOT EXISTS `unipept`.`sequences` (
   `sequence` VARCHAR(50) NOT NULL ,
   `lca` MEDIUMINT UNSIGNED NULL ,
   `lca_il` MEDIUMINT UNSIGNED NULL ,
-  `fa`  MEDIUMBLOB NULL ,
-  `fa_il`  MEDIUMBLOB NULL ,
   PRIMARY KEY (`id`))
 ENGINE = InnoDB
 DEFAULT CHARACTER SET = ascii
@@ -201,6 +199,57 @@ COLLATE = utf8_general_ci;
 
 
 -- -----------------------------------------------------
+-- Table `unipept`.`seq_fa_cross_references
+-- -----------------------------------------------------
+CREATE TABLE IF NOT EXISTS `unipept`.`seq_fa_cross_references` (
+    `id` INT UNSIGNED NOT NULL AUTO_INCREMENT ,
+    `seq_id` INT UNSIGNED NOT NULL,
+    `fa` BLOB NULL,
+    PRIMARY KEY (`id`))
+ENGINE = InnoDB
+DEFAULT CHARACTER SET = ascii
+COLLATE = ascii_general_ci;
+
+
+-- -----------------------------------------------------
+-- Table `unipept`.`seq_fa_il_cross_references
+-- -----------------------------------------------------
+CREATE TABLE IF NOT EXISTS `unipept`.`seq_fa_il_cross_references` (
+    `id` INT UNSIGNED NOT NULL AUTO_INCREMENT ,
+    `seq_id` INT UNSIGNED NOT NULL,
+    `fa_il` BLOB NULL,
+    PRIMARY KEY (`id`))
+ENGINE = InnoDB
+DEFAULT CHARACTER SET = ascii
+COLLATE = ascii_general_ci;
+
+
+-- -----------------------------------------------------
+-- Table `unipept`.`seq_taxa_cross_references
+-- -----------------------------------------------------
+CREATE TABLE IF NOT EXISTS `unipept`.`seq_taxa_cross_references` (
+`id` INT UNSIGNED NOT NULL AUTO_INCREMENT ,
+`seq_id` INT UNSIGNED NOT NULL,
+`taxon_id` INT UNSIGNED NOT NULL,
+PRIMARY KEY (`id`))
+ENGINE = InnoDB
+DEFAULT CHARACTER SET = ascii
+COLLATE = ascii_general_ci;
+
+
+-- -----------------------------------------------------
+-- Table `unipept`.`seq_taxa_cross_references
+-- -----------------------------------------------------
+CREATE TABLE IF NOT EXISTS `unipept`.`seq_taxa_il_cross_references` (
+    `id` INT UNSIGNED NOT NULL AUTO_INCREMENT ,
+    `seq_id` INT UNSIGNED NOT NULL,
+    `taxon_id` INT UNSIGNED NOT NULL,
+    PRIMARY KEY (`id`))
+ENGINE = InnoDB
+DEFAULT CHARACTER SET = ascii
+COLLATE = ascii_general_ci;
+
+-- -----------------------------------------------------
 -- Table `unipept`.`go_cross_references`
 -- -----------------------------------------------------
 CREATE  TABLE IF NOT EXISTS `unipept`.`go_cross_references` (
@@ -233,6 +282,19 @@ CREATE  TABLE IF NOT EXISTS `unipept`.`interpro_cross_references` (
   `uniprot_entry_id` INT UNSIGNED NOT NULL ,
   `interpro_entry_code` VARCHAR(9) NOT NULL ,
   PRIMARY KEY (`id`))
+ENGINE = InnoDB
+DEFAULT CHARACTER SET = ascii
+COLLATE = ascii_general_ci;
+
+
+-- -----------------------------------------------------
+-- Table `unipept`.`taxon_cross_references`
+-- -----------------------------------------------------
+CREATE  TABLE IF NOT EXISTS `unipept`.`taxon_cross_references` (
+    `id` INT UNSIGNED NOT NULL AUTO_INCREMENT ,
+    `sequence_id` INT UNSIGNED NOT NULL ,
+    `taxon_id` VARCHAR(9) NOT NULL ,
+    PRIMARY KEY (`id`))
 ENGINE = InnoDB
 DEFAULT CHARACTER SET = ascii
 COLLATE = ascii_general_ci;

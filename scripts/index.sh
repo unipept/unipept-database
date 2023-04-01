@@ -17,7 +17,7 @@ function print {
 function doCmd {
     echo -n "-> "
     print "$1"
-    echo $1 | mysql -u unipept -punipept unipept 2>&1 | sed "s/^/   /" | grep -v "Using a password on the command line interface can be insecure" | tee -a $logfile
+    echo $1 | mysql --user=unipept --password=unipept unipept 2>&1 | sed "s/^/   /" | grep -v "Using a password on the command line interface can be insecure" | tee -a $logfile
 }
 
 
@@ -44,13 +44,6 @@ doCmd "ALTER TABLE peptides ADD INDEX fk_peptides_sequences (sequence_id ASC);"
 doCmd "ALTER TABLE peptides ADD INDEX fk_peptides_uniprot_entries (uniprot_entry_id ASC);"
 doCmd "ALTER TABLE peptides ADD INDEX fk_peptides_original_sequences (original_sequence_id ASC);"
 
-print "adding index to embl_cross_references"
-doCmd "ALTER TABLE embl_cross_references ADD INDEX fk_embl_reference_uniprot_entries (uniprot_entry_id ASC);"
-# doCmd "ALTER TABLE embl_cross_references ADD INDEX idx_sequence_id (sequence_id ASC);"
-
-print "adding index to refseq_cross_references"
-doCmd "ALTER TABLE refseq_cross_references ADD INDEX fk_refseq_reference_uniprot_entries (uniprot_entry_id ASC);"
-
 print "adding index to go_cross_references"
 doCmd "ALTER TABLE go_cross_references ADD INDEX fk_go_reference_uniprot_entries (uniprot_entry_id ASC);"
 # doCmd "ALTER TABLE go_cross_references ADD INDEX fk_go_cross_reference_go_terms_idx (go_term_code ASC);"
@@ -61,5 +54,19 @@ doCmd "ALTER TABLE ec_cross_references ADD INDEX fk_ec_reference_uniprot_entries
 
 print "adding index to interpro_cross_references"
 doCmd "ALTER TABLE interpro_cross_references ADD INDEX fk_interpro_reference_uniprot_entries (uniprot_entry_id ASC);"
+
+print "adding index to seq_fa_cross_references"
+doCmd "ALTER TABLE seq_fa_cross_references ADD INDEX fk_seq_fa_cross_reference_seq_idx (seq_id ASC)"
+
+print "adding index to seq_fa_il_cross_references"
+doCmd "ALTER TABLE seq_fa_il_cross_references ADD INDEX fk_seq_fa_cross_reference_seq_idx (seq_id ASC)"
+
+print "adding index to seq_taxa_cross_references"
+doCmd "ALTER TABLE seq_taxa_cross_references ADD INDEX fk_seq_taxa_cross_reference_seq_idx (seq_id ASC)"
+doCmd "ALTER TABLE seq_taxa_cross_references ADD INDEX fk_seq_taxa_cross_reference_taxa_idx (taxon_id ASC)"
+
+print "adding index to seq_taxa_il_cross_references"
+doCmd "ALTER TABLE seq_taxa_il_cross_references ADD INDEX fk_seq_taxa_il_cross_reference_seq_idx (seq_id ASC)"
+doCmd "ALTER TABLE seq_taxa_il_cross_references ADD INDEX fk_seq_taxa_il_cross_reference_taxa_idx (taxon_id ASC)"
 
 print "Done"
