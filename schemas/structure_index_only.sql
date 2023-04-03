@@ -1,101 +1,91 @@
-SET @OLD_UNIQUE_CHECKS=@@UNIQUE_CHECKS, UNIQUE_CHECKS=0;
-SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0;
-SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='TRADITIONAL';
-
--- -----------------------------------------------------
--- Table `unipept`.`taxons`
--- -----------------------------------------------------
--- ALTER TABLE taxons ADD INDEX fk_taxon_taxon (parent_id ASC);
+SET session_replication_role = 'replica';
 
 
 -- -----------------------------------------------------
 -- Table `unipept`.`uniprot_entries`
 -- -----------------------------------------------------
-ALTER TABLE uniprot_entries ADD INDEX fk_uniprot_entries_taxons (taxon_id ASC);
-ALTER TABLE uniprot_entries ADD UNIQUE INDEX idx_uniprot_entries_accession (uniprot_accession_number ASC)
-
+CREATE INDEX fk_uniprot_entries_taxons ON uniprot_entries (taxon_id ASC);
+CREATE UNIQUE INDEX idx_uniprot_entries_accession ON uniprot_entries (uniprot_accession_number ASC);
 
 -- -----------------------------------------------------
 -- Table `unipept`.`ec_numbers`
 -- -----------------------------------------------------
-ALTER TABLE ec_numbers ADD UNIQUE INDEX idx_ec_code (code ASC);
-
+CREATE UNIQUE INDEX idx_ec_code ON ec_numbers (code ASC);
 
 -- -----------------------------------------------------
 -- Table `unipept`.`go_terms`
 -- -----------------------------------------------------
-ALTER TABLE go_terms ADD UNIQUE INDEX idx_go_code (code ASC);
-
+CREATE UNIQUE INDEX idx_go_code ON go_terms (code ASC);
 
 -- -----------------------------------------------------
 -- Table `unipept`.`interpro`
 -- -----------------------------------------------------
-ALTER TABLE interpro_entries ADD UNIQUE INDEX idx_interpro_code (code ASC);
+CREATE UNIQUE INDEX idx_interpro_code ON interpro_entries (code ASC);
 
 
 -- -----------------------------------------------------
 -- Table `unipept`.`sequences`
 -- -----------------------------------------------------
-ALTER TABLE sequences ADD UNIQUE INDEX idx_sequences (sequence ASC);
-ALTER TABLE sequences ADD INDEX fk_sequences_taxons (lca ASC), ADD INDEX fk_sequences_taxons_2 (lca_il ASC);
+CREATE UNIQUE INDEX idx_sequences ON sequences (sequence ASC);
+CREATE INDEX fk_sequences_taxons ON sequences (lca ASC);
+CREATE INDEX fk_sequences_taxons_2 ON sequences (lca_il ASC);
 
 
 -- -----------------------------------------------------
 -- Table `unipept`.`peptides`
 -- -----------------------------------------------------
-ALTER TABLE peptides ADD INDEX fk_peptides_sequences (sequence_id ASC), ADD INDEX fk_peptides_uniprot_entries (uniprot_entry_id ASC), ADD INDEX fk_peptides_original_sequences (original_sequence_id ASC);
+CREATE INDEX fk_peptides_sequences ON peptides (sequence_id ASC);
+CREATE INDEX fk_peptides_uniprot_entries ON peptides (uniprot_entry_id ASC);
+CREATE INDEX fk_peptides_original_sequences ON peptides (original_sequence_id ASC);
 
 
 -- -----------------------------------------------------
 -- Table `unipept`.`seq_fa_cross_references`
 -- -----------------------------------------------------
-ALTER TABLE seq_fa_cross_references ADD INDEX fk_seq_fa_cross_reference_seq_idx (seq_id ASC);
+CREATE INDEX fk_seq_fa_cross_reference_seq_idx ON seq_fa_cross_references (seq_id ASC);
 
 
 -- -----------------------------------------------------
 -- Table `unipept`.`seq_fa_il_cross_references`
 -- -----------------------------------------------------
-ALTER TABLE seq_fa_il_cross_references ADD INDEX fk_seq_fa_il_cross_reference_seq_idx (seq_id ASC);
+CREATE INDEX fk_seq_fa_il_cross_reference_seq_idx ON seq_fa_il_cross_references (seq_id ASC);
 
 
 -- -----------------------------------------------------
 -- Table `unipept`.`seq_taxa_cross_references`
 -- -----------------------------------------------------
-ALTER TABLE seq_taxa_cross_references ADD INDEX fk_seq_taxa_cross_reference_seq_idx (seq_id ASC);
-ALTER TABLE seq_taxa_cross_references ADD INDEX fk_seq_taxa_cross_reference_taxa_idx (taxon_id ASC);
+CREATE INDEX fk_seq_taxa_cross_reference_seq_idx ON seq_taxa_cross_references (seq_id ASC);
+CREATE INDEX fk_seq_taxa_cross_reference_taxa_idx ON seq_taxa_cross_references (taxon_id ASC);
 
 
 -- -----------------------------------------------------
 -- Table `unipept`.`seq_taxa_il_cross_references`
 -- -----------------------------------------------------
-ALTER TABLE seq_taxa_il_cross_references ADD INDEX fk_seq_taxa_il_cross_reference_seq_idx (seq_id ASC);
-ALTER TABLE seq_taxa_il_cross_references ADD INDEX fk_seq_taxa_il_cross_reference_taxa_idx (taxon_id ASC);
+CREATE INDEX fk_seq_taxa_il_cross_reference_seq_idx ON seq_taxa_il_cross_references (seq_id ASC);
+CREATE INDEX fk_seq_taxa_il_cross_reference_taxa_idx ON seq_taxa_il_cross_references (taxon_id ASC);
 
 
 -- -----------------------------------------------------
 -- Table `unipept`.`go_cross_references`
 -- -----------------------------------------------------
-ALTER TABLE go_cross_references ADD INDEX fk_go_reference_uniprot_entries (uniprot_entry_id ASC);
--- ALTER TABLE go_cross_references ADD INDEX fk_go_cross_reference_go_terms_idx (go_term_code ASC);
+CREATE INDEX fk_go_reference_uniprot_entries ON go_cross_references (uniprot_entry_id ASC);
 
 
 -- -----------------------------------------------------
 -- Table `unipept`.`ec_cross_references`
 -- -----------------------------------------------------
-ALTER TABLE ec_cross_references ADD INDEX fk_ec_reference_uniprot_entries (uniprot_entry_id ASC);
--- ALTER TABLE ec_cross_references ADD INDEX fk_ec_terms_reference_go_terms_idx (ec_number_code ASC);
+CREATE INDEX fk_ec_reference_uniprot_entries ON ec_cross_references (uniprot_entry_id ASC);
 
 
 -- -----------------------------------------------------
 -- Table `unipept`.`interpro_cross_references`
 -- -----------------------------------------------------
-ALTER TABLE interpro_cross_references ADD INDEX fk_interpro_reference_uniprot_entries (uniprot_entry_id ASC);
+CREATE INDEX fk_interpro_reference_uniprot_entries ON interpro_cross_references (uniprot_entry_id ASC);
 
 -- -----------------------------------------------------
 -- Table `unipept`.`taxon_cross_references`
 -- -----------------------------------------------------
-ALTER TABLE taxon_cross_references ADD INDEX `fk_taxon_reference_sequences` (`sequence_id` ASC);
+CREATE INDEX fk_taxon_reference_sequences ON taxon_cross_references (sequence_id ASC);
 
-SET SQL_MODE=@OLD_SQL_MODE;
-SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS;
-SET UNIQUE_CHECKS=@OLD_UNIQUE_CHECKS;
+
+SET session_replication_role = 'origin';
