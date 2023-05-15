@@ -26,7 +26,7 @@ function doCmd {
 
 print "adding index to uniprot_entries"
 doCmd "ALTER TABLE uniprot_entries ADD INDEX fk_uniprot_entries_taxons (taxon_id ASC);"
-# doCmd "ALTER TABLE uniprot_entries ADD UNIQUE INDEX idx_uniprot_entries_accession (uniprot_accession_number ASC);"
+doCmd "ALTER TABLE uniprot_entries ADD UNIQUE INDEX idx_uniprot_entries_accession (uniprot_accession_number ASC);"
 
 print "adding index to ec_numbers"
 doCmd "ALTER TABLE ec_numbers ADD UNIQUE INDEX idx_ec_numbers (code ASC);"
