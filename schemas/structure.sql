@@ -235,21 +235,6 @@ ENGINE = InnoDB
 DEFAULT CHARACTER SET = utf8
 COLLATE = utf8_general_ci;
 
-
--- -----------------------------------------------------
--- Table `unipept`.`posts`
--- -----------------------------------------------------
-CREATE  TABLE IF NOT EXISTS `unipept`.`posts` (
-  `id` INT UNSIGNED NOT NULL AUTO_INCREMENT ,
-  `title` VARCHAR(100) NOT NULL ,
-  `content` TEXT NOT NULL ,
-  `date` DATE NOT NULL ,
-  PRIMARY KEY (`id`) )
-ENGINE = InnoDB
-DEFAULT CHARACTER SET = utf8
-COLLATE = utf8_general_ci;
-
-
 -- -----------------------------------------------------
 -- Table `unipept`.`go_cross_references`
 -- -----------------------------------------------------
@@ -312,17 +297,6 @@ CREATE  TABLE IF NOT EXISTS `unipept`.`interpro_cross_references` (
 ENGINE = InnoDB
 DEFAULT CHARACTER SET = ascii
 COLLATE = ascii_general_ci;
-
-
--- -----------------------------------------------------
--- Table `unipept`.`users`
--- -----------------------------------------------------
-CREATE TABLE IF NOT EXISTS `unipept`.`users` (
-  `id` INT NOT NULL AUTO_INCREMENT,
-  `username` VARCHAR(8) NOT NULL,
-  `admin` TINYINT NOT NULL DEFAULT 0,
-  PRIMARY KEY (`id`))
-ENGINE = InnoDB;
 
 SET SQL_MODE=@OLD_SQL_MODE;
 SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS;
