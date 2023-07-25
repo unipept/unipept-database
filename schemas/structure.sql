@@ -172,7 +172,7 @@ COLLATE = ascii_general_ci;
 -- Table `unipept`.`peptides`
 -- -----------------------------------------------------
 CREATE  TABLE IF NOT EXISTS `unipept`.`peptides` (
-  `id` INT UNSIGNED NOT NULL AUTO_INCREMENT ,
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT ,
   `sequence_id` INT UNSIGNED NOT NULL ,
   `original_sequence_id` INT UNSIGNED NOT NULL ,
   `uniprot_entry_id` INT UNSIGNED NOT NULL ,
