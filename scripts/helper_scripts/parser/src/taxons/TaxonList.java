@@ -89,7 +89,7 @@ public class TaxonList extends ArrayList<Taxon> {
             (t.name.matches(".*\\d.*") && !t.name.contains("virus"))
             || t.name.endsWith(" sp.")
             || t.name.endsWith(" genomosp.")
-            || t.name.toLowerCase().contains("bacterium")
+            || t.name.contains(" bacterium")
           )
         )
         || t.name.contains("enrichment culture")
@@ -102,7 +102,8 @@ public class TaxonList extends ArrayList<Taxon> {
         || t.name.endsWith("metagenome")
         || t.name.endsWith("library")
         || taxon_id == 28384
-        || taxon_id == 48479) {
+        || taxon_id == 48479
+        || taxon_id == 1869227) {
             t.invalidate();
             return false;
         }
