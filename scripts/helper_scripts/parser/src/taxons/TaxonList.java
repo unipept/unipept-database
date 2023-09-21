@@ -102,7 +102,8 @@ public class TaxonList extends ArrayList<Taxon> {
         || t.name.endsWith("metagenome")
         || t.name.endsWith("library")
         || taxon_id == 28384
-        || taxon_id == 48479) {
+        || taxon_id == 48479
+        || taxon_id == 1869227) {
             t.invalidate();
             return false;
         }
