@@ -41,8 +41,6 @@ public class TableWriter implements UniprotObserver {
     // csv files
     private CSV.IndexedWriter peptides;
     private CSV.IndexedWriter uniprotEntries;
-    private CSV.IndexedWriter refseqCrossReferences;
-    private CSV.IndexedWriter emblCrossReferences;
     private CSV.IndexedWriter goCrossReferences;
     private CSV.IndexedWriter ecCrossReferences;
     private CSV.IndexedWriter interProCrossReferences;
@@ -80,19 +78,16 @@ public class TableWriter implements UniprotObserver {
         long uniprotEntryId = addUniprotEntry(entry.getUniprotAccessionNumber(), entry.getVersion(),
                 entry.getTaxonId(), entry.getType(), entry.getName(), entry.getSequence());
         if (uniprotEntryId != -1) { // failed to add entry
-
             // todo make cleaner
             String faSummary = Stream.of(
                     entry.getGOReferences().stream().map(UniprotGORef::getId),
-                    entry.getECReferences().stream().map(x->"EC:"+x.getId()),
-                    entry.getInterProReferences().stream().map(x->"IPR:"+x.getId())
+                    entry.getECReferences().stream().filter(x -> !x.getId().isEmpty()).map(x->"EC:"+x.getId()),
+                    entry.getInterProReferences().stream().filter(x -> !x.getId().isEmpty()).map(x->"IPR:"+x.getId())
             ).flatMap(i -> i).collect(Collectors.joining(";"));
 
             for(String sequence : entry.digest()) {
                 addData(sequence.replace('I', 'L'), uniprotEntryId, sequence, faSummary);
             }
-            for (UniprotDbRef ref : entry.getDbReferences())
-                addDbRef(ref, uniprotEntryId);
             for (UniprotGORef ref : entry.getGOReferences())
                 addGORef(ref, uniprotEntryId);
             for (UniprotECRef ref : entry.getECReferences())
@@ -124,12 +119,13 @@ public class TableWriter implements UniprotObserver {
         if(0 <= taxonId && taxonId < taxonList.size() && taxonList.get(taxonId) != null) {
             try {
                 uniprotEntries.write(
-                        uniprotAccessionNumber,
-                        Integer.toString(version),
-                        Integer.toString(taxonId),
-                        type,
-                        name,
-                        sequence);
+                    uniprotAccessionNumber,
+                    Integer.toString(version),
+                    Integer.toString(taxonId),
+                    type,
+                    name,
+                    sequence
+                );
                 return uniprotEntries.index();
             } catch(IOException e) {
                 System.err.println(new Timestamp(System.currentTimeMillis())
@@ -163,37 +159,14 @@ public class TableWriter implements UniprotObserver {
     public void addData(String unifiedSequence, long uniprotEntryId, String originalSequence, String functionalAnnotations) {
         try {
             peptides.write(
-                    unifiedSequence,
-                    originalSequence,
-                    Long.toString(uniprotEntryId),
-                    functionalAnnotations
-                    );
+                unifiedSequence,
+                originalSequence,
+                Long.toString(uniprotEntryId),
+                functionalAnnotations
+            );
         } catch(IOException e) {
             System.err.println(new Timestamp(System.currentTimeMillis())
                     + " Error adding this peptide to the database: " + unifiedSequence);
-            e.printStackTrace();
-        }
-    }
-
-    /**
-     * Adds a uniprot entry cross reference to the database
-     *
-     * @param ref
-     *            The uniprot cross reference to add
-     * @param uniprotEntryId
-     *            The uniprotEntry of the cross reference
-     */
-    public void addDbRef(UniprotDbRef ref, long uniprotEntryId) {
-        try {
-            CSV.Writer w = (ref.getType().equals("EMBL"))
-                ? emblCrossReferences
-                : refseqCrossReferences;
-            w.write(Long.toString(uniprotEntryId),
-                    ref.getProteinId(),
-                    ref.getSequenceId());
-        } catch (IOException e) {
-            System.err.println(new Timestamp(System.currentTimeMillis())
-                    + " Error adding this cross reference to the database.");
             e.printStackTrace();
         }
     }
