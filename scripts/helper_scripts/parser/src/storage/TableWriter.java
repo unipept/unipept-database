@@ -78,7 +78,6 @@ public class TableWriter implements UniprotObserver {
         long uniprotEntryId = addUniprotEntry(entry.getUniprotAccessionNumber(), entry.getVersion(),
                 entry.getTaxonId(), entry.getType(), entry.getName(), entry.getSequence());
         if (uniprotEntryId != -1) { // failed to add entry
-            // todo make cleaner
             String faSummary = Stream.of(
                     entry.getGOReferences().stream().map(UniprotGORef::getId),
                     entry.getECReferences().stream().filter(x -> !x.getId().isEmpty()).map(x->"EC:"+x.getId()),
