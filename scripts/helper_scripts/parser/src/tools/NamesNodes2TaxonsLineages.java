@@ -18,7 +18,7 @@ public class NamesNodes2TaxonsLineages {
      * Parse a list of taxons and their lineages from the NCBI dumps.
      *
      * This program will parse the first two argument files, and create the next
-     * two. The first two arguments are the nodes.dmp en names.dmp files
+     * two. The first two arguments are the nodes.dmp and names.dmp files
      * downloaded from the NCBI. TSV-dumps of the parsed taxons and lineages
      * will be written to the third and fourth parameter.
      */
