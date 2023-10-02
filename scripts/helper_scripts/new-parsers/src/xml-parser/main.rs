@@ -11,10 +11,6 @@ enum UniprotType {
 // Parse a Uniprot XML file and convert it into a TSV-file
 #[derive(Parser, Debug)]
 struct Cli {
-    #[clap(long = "min", default_value_t = 5)]
-    peptide_min_length: u32,
-    #[clap(long = "max", default_value_t = 50)]
-    peptide_max_length: u32,
     #[clap(value_enum, short = 't', long, default_value_t = UniprotType::Swissprot)]
     uniprot_type: UniprotType,
     #[clap(short, long, default_value_t = false)]
@@ -47,7 +43,7 @@ fn write_entry(entry: &uniprot::uniprot::Entry, verbose: bool) {
         None => { entry.protein.name.submitted[0].full.clone() }
     };
 
-    let version: String = entry.sequence.version.to_string();
+    let version: String = entry.version.to_string();
 
     let mut ec_references: Vec<String> = Vec::new();
     let mut go_references: Vec<String> = Vec::new();
