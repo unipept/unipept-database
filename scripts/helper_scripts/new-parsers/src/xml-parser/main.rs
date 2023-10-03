@@ -34,14 +34,63 @@ fn write_header() {
     println!("{}", result_string);
 }
 
+fn parse_name(entry: &uniprot::uniprot::Entry) -> String {
+    let mut submitted_name: String = String::new();
+
+    // Check the last "recommended" name from a protein's components,
+    // otherwise store the last "submitted" name of these components for later
+    for component in entry.protein.components.iter().rev() {
+        match &component.recommended {
+            Some(n) => { return n.full.clone(); }
+            None => {}
+        }
+
+        if submitted_name.len() == 0 {
+            if let Some(n) = component.submitted.last() {
+                submitted_name = n.full.clone();
+            }
+        }
+    }
+
+    // Do the same thing for the domains
+    for domain in entry.protein.domains.iter().rev() {
+        match &domain.recommended {
+            Some(n) => { return n.full.clone(); }
+            None => {}
+        }
+
+        if submitted_name.len() == 0 {
+            if let Some(n) = domain.submitted.last() {
+                submitted_name = n.full.clone();
+            }
+        }
+    }
+
+    // First check the protein's own recommended name,
+    // otherwise return the submitted name from above if there was one,
+    // otherwise the last submitted name from the protein itself
+    match &entry.protein.name.recommended {
+        Some(n) => { n.full.clone() }
+        None => {
+            if submitted_name.len() > 0 {
+                submitted_name
+            } else {
+                if let Some(n) = entry.protein.name.submitted.last() {
+                    n.full.clone()
+                } else {
+                    eprintln!("Could not find a name for entry {}", entry.accessions[0]);
+                    String::new()
+                }
+            }
+        }
+    }
+}
+
 fn write_entry(entry: &uniprot::uniprot::Entry, verbose: bool) {
     let accession_number: String = entry.accessions[0].clone();
     let sequence: String = entry.sequence.value.clone();
 
-    let name: String = match &entry.protein.name.recommended {
-        Some(n) => n.full.clone(),
-        None => { entry.protein.name.submitted[0].full.clone() }
-    };
+    let name: String = parse_name(entry);
 
     let version: String = entry.version.to_string();
 
@@ -50,12 +99,14 @@ fn write_entry(entry: &uniprot::uniprot::Entry, verbose: bool) {
     let mut ip_references: Vec<String> = Vec::new();
     let mut taxon_id: String = String::new();
 
+    // Find the taxon id in the organism
     for reference in &entry.organism.db_references {
         if reference.ty == "NCBI Taxonomy" {
             taxon_id = reference.id.clone();
         }
     }
 
+    // Find the EC, GO and InterPro references in the entry itself
     for reference in &entry.db_references {
         let vector: Option<&mut Vec<String>> = match reference.ty.as_str() {
             "EC" => Some(&mut ec_references),
