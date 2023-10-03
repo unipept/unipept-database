@@ -150,7 +150,6 @@ fn main() {
 
     write_header();
 
-    // TODO perhaps read/parse in multiple threads as well?
     for r in uniprot::uniprot::parse(reader) {
         let entry = r.unwrap();
         write_entry(&entry, args.verbose);
