@@ -34,6 +34,7 @@ fn write_header() {
     println!("{}", result_string);
 }
 
+// Resolve the name of a single entry
 fn parse_name(entry: &uniprot::uniprot::Entry) -> String {
     let mut submitted_name: String = String::new();
 
@@ -86,6 +87,7 @@ fn parse_name(entry: &uniprot::uniprot::Entry) -> String {
     }
 }
 
+// Write a single entry to stdout
 fn write_entry(entry: &uniprot::uniprot::Entry, verbose: bool) {
     let accession_number: String = entry.accessions[0].clone();
     let sequence: String = entry.sequence.value.clone();
@@ -148,6 +150,7 @@ fn main() {
 
     write_header();
 
+    // TODO perhaps read/parse in multiple threads as well?
     for r in uniprot::uniprot::parse(reader) {
         let entry = r.unwrap();
         write_entry(&entry, args.verbose);
