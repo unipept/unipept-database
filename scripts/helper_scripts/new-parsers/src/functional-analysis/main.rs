@@ -12,8 +12,7 @@ fn write_entry(writer: &mut BufWriter<File>, current_peptide: String, num_prot: 
         .join(",");
 
     let format_string = format!(
-        r#"{}\t{{"num":{{"all":{num_prot},"EC":{num_ec},"GO":{num_go},"IPR":{num_ip},"data":{{{data}}}}}}}
-        "#, current_peptide
+        "{current_peptide}\t{{\"num\":{{\"all\":{num_prot},\"EC\":{num_ec},\"GO\":{num_go},\"IPR\":{num_ip},\"data\":{{{data}}}}}}}\n"
     );
 
     if let Err(e) = writer.write_all(format_string.as_bytes()) {
