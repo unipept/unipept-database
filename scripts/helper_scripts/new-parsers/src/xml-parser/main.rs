@@ -1,4 +1,4 @@
-use std::io::{BufReader, stdin, Stdin};
+use std::io::{stdin, StdinLock, stdout, StdoutLock, Write};
 use std::num::NonZeroUsize;
 
 use clap::Parser;
@@ -15,7 +15,7 @@ enum UniprotType {
 struct Cli {
     #[clap(value_enum, short = 't', long, default_value_t = UniprotType::Swissprot)]
     uniprot_type: UniprotType,
-    #[clap(long, default_value_t = 5)]
+    #[clap(long, default_value_t = 0)]
     threads: u32,
     #[clap(short, long, default_value_t = false)]
     verbose: bool,
@@ -90,7 +90,7 @@ fn parse_name(entry: &uniprot::uniprot::Entry) -> String {
 }
 
 // Write a single entry to stdout
-fn write_entry(entry: &uniprot::uniprot::Entry, verbose: bool) {
+fn write_entry(writer: &mut StdoutLock, entry: &uniprot::uniprot::Entry, verbose: bool) {
     let accession_number: String = entry.accessions[0].clone();
     let sequence: String = entry.sequence.value.clone();
 
@@ -142,13 +142,19 @@ fn write_entry(entry: &uniprot::uniprot::Entry, verbose: bool) {
         eprintln!("INFO VERBOSE: Writing tabular line: {}", line);
     }
 
-    println!("{}", line);
+    if let Err(e) = writer.write(line.as_bytes()) {
+        eprintln!("{:?}", e);
+    }
 }
 
 fn main() {
     let args = Cli::parse();
 
-    let reader = BufReader::new(stdin());
+    let stdin = stdin();
+    let reader = stdin.lock();
+
+    let stdout = stdout();
+    let mut writer = stdout.lock();
 
     write_header();
 
@@ -157,11 +163,11 @@ fn main() {
         1 => {
             for r in SequentialParser::new(reader) {
                 let entry = r.unwrap();
-                write_entry(&entry, args.verbose);
+                write_entry(&mut writer, &entry, args.verbose);
             }
         }
         n => {
-            let parser: ThreadedParser<BufReader<Stdin>> = if n == 0 {
+            let parser: ThreadedParser<StdinLock> = if n == 0 {
                 ThreadedParser::new(reader)
             } else {
                 ThreadedParser::with_threads(
@@ -172,7 +178,7 @@ fn main() {
 
             for r in parser {
                 let entry = r.unwrap();
-                write_entry(&entry, args.verbose);
+                write_entry(&mut writer, &entry, args.verbose);
             }
         }
     }
