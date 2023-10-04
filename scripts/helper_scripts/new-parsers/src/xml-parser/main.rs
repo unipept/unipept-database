@@ -50,7 +50,7 @@ fn parse_name(entry: &uniprot::uniprot::Entry) -> String {
             None => {}
         }
 
-        if submitted_name.len() == 0 {
+        if submitted_name.is_empty() {
             if let Some(n) = component.submitted.last() {
                 submitted_name = n.full.clone();
             }
@@ -64,7 +64,7 @@ fn parse_name(entry: &uniprot::uniprot::Entry) -> String {
             None => {}
         }
 
-        if submitted_name.len() == 0 {
+        if submitted_name.is_empty() {
             if let Some(n) = domain.submitted.last() {
                 submitted_name = n.full.clone();
             }
@@ -77,15 +77,13 @@ fn parse_name(entry: &uniprot::uniprot::Entry) -> String {
     match &entry.protein.name.recommended {
         Some(n) => { n.full.clone() }
         None => {
-            if submitted_name.len() > 0 {
+            if !submitted_name.is_empty() {
                 submitted_name
+            } else if let Some(n) = entry.protein.name.submitted.last() {
+                n.full.clone()
             } else {
-                if let Some(n) = entry.protein.name.submitted.last() {
-                    n.full.clone()
-                } else {
-                    eprintln!("Could not find a name for entry {}", entry.accessions[0]);
-                    String::new()
-                }
+                eprintln!("Could not find a name for entry {}", entry.accessions[0]);
+                String::new()
             }
         }
     }
@@ -168,7 +166,7 @@ fn main() {
             } else {
                 ThreadedParser::with_threads(
                     reader,
-                    NonZeroUsize::new(n as usize).expect("number of threads is not a valid non-zero usize")
+                    NonZeroUsize::new(n as usize).expect("number of threads is not a valid non-zero usize"),
                 )
             };
 
