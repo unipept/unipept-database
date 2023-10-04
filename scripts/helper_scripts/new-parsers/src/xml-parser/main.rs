@@ -1,4 +1,4 @@
-use std::io::{stdin, StdinLock, stdout, StdoutLock, Write};
+use std::io::{BufReader, stdin, Stdin, StdinLock, stdout, StdoutLock, Write};
 use std::num::NonZeroUsize;
 
 use clap::Parser;
@@ -90,7 +90,7 @@ fn parse_name(entry: &uniprot::uniprot::Entry) -> String {
 }
 
 // Write a single entry to stdout
-fn write_entry(writer: &mut StdoutLock, entry: &uniprot::uniprot::Entry, verbose: bool) {
+fn write_entry(entry: &uniprot::uniprot::Entry, verbose: bool) {
     let accession_number: String = entry.accessions[0].clone();
     let sequence: String = entry.sequence.value.clone();
 
@@ -142,19 +142,13 @@ fn write_entry(writer: &mut StdoutLock, entry: &uniprot::uniprot::Entry, verbose
         eprintln!("INFO VERBOSE: Writing tabular line: {}", line);
     }
 
-    if let Err(e) = writer.write(line.as_bytes()) {
-        eprintln!("{:?}", e);
-    }
+    println!("{}", line);
 }
 
 fn main() {
     let args = Cli::parse();
 
-    let stdin = stdin();
-    let reader = stdin.lock();
-
-    let stdout = stdout();
-    let mut writer = stdout.lock();
+    let reader = BufReader::new(stdin());
 
     write_header();
 
@@ -163,11 +157,11 @@ fn main() {
         1 => {
             for r in SequentialParser::new(reader) {
                 let entry = r.unwrap();
-                write_entry(&mut writer, &entry, args.verbose);
+                write_entry(&entry, args.verbose);
             }
         }
         n => {
-            let parser: ThreadedParser<StdinLock> = if n == 0 {
+            let parser: ThreadedParser<BufReader<Stdin>> = if n == 0 {
                 ThreadedParser::new(reader)
             } else {
                 ThreadedParser::with_threads(
@@ -178,7 +172,7 @@ fn main() {
 
             for r in parser {
                 let entry = r.unwrap();
-                write_entry(&mut writer, &entry, args.verbose);
+                write_entry(&entry, args.verbose);
             }
         }
     }
