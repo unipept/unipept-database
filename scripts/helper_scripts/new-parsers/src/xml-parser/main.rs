@@ -1,6 +1,8 @@
-use std::io::{BufReader, stdin};
+use std::io::{BufReader, stdin, Stdin};
+use std::num::NonZeroUsize;
 
 use clap::Parser;
+use uniprot::uniprot::{SequentialParser, ThreadedParser};
 
 #[derive(clap::ValueEnum, Clone, Debug)]
 enum UniprotType {
@@ -13,6 +15,8 @@ enum UniprotType {
 struct Cli {
     #[clap(value_enum, short = 't', long, default_value_t = UniprotType::Swissprot)]
     uniprot_type: UniprotType,
+    #[clap(long, default_value_t = 5)]
+    threads: u32,
     #[clap(short, long, default_value_t = false)]
     verbose: bool,
 }
@@ -150,8 +154,28 @@ fn main() {
 
     write_header();
 
-    for r in uniprot::uniprot::parse(reader) {
-        let entry = r.unwrap();
-        write_entry(&entry, args.verbose);
+    // Create a different parser based on the amount of threads requested
+    match args.threads {
+        1 => {
+            for r in SequentialParser::new(reader) {
+                let entry = r.unwrap();
+                write_entry(&entry, args.verbose);
+            }
+        }
+        n => {
+            let parser: ThreadedParser<BufReader<Stdin>> = if n == 0 {
+                ThreadedParser::new(reader)
+            } else {
+                ThreadedParser::with_threads(
+                    reader,
+                    NonZeroUsize::new(n as usize).expect("number of threads is not a valid non-zero usize")
+                )
+            };
+
+            for r in parser {
+                let entry = r.unwrap();
+                write_entry(&entry, args.verbose);
+            }
+        }
     }
 }
