@@ -1,4 +1,4 @@
-use std::io::{BufReader, stdin, Stdin, StdinLock, stdout, StdoutLock, Write};
+use std::io::{BufReader, stdin, Stdin};
 use std::num::NonZeroUsize;
 
 use clap::Parser;
