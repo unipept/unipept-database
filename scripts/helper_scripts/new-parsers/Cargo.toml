@@ -4,6 +4,10 @@ version = "0.1.0"
 edition = "2021"
 
 [[bin]]
+name = "functional-analysis"
+path = "src/functional-analysis/main.rs"
+
+[[bin]]
 name = "xml-parser"
 path = "src/xml-parser/main.rs"
 
