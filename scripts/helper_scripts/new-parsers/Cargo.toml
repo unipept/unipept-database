@@ -11,4 +11,6 @@ path = "src/xml-parser/main.rs"
 
 [dependencies]
 clap = { version = "4.4.6", features = ["derive"] }
-uniprot = "0.6.0"
+smartstring = { version = "1.0" }
+#uniprot = "0.6.0"
+uniprot = { git = "https://github.com/althonos/uniprot.rs.git", branch = "producer-thread" }

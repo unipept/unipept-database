@@ -2,7 +2,10 @@ use std::io::{BufReader, stdin, Stdin};
 use std::num::NonZeroUsize;
 
 use clap::Parser;
+use smartstring::{LazyCompact, SmartString};
 use uniprot::uniprot::{SequentialParser, ThreadedParser};
+
+type SmartStr = SmartString<LazyCompact>;
 
 #[derive(clap::ValueEnum, Clone, Debug)]
 enum UniprotType {
@@ -39,8 +42,8 @@ fn write_header() {
 }
 
 // Resolve the name of a single entry
-fn parse_name(entry: &uniprot::uniprot::Entry) -> String {
-    let mut submitted_name: String = String::new();
+fn parse_name(entry: &uniprot::uniprot::Entry) -> SmartStr {
+    let mut submitted_name: SmartStr = SmartStr::new();
 
     // Check the last "recommended" name from a protein's components,
     // otherwise store the last "submitted" name of these components for later
@@ -83,7 +86,7 @@ fn parse_name(entry: &uniprot::uniprot::Entry) -> String {
                 n.full.clone()
             } else {
                 eprintln!("Could not find a name for entry {}", entry.accessions[0]);
-                String::new()
+                SmartStr::new()
             }
         }
     }
@@ -91,17 +94,17 @@ fn parse_name(entry: &uniprot::uniprot::Entry) -> String {
 
 // Write a single entry to stdout
 fn write_entry(entry: &uniprot::uniprot::Entry, verbose: bool) {
-    let accession_number: String = entry.accessions[0].clone();
-    let sequence: String = entry.sequence.value.clone();
+    let accession_number: SmartStr = entry.accessions[0].clone();
+    let sequence: SmartStr = entry.sequence.value.clone();
 
-    let name: String = parse_name(entry);
+    let name: SmartStr = parse_name(entry);
 
-    let version: String = entry.version.to_string();
+    let version: SmartStr = SmartStr::from(entry.version.to_string());
 
-    let mut ec_references: Vec<String> = Vec::new();
-    let mut go_references: Vec<String> = Vec::new();
-    let mut ip_references: Vec<String> = Vec::new();
-    let mut taxon_id: String = String::new();
+    let mut ec_references: Vec<SmartStr> = Vec::new();
+    let mut go_references: Vec<SmartStr> = Vec::new();
+    let mut ip_references: Vec<SmartStr> = Vec::new();
+    let mut taxon_id: SmartStr = SmartStr::new();
 
     // Find the taxon id in the organism
     for reference in &entry.organism.db_references {
@@ -112,7 +115,7 @@ fn write_entry(entry: &uniprot::uniprot::Entry, verbose: bool) {
 
     // Find the EC, GO and InterPro references in the entry itself
     for reference in &entry.db_references {
-        let vector: Option<&mut Vec<String>> = match reference.ty.as_str() {
+        let vector: Option<&mut Vec<SmartStr>> = match reference.ty.as_str() {
             "EC" => Some(&mut ec_references),
             "GO" => Some(&mut go_references),
             "InterPro" => Some(&mut ip_references),
@@ -124,15 +127,15 @@ fn write_entry(entry: &uniprot::uniprot::Entry, verbose: bool) {
         }
     }
 
-    let fields: [String; 9] = [
+    let fields: [SmartStr; 9] = [
         accession_number,
         sequence,
         name,
         version,
-        ec_references.join(";"),
-        go_references.join(";"),
-        ip_references.join(";"),
-        "swissprot".to_string(),  // TODO check if this is supposed to be swissprot
+        SmartStr::from(ec_references.join(";")),
+        SmartStr::from(go_references.join(";")),
+        SmartStr::from(ip_references.join(";")),
+        SmartStr::from("swissprot"),  // TODO check if this is supposed to be swissprot
         taxon_id,
     ];
 
