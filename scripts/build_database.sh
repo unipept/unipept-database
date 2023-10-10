@@ -79,6 +79,7 @@ Dependencies:
   * java
   * uuidgen
   * parallel
+  * jq
 END
 }
 
@@ -251,6 +252,7 @@ checkdep uuidgen
 checkdep pv
 checkdep node
 checkdep pigz
+checkdep jq
 
 ### Default configuration for this script
 PEPTIDE_MIN_LENGTH=5 # What is the minimum length (inclusive) for tryptic peptides?"
@@ -311,6 +313,20 @@ have() {
 	else
 		[ "$#" -eq 0 ]
 	fi
+}
+
+download_rust_binaries() {
+  # Find latest release
+  RELEASE=$(curl -L -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" https://api.github.com/repos/stijndcl/unipept-database/releases/latest)
+
+  declare -a BINARIES=("functional-analysis" "xml-parser")
+  for binary in ${BINARIES[@]}; do
+    # Pull the file URL out of the API response
+    BINARY_URL=$(echo $RELEASE | jq -r --arg binary $binary '.assets[] | select(.name == $binary) | .browser_download_url')
+    # Download it
+    curl -L $BINARY_URL -o "$CURRENT_LOCATION/helper_scripts/$binary"
+    chmod +x "$CURRENT_LOCATION/helper_scripts/$binary"
+  done
 }
 
 ### All the different database construction steps.
@@ -380,7 +396,12 @@ download_and_convert_all_sources() {
 
       reportProgress -1 "Downloading database index for $DB_TYPE." 3
 
-      curl --continue-at - --create-dirs "$DB_SOURCE" --silent | zcat | java -jar "$CURRENT_LOCATION/helper_scripts/XmlToTabConverter.jar" 5 50 "$DB_TYPE" "$VERBOSE" | node "$CURRENT_LOCATION/helper_scripts/WriteToChunk.js" "$DB_INDEX_OUTPUT" "$VERBOSE"
+      # Curl doesn't allow downloading in a specific directory without a filename,
+      # do this as a temporary workaround: cd to the directory, curl, and cd back
+      # TODO use pget instead? will discuss later
+      XML_FILE=$(cd "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT" && curl "$DB_SOURCE" --silent -O --remote-name -w "%{filename_effective}")
+      zcat "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/$XML_FILE" | "$CURRENT_LOCATION/helper_scripts/xml-parser" -t "$DB_TYPE" --threads 0 --verbose "$VERBOSE" | node "$CURRENT_LOCATION/helper_scripts/WriteToChunk.js" "$DB_INDEX_OUTPUT" "$VERBOSE"
+      rm "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/$XML_FILE"
 
       # Now, compress the different chunks
       CHUNKS=$(find "$DB_INDEX_OUTPUT" -name "*.chunk")
@@ -594,7 +615,7 @@ calculate_equalized_fas() {
 	log "Started the calculation of equalized FA's."
 	mkfifo "peptides_eq"
 	zcat "$INTDIR/peptides_by_equalized.tsv.gz" | cut -f2,5 > "peptides_eq" &
-	node  "$CURRENT_LOCATION/helper_scripts/FunctionalAnalysisPeptides.js" "peptides_eq" "$(gz "$INTDIR/FAs_equalized.tsv.gz")"
+	"$CURRENT_LOCATION/helper_scripts/functional-analysis" -i "peptides_eq" -o "$(gz "$INTDIR/FAs_equalized.tsv.gz")"
 	rm "peptides_eq"
 	log "Finished the calculation of equalized FA's with status $?."
 }
@@ -615,7 +636,7 @@ calculate_original_fas() {
 	log "Started the calculation of original FA's."
 	mkfifo "peptides_orig"
 	zcat "$INTDIR/peptides_by_original.tsv.gz" | cut -f3,5 > "peptides_orig" &
-	node  "$CURRENT_LOCATION/helper_scripts/FunctionalAnalysisPeptides.js" "peptides_orig" "$(gz "$INTDIR/FAs_original.tsv.gz")"
+	"$CURRENT_LOCATION/helper_scripts/functional-analysis" -i "peptides_orig" -o "$(gz "$INTDIR/FAs_original.tsv.gz")"
 	rm "peptides_orig"
 	log "Finished the calculation of original FA's."
 }
