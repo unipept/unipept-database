@@ -772,6 +772,7 @@ create_tryptic_index() {
 
 case "$BUILD_TYPE" in
 database)
+  download_rust_binaries
 	create_taxon_tables
 	download_and_convert_all_sources
 	create_tables_and_filter
