@@ -79,7 +79,6 @@ Dependencies:
   * java
   * uuidgen
   * parallel
-  * jq
 END
 }
 
@@ -252,7 +251,6 @@ checkdep uuidgen
 checkdep pv
 checkdep node
 checkdep pigz
-checkdep jq
 
 ### Default configuration for this script
 PEPTIDE_MIN_LENGTH=5 # What is the minimum length (inclusive) for tryptic peptides?"
@@ -313,20 +311,6 @@ have() {
 	else
 		[ "$#" -eq 0 ]
 	fi
-}
-
-download_rust_binaries() {
-  # Find latest release
-  RELEASE=$(curl -L -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" https://api.github.com/repos/stijndcl/unipept-database/releases/latest)
-
-  declare -a BINARIES=("functional-analysis" "xml-parser")
-  for binary in ${BINARIES[@]}; do
-    # Pull the file URL out of the API response
-    BINARY_URL=$(echo $RELEASE | jq -r --arg binary $binary '.assets[] | select(.name == $binary) | .browser_download_url')
-    # Download it
-    curl -L $BINARY_URL -o "$CURRENT_LOCATION/helper_scripts/$binary"
-    chmod +x "$CURRENT_LOCATION/helper_scripts/$binary"
-  done
 }
 
 ### All the different database construction steps.
@@ -772,7 +756,6 @@ create_tryptic_index() {
 
 case "$BUILD_TYPE" in
 database)
-  download_rust_binaries
 	create_taxon_tables
 	download_and_convert_all_sources
 	create_tables_and_filter
