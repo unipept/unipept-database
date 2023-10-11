@@ -50,7 +50,7 @@ pub struct Cli {
 
 fn main() {
     let args = Cli::parse();
-    let writer = TableWriter::new(&args);
+    let mut writer = TableWriter::new(&args);
     let parser = TabParser::new(&args);
 
     for entry in parser {

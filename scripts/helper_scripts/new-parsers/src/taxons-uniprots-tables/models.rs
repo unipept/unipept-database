@@ -1,22 +1,22 @@
 use std::str::FromStr;
 
 pub struct Entry {
-    min_length: u32,
-    max_length: u32,
+    pub min_length: u32,
+    pub max_length: u32,
 
     // TODO throw away things we don't use
     // These three are actually ints, but they are never used as ints,
     // so there is no use converting/parsing them as such
-    accession_number: String,
-    version: String,
-    taxon_id: u32,
+    pub accession_number: String,
+    pub version: String,
+    pub taxon_id: u32,
 
-    type_: String,
-    name: String,
-    sequence: String,
-    ec_references: Vec<String>,
-    go_references: Vec<String>,
-    ip_references: Vec<String>,
+    pub type_: String,
+    pub name: String,
+    pub sequence: String,
+    pub ec_references: Vec<String>,
+    pub go_references: Vec<String>,
+    pub ip_references: Vec<String>,
 }
 
 impl Entry {

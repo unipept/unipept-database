@@ -9,7 +9,7 @@ pub struct TaxonList {
 }
 
 impl TaxonList {
-    pub fn from_file(pb: PathBuf) -> Self {
+    pub fn from_file(pb: &PathBuf) -> Self {
         let mut entries = Vec::new();
         let reader = open_read(&pb);
 
@@ -42,5 +42,13 @@ impl TaxonList {
         TaxonList {
             entries
         }
+    }
+
+    pub fn get(&self, i: usize) -> &Option<Taxon> {
+        &self.entries[i]
+    }
+
+    pub fn len(&self) -> usize {
+        self.entries.len()
     }
 }
