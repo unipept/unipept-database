@@ -26,7 +26,7 @@ impl TabParser {
                 eprintln!("unable to read header line");
                 std::process::exit(1)
             },
-            Some(s) => s.expect("unable toread header line")
+            Some(s) => s.expect("unable to read header line")
         };
 
         for (i, l) in line.split("\t").enumerate() {
