@@ -1,9 +1,10 @@
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Lines};
-use crate::{Cli, models};
+
+use crate::Cli;
 use crate::models::Entry;
-use crate::utils::open;
+use crate::utils::open_read;
 
 pub struct TabParser {
     lines: Lines<BufReader<File>>,
@@ -16,20 +17,24 @@ pub struct TabParser {
 impl TabParser {
     pub fn new(cli: &Cli) -> Self {
         // First read the header line
-        let mut reader = open(&cli.taxons);
+        let mut reader = open_read(&cli.taxons);
         let mut map = HashMap::new();
+        let mut lines = reader.lines();
 
-        let mut line = String::new();
-        reader.read_line(&mut line).expect("unable to read header line");
+        let line = match lines.next() {
+            None => {
+                eprintln!("unable to read header line");
+                std::process::exit(1)
+            },
+            Some(s) => s.expect("unable toread header line")
+        };
 
-        let spl = line.split("\t").map(|x| x.trim());
-
-        for (i, l) in spl.enumerate() {
-            map.insert(l.to_string(), i);
+        for (i, l) in line.split("\t").enumerate() {
+            map.insert(l.trim().to_string(), i);
         }
 
         TabParser {
-            lines: reader.lines(),
+            lines,
             header_map: map,
             min_length: cli.peptide_min,
             max_length: cli.peptide_max,
@@ -39,7 +44,7 @@ impl TabParser {
 }
 
 impl Iterator for TabParser {
-    type Item = models::Entry;
+    type Item = Entry;
 
     fn next(&mut self) -> Option<Self::Item> {
         let line = self.lines.next()?.unwrap();

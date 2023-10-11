@@ -2,6 +2,7 @@ mod models;
 mod utils;
 mod table_writer;
 mod tab_parser;
+mod taxon_list;
 
 use std::path::PathBuf;
 use clap::Parser;

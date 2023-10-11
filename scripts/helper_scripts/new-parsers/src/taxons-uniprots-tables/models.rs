@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 pub struct Entry {
     min_length: u32,
     max_length: u32,
@@ -7,7 +9,7 @@ pub struct Entry {
     // so there is no use converting/parsing them as such
     accession_number: String,
     version: String,
-    taxon_id: String,
+    taxon_id: u32,
 
     type_: String,
     name: String,
@@ -25,7 +27,7 @@ impl Entry {
 
             accession_number,
             version,
-            taxon_id,
+            taxon_id: taxon_id.parse().unwrap(),
             type_,
             name,
             sequence,
@@ -41,13 +43,12 @@ impl Entry {
 
         let mut start: usize = 0;
         let length = self.sequence.len();
-
         let content = self.sequence.as_bytes();
 
         for (i, c) in content.iter().enumerate() {
             if (*c == b'K' || *c == b'R') && i + 1 < length && content[i] != b'P' {
                 if i + 1 - start >= self.min_length as usize && i + 1 - start <= self.max_length as usize {
-                    result.push(String::from_utf8_lossy(&content[start..i+1]).to_string())
+                    result.push(String::from_utf8_lossy(&content[start..i + 1]).to_string())
                 }
 
                 start = i + 1;
@@ -60,5 +61,66 @@ impl Entry {
         }
 
         result
+    }
+}
+
+pub enum Rank {
+    NoRank,
+    SuperKingdom,
+    Kingdom,
+    SubKingdom,
+    SuperPhylum,
+    Phylum,
+    SubPhylum,
+    SuperClass,
+    Class,
+    SubClass,
+    SuperOrder,
+    Order,
+    SubOrder,
+    InfraOrder,
+    SuperFamily,
+    Family,
+    SubFamily,
+    Tribe,
+    SubTribe,
+    Genus,
+    SubGenus,
+    SpeciesGroup,
+    SpeciesSubgroup,
+    Species,
+    SubSpecies,
+    Strain,
+    Varietas,
+    Forma,
+}
+
+impl FromStr for Rank {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_uppercase().replace(" ", "_").as_str() {
+            "NO_RANK" => Ok(Self::NoRank),
+            // TODO others
+            _ => Err(())
+        }
+    }
+}
+
+pub struct Taxon {
+    name: String,
+    rank: Rank,
+    parent: u32,
+    valid: bool,
+}
+
+impl Taxon {
+    pub fn new(name: String, rank: Rank, parent: u32, valid: bool) -> Self {
+        Taxon {
+            name,
+            rank,
+            parent,
+            valid,
+        }
     }
 }
