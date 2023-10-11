@@ -8,6 +8,10 @@ name = "functional-analysis"
 path = "src/functional-analysis/main.rs"
 
 [[bin]]
+name = "taxons-uniprots-tables"
+path = "src/taxons-uniprots-tables/main.rs"
+
+[[bin]]
 name = "xml-parser"
 path = "src/xml-parser/main.rs"
 
