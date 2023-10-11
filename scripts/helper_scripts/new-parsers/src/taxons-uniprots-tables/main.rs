@@ -1,8 +1,15 @@
+mod models;
+mod utils;
+mod table_writer;
+mod tab_parser;
+
 use std::path::PathBuf;
 use clap::Parser;
+use crate::tab_parser::TabParser;
+use crate::table_writer::TableWriter;
 
 #[derive(Parser, Debug)]
-struct Cli {
+pub struct Cli {
     /// Minimum peptide length
     #[clap(long)]
     peptide_min: u32,
@@ -42,4 +49,10 @@ struct Cli {
 
 fn main() {
     let args = Cli::parse();
+    let writer = TableWriter::new(&args);
+    let parser = TabParser::new(&args);
+
+    for entry in parser {
+        writer.store(entry);
+    }
 }
