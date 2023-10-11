@@ -4,12 +4,11 @@ pub struct Entry {
     pub min_length: u32,
     pub max_length: u32,
 
-    // TODO throw away things we don't use
-    // These three are actually ints, but they are never used as ints,
+    // These three are actually ints, but sthey are never used as ints,
     // so there is no use converting/parsing them as such
     pub accession_number: String,
     pub version: String,
-    pub taxon_id: u32,
+    pub taxon_id: i32,
 
     pub type_: String,
     pub name: String,

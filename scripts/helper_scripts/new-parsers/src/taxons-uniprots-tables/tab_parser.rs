@@ -50,7 +50,7 @@ impl Iterator for TabParser {
         let line = self.lines.next()?.unwrap();
         let fields: Vec<&str> = line.trim().split("\t").collect();
 
-        let entry = Entry::new(
+        let mut entry = Entry::new(
             self.min_length,
             self.max_length,
             fields[self.header_map["Status"]].trim().to_string(),
@@ -61,7 +61,17 @@ impl Iterator for TabParser {
             fields[self.header_map["Organism ID"]].trim().to_string(),
         );
 
-        // TODO vectors
+        for ec in fields[self.header_map["EC number"]].split(";") {
+            entry.ec_references.push(ec.trim().to_string());
+        }
+
+        for go in fields[self.header_map["Gene ontology IDs"]].split(";") {
+            entry.go_references.push(go.trim().to_string());
+        }
+
+        for ip in fields[self.header_map["Cross-reference (InterPro)"]].split(";") {
+            entry.ip_references.push(ip.trim().to_string());
+        }
 
         Some(entry)
     }

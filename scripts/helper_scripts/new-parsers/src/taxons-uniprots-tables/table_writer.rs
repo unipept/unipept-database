@@ -10,7 +10,7 @@ use crate::utils::open_write;
 
 pub struct TableWriter {
     taxons: TaxonList,
-    wrong_ids: HashSet<u32>,
+    wrong_ids: HashSet<i32>,
     peptides: BufWriter<File>,
     uniprot_entries: BufWriter<File>,
     go_cross_references: BufWriter<File>,
@@ -49,6 +49,18 @@ impl TableWriter {
 
         // Failed to add entry
         if id == -1 { return; }
+
+        for r in &entry.go_references {
+            self.add_go_ref(r.clone(), id);
+        }
+
+        for r in &entry.ec_references {
+            self.add_ec_ref(r.clone(), id);
+        }
+
+        for r in &entry.ip_references {
+            self.add_ip_ref(r.clone(), id);
+        }
 
         let digest = entry.digest();
         let go_ids = entry.go_references.into_iter();
@@ -92,7 +104,7 @@ impl TableWriter {
 
     // Store the entry info and return the generated id
     fn add_uniprot_entry(&mut self, entry: &Entry) -> i64 {
-        if 0 <= entry.taxon_id && entry.taxon_id < self.taxons.len() as u32 && self.taxons.get(entry.taxon_id as usize).is_some() {
+        if 0 <= entry.taxon_id && entry.taxon_id < self.taxons.len() as i32 && self.taxons.get(entry.taxon_id as usize).is_some() {
             self.uniprot_count += 1;
 
             let accession_number = self.string_rep(entry.accession_number.clone());
@@ -128,5 +140,47 @@ impl TableWriter {
         }
 
         -1
+    }
+
+    fn add_go_ref(&mut self, ref_id: String, uniprot_entry_id: i64) {
+        self.go_count += 1;
+
+        let ref_id = self.string_rep(ref_id);
+
+        if let Err(e) = write!(
+            &mut self.go_cross_references,
+            "{}\t{}\t{}",
+            self.go_count, ref_id, uniprot_entry_id
+        ) {
+            eprintln!("{}\tError adding GO reference to the database.\n{:?}", Instant::now().elapsed().as_millis(), e);
+        }
+    }
+
+    fn add_ec_ref(&mut self, ref_id: String, uniprot_entry_id: i64) {
+        self.ec_count += 1;
+
+        let ref_id = self.string_rep(ref_id);
+
+        if let Err(e) = write!(
+            &mut self.ec_cross_references,
+            "{}\t{}\t{}",
+            self.ec_count, ref_id, uniprot_entry_id
+        ) {
+            eprintln!("{}\tError adding EC reference to the database.\n{:?}", Instant::now().elapsed().as_millis(), e);
+        }
+    }
+
+    fn add_ip_ref(&mut self, ref_id: String, uniprot_entry_id: i64) {
+        self.ip_count += 1;
+
+        let ref_id = self.string_rep(ref_id);
+
+        if let Err(e) = write!(
+            &mut self.ip_cross_references,
+            "{}\t{}\t{}",
+            self.ip_count, ref_id, uniprot_entry_id
+        ) {
+            eprintln!("{}\tError adding InterPro reference to the database.\n{:?}", Instant::now().elapsed().as_millis(), e);
+        }
     }
 }
