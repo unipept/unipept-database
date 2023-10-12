@@ -1,4 +1,7 @@
+use std::fmt;
+use std::fmt::Formatter;
 use std::str::FromStr;
+use std::string::ParseError;
 
 pub struct Entry {
     pub min_length: u32,
@@ -63,6 +66,17 @@ impl Entry {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct RankParseError {
+    input: String
+}
+
+impl fmt::Display for RankParseError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "unable to parse {} as Rank", self.input)
+    }
+}
+
 pub enum Rank {
     NoRank,
     SuperKingdom,
@@ -95,13 +109,39 @@ pub enum Rank {
 }
 
 impl FromStr for Rank {
-    type Err = ();
+    type Err = RankParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_uppercase().replace(" ", "_").as_str() {
+            "CLASS" => Ok(Self::Class),
+            "FAMILY" => Ok(Self::Family),
+            "FORMA" => Ok(Self::Forma),
+            "GENUS" => Ok(Self::Genus),
+            "INFRAORDER" => Ok(Self::InfraOrder),
+            "KINGDOM" => Ok(Self::Kingdom),
             "NO_RANK" => Ok(Self::NoRank),
-            // TODO others
-            _ => Err(())
+            "ORDER" => Ok(Self::Order),
+            "PHYLUM" => Ok(Self::Phylum),
+            "SPECIES" => Ok(Self::Species),
+            "SPECIES_GROUP" => Ok(Self::SpeciesGroup),
+            "SPECIES_SUBGROUP" => Ok(Self::SpeciesSubgroup),
+            "STRAIN" => Ok(Self::Strain),
+            "SUBCLASS" => Ok(Self::SubClass),
+            "SUBFAMILY" => Ok(Self::SubFamily),
+            "SUBGENUS" => Ok(Self::SubGenus),
+            "SUBKINGDOM" => Ok(Self::SubKingdom),
+            "SUBORDER" => Ok(Self::SubOrder),
+            "SUBPHYLUM" => Ok(Self::SubPhylum),
+            "SUBSPECIES" => Ok(Self::SubSpecies),
+            "SUBTRIBE" => Ok(Self::SubTribe),
+            "SUPERCLASS" => Ok(Self::SuperClass),
+            "SUPERFAMILY" => Ok(Self::SuperFamily),
+            "SUPERKINGDOM" => Ok(Self::SuperKingdom),
+            "SUPERORDER" => Ok(Self::SuperOrder),
+            "SUPERPHYLUM" => Ok(Self::SuperPhylum),
+            "TRIBE" => Ok(Self::Tribe),
+            "VARIETAS" => Ok(Self::Varietas),
+            _ => Err(RankParseError { input: s.to_string() })
         }
     }
 }

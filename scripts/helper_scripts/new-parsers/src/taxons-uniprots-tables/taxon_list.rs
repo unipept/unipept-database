@@ -4,6 +4,7 @@ use std::str::FromStr;
 use crate::models::{Rank, Taxon};
 use crate::utils::open_read;
 
+// TODO check if content of taxon is ever used - if not, just use something simple instead of a struct
 pub struct TaxonList {
     entries: Vec<Option<Taxon>>
 }
@@ -18,16 +19,13 @@ impl TaxonList {
             let spl: Vec<&str> = line.split("\t").collect();
             let id: u32 = spl[0].parse().expect("unable to parse id");
             let parent: u32 = spl[3].parse().expect("unable to parse parent id");
-            if !spl[4].trim().is_empty() {
-                eprintln!("Found boolean value: {}", spl[4]);
-                std::process::exit(1)
-            }
+            let valid = spl[4].trim() == "true";
             
             let taxon = Taxon::new(
                 spl[1].to_string(),
                 Rank::from_str(spl[2]).expect("unable to parse rank"),
                 parent,
-                false // TODO see if the 5th column is ever not empty
+                valid
             );
 
             // TODO check if this makes sense?
