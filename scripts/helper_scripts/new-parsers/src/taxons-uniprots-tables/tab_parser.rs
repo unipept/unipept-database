@@ -1,13 +1,12 @@
 use std::collections::HashMap;
-use std::fs::File;
-use std::io::{BufRead, BufReader, Lines};
+use std::io::{BufRead, BufReader, Lines, Stdin};
 
 use crate::Cli;
 use crate::models::Entry;
-use crate::utils::open_read;
+use crate::utils::open_sin;
 
 pub struct TabParser {
-    lines: Lines<BufReader<File>>,
+    lines: Lines<BufReader<Stdin>>,
     header_map: HashMap<String, usize>,
     min_length: u32,
     max_length: u32,
@@ -17,8 +16,9 @@ pub struct TabParser {
 impl TabParser {
     pub fn new(cli: &Cli) -> Self {
         // First read the header line
-        let mut reader = open_read(&cli.taxons);
+        let mut reader = open_sin();
         let mut map = HashMap::new();
+
         let mut lines = reader.lines();
 
         let line = match lines.next() {

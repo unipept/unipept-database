@@ -6,19 +6,7 @@ use std::time::Instant;
 use crate::Cli;
 use crate::models::Entry;
 use crate::taxon_list::TaxonList;
-use crate::utils::open_write;
-
-// Get the MySQL-compatible representation of a string
-// More specifically, represent empty strings as \\N
-macro_rules! nullable {
-    ($str:expr) => {
-        if $str.is_empty() {
-            "\\N".to_string()
-        } else {
-            $str
-        }
-    };
-}
+use crate::utils::{now, open_write};
 
 pub struct TableWriter {
     taxons: TaxonList,
@@ -89,18 +77,14 @@ impl TableWriter {
     fn add_peptide(&mut self, sequence: String, id: i64, original_sequence: String, annotations: String) {
         self.peptide_count += 1;
 
-        let unified_sequence = nullable!(sequence);
-        let original_sequence = nullable!(original_sequence);
-        let annotations = nullable!(annotations);
-
-        if let Err(e) = write!(
+        if let Err(e) = writeln!(
             &mut self.peptides,
             "{}\t{}\t{}\t{}\t{}",
             self.peptide_count,
-            unified_sequence, original_sequence,
-            id.to_string(), annotations
+            sequence, original_sequence,
+            id, annotations
         ) {
-            eprintln!("{}\tError writing to CSV.\n{:?}", Instant::now().elapsed().as_millis(), e);
+            eprintln!("{}\tError writing to CSV.\n{:?}", now(), e);
         }
     }
 
@@ -109,23 +93,22 @@ impl TableWriter {
         if 0 <= entry.taxon_id && entry.taxon_id < self.taxons.len() as i32 && self.taxons.get(entry.taxon_id as usize).is_some() {
             self.uniprot_count += 1;
 
-            let accession_number = nullable!(entry.accession_number.clone());
-            let version = nullable!(entry.version.clone());
-            let taxon_id = nullable!(entry.taxon_id.to_string());
-            let type_ = nullable!(entry.type_.clone());
-            let name = nullable!(entry.name.clone());
-            let sequence = nullable!(entry.sequence.clone());
+            let accession_number = entry.accession_number.clone();
+            let version = entry.version.clone();
+            let taxon_id = entry.taxon_id;
+            let type_ = entry.type_.clone();
+            let name = entry.name.clone();
+            let sequence = entry.sequence.clone();
 
-
-            if let Err(e) = write!(
+            if let Err(e) = writeln!(
                 &mut self.uniprot_entries,
-                "{}\t{}\t{}\t{}\t{}\t{}\t{}\n",
+                "{}\t{}\t{}\t{}\t{}\t{}\t{}",
                 self.uniprot_count, accession_number,
                 version, taxon_id,
                 type_, name,
                 sequence
             ) {
-                eprintln!("{}\tError writing to CSV.\n{:?}", Instant::now().elapsed().as_millis(), e);
+                eprintln!("{}\tError writing to CSV.\n{:?}", now(), e);
             } else {
                 return self.uniprot_count;
             }
@@ -134,7 +117,7 @@ impl TableWriter {
                 self.wrong_ids.insert(entry.taxon_id);
                 eprintln!(
                     "{}\t{} added to the list of {} invalid taxonIds.",
-                    Instant::now().elapsed().as_millis(),
+                    now(),
                     entry.taxon_id,
                     self.wrong_ids.len()
                 );
@@ -147,10 +130,10 @@ impl TableWriter {
     fn add_go_ref(&mut self, ref_id: String, uniprot_entry_id: i64) {
         self.go_count += 1;
 
-        if let Err(e) = write!(
+        if let Err(e) = writeln!(
             &mut self.go_cross_references,
             "{}\t{}\t{}",
-            self.go_count, nullable!(ref_id), uniprot_entry_id
+            self.go_count, uniprot_entry_id, ref_id
         ) {
             eprintln!("{}\tError adding GO reference to the database.\n{:?}", Instant::now().elapsed().as_millis(), e);
         }
@@ -159,10 +142,10 @@ impl TableWriter {
     fn add_ec_ref(&mut self, ref_id: String, uniprot_entry_id: i64) {
         self.ec_count += 1;
 
-        if let Err(e) = write!(
+        if let Err(e) = writeln!(
             &mut self.ec_cross_references,
             "{}\t{}\t{}",
-            self.ec_count, nullable!(ref_id), uniprot_entry_id
+            self.ec_count, uniprot_entry_id, ref_id
         ) {
             eprintln!("{}\tError adding EC reference to the database.\n{:?}", Instant::now().elapsed().as_millis(), e);
         }
@@ -171,10 +154,10 @@ impl TableWriter {
     fn add_ip_ref(&mut self, ref_id: String, uniprot_entry_id: i64) {
         self.ip_count += 1;
 
-        if let Err(e) = write!(
+        if let Err(e) = writeln!(
             &mut self.ip_cross_references,
             "{}\t{}\t{}",
-            self.ip_count, nullable!(ref_id), uniprot_entry_id
+            self.ip_count, uniprot_entry_id, ref_id,
         ) {
             eprintln!("{}\tError adding InterPro reference to the database.\n{:?}", Instant::now().elapsed().as_millis(), e);
         }

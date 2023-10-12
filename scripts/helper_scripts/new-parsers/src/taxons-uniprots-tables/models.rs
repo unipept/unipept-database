@@ -2,6 +2,7 @@ use std::fmt;
 use std::fmt::Formatter;
 use std::str::FromStr;
 
+#[derive(Debug)]
 pub struct Entry {
     pub min_length: u32,
     pub max_length: u32,
@@ -47,9 +48,9 @@ impl Entry {
         let content = self.sequence.as_bytes();
 
         for (i, c) in content.iter().enumerate() {
-            if (*c == b'K' || *c == b'R') && i + 1 < length && content[i] != b'P' {
+            if (*c == b'K' || *c == b'R') && (i + 1 < length && content[i + 1] != b'P') {
                 if i + 1 - start >= self.min_length as usize && i + 1 - start <= self.max_length as usize {
-                    result.push(String::from_utf8_lossy(&content[start..i + 1]).to_string())
+                    result.push(String::from_utf8_lossy(&content[start..i + 1]).to_string());
                 }
 
                 start = i + 1;
@@ -67,7 +68,7 @@ impl Entry {
 
 #[derive(Debug, Clone)]
 pub struct RankParseError {
-    input: String
+    input: String,
 }
 
 impl fmt::Display for RankParseError {
@@ -76,6 +77,7 @@ impl fmt::Display for RankParseError {
     }
 }
 
+#[derive(Debug)]
 pub enum Rank {
     NoRank,
     SuperKingdom,
@@ -145,6 +147,7 @@ impl FromStr for Rank {
     }
 }
 
+#[derive(Debug)]
 pub struct Taxon {
     name: String,
     rank: Rank,
