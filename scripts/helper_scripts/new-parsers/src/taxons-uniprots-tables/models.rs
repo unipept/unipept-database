@@ -1,7 +1,6 @@
 use std::fmt;
 use std::fmt::Formatter;
 use std::str::FromStr;
-use std::string::ParseError;
 
 pub struct Entry {
     pub min_length: u32,

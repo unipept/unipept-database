@@ -8,6 +8,18 @@ use crate::models::Entry;
 use crate::taxon_list::TaxonList;
 use crate::utils::open_write;
 
+// Get the MySQL-compatible representation of a string
+// More specifically, represent empty strings as \\N
+macro_rules! nullable {
+    ($str:expr) => {
+        if $str.is_empty() {
+            "\\N".to_string()
+        } else {
+            $str
+        }
+    };
+}
+
 pub struct TableWriter {
     taxons: TaxonList,
     wrong_ids: HashSet<i32>,
@@ -74,22 +86,12 @@ impl TableWriter {
         }
     }
 
-    // Get the MySQL-compatible representation of a string
-    // More specifically, represent empty strings as \\N
-    fn string_rep(&self, s: String) -> String {
-        if s.is_empty() {
-            "\\N".to_string()
-        } else {
-            s
-        }
-    }
-
     fn add_peptide(&mut self, sequence: String, id: i64, original_sequence: String, annotations: String) {
         self.peptide_count += 1;
 
-        let unified_sequence = self.string_rep(sequence);
-        let original_sequence = self.string_rep(original_sequence);
-        let annotations = self.string_rep(annotations);
+        let unified_sequence = nullable!(sequence);
+        let original_sequence = nullable!(original_sequence);
+        let annotations = nullable!(annotations);
 
         if let Err(e) = write!(
             &mut self.peptides,
@@ -107,12 +109,12 @@ impl TableWriter {
         if 0 <= entry.taxon_id && entry.taxon_id < self.taxons.len() as i32 && self.taxons.get(entry.taxon_id as usize).is_some() {
             self.uniprot_count += 1;
 
-            let accession_number = self.string_rep(entry.accession_number.clone());
-            let version = self.string_rep(entry.version.clone());
-            let taxon_id = self.string_rep(entry.taxon_id.to_string());
-            let type_ = self.string_rep(entry.type_.clone());
-            let name = self.string_rep(entry.name.clone());
-            let sequence = self.string_rep(entry.sequence.clone());
+            let accession_number = nullable!(entry.accession_number.clone());
+            let version = nullable!(entry.version.clone());
+            let taxon_id = nullable!(entry.taxon_id.to_string());
+            let type_ = nullable!(entry.type_.clone());
+            let name = nullable!(entry.name.clone());
+            let sequence = nullable!(entry.sequence.clone());
 
 
             if let Err(e) = write!(
@@ -145,12 +147,10 @@ impl TableWriter {
     fn add_go_ref(&mut self, ref_id: String, uniprot_entry_id: i64) {
         self.go_count += 1;
 
-        let ref_id = self.string_rep(ref_id);
-
         if let Err(e) = write!(
             &mut self.go_cross_references,
             "{}\t{}\t{}",
-            self.go_count, ref_id, uniprot_entry_id
+            self.go_count, nullable!(ref_id), uniprot_entry_id
         ) {
             eprintln!("{}\tError adding GO reference to the database.\n{:?}", Instant::now().elapsed().as_millis(), e);
         }
@@ -159,12 +159,10 @@ impl TableWriter {
     fn add_ec_ref(&mut self, ref_id: String, uniprot_entry_id: i64) {
         self.ec_count += 1;
 
-        let ref_id = self.string_rep(ref_id);
-
         if let Err(e) = write!(
             &mut self.ec_cross_references,
             "{}\t{}\t{}",
-            self.ec_count, ref_id, uniprot_entry_id
+            self.ec_count, nullable!(ref_id), uniprot_entry_id
         ) {
             eprintln!("{}\tError adding EC reference to the database.\n{:?}", Instant::now().elapsed().as_millis(), e);
         }
@@ -173,12 +171,10 @@ impl TableWriter {
     fn add_ip_ref(&mut self, ref_id: String, uniprot_entry_id: i64) {
         self.ip_count += 1;
 
-        let ref_id = self.string_rep(ref_id);
-
         if let Err(e) = write!(
             &mut self.ip_cross_references,
             "{}\t{}\t{}",
-            self.ip_count, ref_id, uniprot_entry_id
+            self.ip_count, nullable!(ref_id), uniprot_entry_id
         ) {
             eprintln!("{}\tError adding InterPro reference to the database.\n{:?}", Instant::now().elapsed().as_millis(), e);
         }
