@@ -1,19 +1,15 @@
 [package]
-name = "new-parsers"
+name = "unipept"
 version = "0.1.0"
 edition = "2021"
 
 [[bin]]
 name = "functional-analysis"
-path = "src/functional-analysis/main.rs"
+path = "src/bin/functional-analysis.rs"
 
 [[bin]]
 name = "taxons-uniprots-tables"
-path = "src/taxons-uniprots-tables/main.rs"
-
-[[bin]]
-name = "xml-parser"
-path = "src/xml-parser/main.rs"
+path = "src/bin/taxons-uniprots-tables.rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

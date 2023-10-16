@@ -1,12 +1,12 @@
 use std::collections::HashSet;
 use std::fs::File;
 use std::io::{BufWriter, Write};
+use std::path::PathBuf;
 use std::time::Instant;
 
-use crate::Cli;
-use crate::models::Entry;
-use crate::taxon_list::TaxonList;
-use crate::utils::{now, open_write};
+use crate::taxons_uniprots_tables::models::Entry;
+use crate::taxons_uniprots_tables::taxon_list::TaxonList;
+use crate::taxons_uniprots_tables::utils::{now, open_write};
 
 pub struct TableWriter {
     taxons: TaxonList,
@@ -25,15 +25,15 @@ pub struct TableWriter {
 }
 
 impl TableWriter {
-    pub fn new(cli: &Cli) -> Self {
+    pub fn new(taxons: &PathBuf, peptides: &PathBuf, uniprot_entries: &PathBuf, go_references: &PathBuf, ec_references: &PathBuf, interpro_references: &PathBuf) -> Self {
         TableWriter {
-            taxons: TaxonList::from_file(&cli.taxons),
+            taxons: TaxonList::from_file(taxons),
             wrong_ids: HashSet::new(),
-            peptides: open_write(&cli.peptides),
-            uniprot_entries: open_write(&cli.uniprot_entries),
-            go_cross_references: open_write(&cli.go),
-            ec_cross_references: open_write(&cli.ec),
-            ip_cross_references: open_write(&cli.interpro),
+            peptides: open_write(peptides),
+            uniprot_entries: open_write(uniprot_entries),
+            go_cross_references: open_write(go_references),
+            ec_cross_references: open_write(ec_references),
+            ip_cross_references: open_write(interpro_references),
 
             peptide_count: 0,
             uniprot_count: 0,

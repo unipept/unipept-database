@@ -1,9 +1,8 @@
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Lines, Stdin};
 
-use crate::Cli;
-use crate::models::Entry;
-use crate::utils::open_sin;
+use crate::taxons_uniprots_tables::models::Entry;
+use crate::taxons_uniprots_tables::utils::open_sin;
 
 pub struct TabParser {
     lines: Lines<BufReader<Stdin>>,
@@ -14,7 +13,7 @@ pub struct TabParser {
 }
 
 impl TabParser {
-    pub fn new(cli: &Cli) -> Self {
+    pub fn new(peptide_min: u32, peptide_max: u32, verbose: bool) -> Self {
         // First read the header line
         let mut reader = open_sin();
         let mut map = HashMap::new();
@@ -36,9 +35,9 @@ impl TabParser {
         TabParser {
             lines,
             header_map: map,
-            min_length: cli.peptide_min,
-            max_length: cli.peptide_max,
-            verbose: cli.verbose,
+            min_length: peptide_min,
+            max_length: peptide_max,
+            verbose,
         }
     }
 }
