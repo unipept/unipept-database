@@ -8,6 +8,9 @@ use crate::taxons_uniprots_tables::models::Entry;
 use crate::taxons_uniprots_tables::taxon_list::TaxonList;
 use crate::taxons_uniprots_tables::utils::{now, open_write};
 
+/// Note: this is single-threaded
+///       we attempted a parallel version that wrote to all files at the same time,
+///       but this didn't achieve any speed increase, so we decided not to go forward with it
 pub struct TableWriter {
     taxons: TaxonList,
     wrong_ids: HashSet<i32>,
