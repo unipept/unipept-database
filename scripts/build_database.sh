@@ -431,7 +431,6 @@ download_and_convert_all_sources() {
 
         SIZE="$(curl -I "$DB_SOURCE" -s | grep -i content-length | tr -cd '[0-9]')"
 
-        ls /
         zcat "/uniprot_sprot.xml.gz" | "$CURRENT_LOCATION/helper_scripts/xml-parser" -t "$DB_TYPE" --threads 0 | node "$CURRENT_LOCATION/helper_scripts/WriteToChunk.js" "$DB_INDEX_OUTPUT" "$VERBOSE"
 
         # Now, compress the different chunks
