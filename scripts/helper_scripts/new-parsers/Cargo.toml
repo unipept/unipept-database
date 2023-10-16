@@ -1,0 +1,16 @@
+[package]
+name = "new-parsers"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "xml-parser"
+path = "src/xml-parser/main.rs"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+clap = { version = "4.4.6", features = ["derive"] }
+smartstring = { version = "1.0" }
+#uniprot = "0.6.0"
+uniprot = { git = "https://github.com/althonos/uniprot.rs.git", rev = "02b23d0" }
