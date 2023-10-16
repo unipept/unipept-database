@@ -13,4 +13,4 @@ path = "src/xml-parser/main.rs"
 clap = { version = "4.4.6", features = ["derive"] }
 smartstring = { version = "1.0" }
 #uniprot = "0.6.0"
-uniprot = { git = "https://github.com/althonos/uniprot.rs.git", branch = "producer-thread" }
+uniprot = { git = "https://github.com/althonos/uniprot.rs.git", rev = "02b23d0" }

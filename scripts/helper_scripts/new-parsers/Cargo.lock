@@ -349,7 +349,7 @@ checksum = "3354b9ac3fae1ff6755cb6db53683adb661634f67557942dea4facebec0fee4b"
 [[package]]
 name = "uniprot"
 version = "0.6.0"
-source = "git+https://github.com/althonos/uniprot.rs.git?branch=producer-thread#02b23d09aac6b4d5ba729f8d107743c5f7815140"
+source = "git+https://github.com/althonos/uniprot.rs.git?rev=02b23d0#02b23d09aac6b4d5ba729f8d107743c5f7815140"
 dependencies = [
  "chrono",
  "crossbeam-channel",
