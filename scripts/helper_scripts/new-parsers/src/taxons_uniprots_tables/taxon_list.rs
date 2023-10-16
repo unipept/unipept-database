@@ -28,8 +28,6 @@ impl TaxonList {
                 valid
             );
 
-            // TODO check if this makes sense?
-            //  If most entries are usually null, use a map instead
             while entries.len() <= id as usize {
                 entries.push(None);
             }
