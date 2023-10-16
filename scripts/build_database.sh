@@ -382,7 +382,8 @@ download_and_convert_all_sources() {
 
       # Curl doesn't allow downloading in a specific directory without a filename,
       # do this as a temporary workaround: cd to the directory, curl, and cd back
-      # TODO use pget instead? will discuss later
+      # TODO use wget instead? will discuss later
+      # TODO resumability
       XML_FILE=$(cd "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT" && curl "$DB_SOURCE" --silent -O --remote-name -w "%{filename_effective}")
       zcat "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/$XML_FILE" | "$CURRENT_LOCATION/helper_scripts/xml-parser" -t "$DB_TYPE" --threads 0 --verbose "$VERBOSE" | node "$CURRENT_LOCATION/helper_scripts/WriteToChunk.js" "$DB_INDEX_OUTPUT" "$VERBOSE"
       rm "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/$XML_FILE"
