@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Lines, Stdin};
 
 use crate::taxons_uniprots_tables::models::Entry;
-use crate::taxons_uniprots_tables::utils::open_sin;
+use crate::utils::files::open_sin;
 
 pub struct TabParser {
     lines: Lines<BufReader<Stdin>>,

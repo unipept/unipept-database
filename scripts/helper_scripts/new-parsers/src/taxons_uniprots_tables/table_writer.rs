@@ -6,7 +6,8 @@ use std::time::Instant;
 
 use crate::taxons_uniprots_tables::models::Entry;
 use crate::taxons_uniprots_tables::taxon_list::TaxonList;
-use crate::taxons_uniprots_tables::utils::{now, open_write};
+use crate::taxons_uniprots_tables::utils::{now};
+use crate::utils::files::open_write;
 
 /// Note: this is single-threaded
 ///       we attempted a parallel version that wrote to all files at the same time,

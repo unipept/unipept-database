@@ -1,9 +1,11 @@
-use std::io::{BufReader, stdin, Stdin};
+use std::io::{BufReader, Stdin};
 use std::num::NonZeroUsize;
 
 use clap::Parser;
 use smartstring::{LazyCompact, SmartString};
 use uniprot::uniprot::{SequentialParser, ThreadedParser};
+
+use unipept::utils::files::open_sin;
 
 type SmartStr = SmartString<LazyCompact>;
 
@@ -151,7 +153,7 @@ fn write_entry(entry: &uniprot::uniprot::Entry, verbose: bool) {
 fn main() {
     let args = Cli::parse();
 
-    let reader = BufReader::new(stdin());
+    let reader = open_sin();
 
     write_header();
 

@@ -1,9 +1,11 @@
 use std::collections::HashMap;
-use std::fs::{File, OpenOptions};
-use std::io::{BufRead, BufReader, BufWriter, Write};
+use std::fs::File;
+use std::io::{BufRead, BufWriter, Write};
 use std::path::PathBuf;
 
 use clap::Parser;
+
+use unipept::utils::files::{open_read, open_write};
 
 fn write_entry(writer: &mut BufWriter<File>, current_peptide: String, num_prot: u32, num_go: u32, num_ec: u32, num_ip: u32, m: &HashMap<String, u32>) {
     let data = m.iter()
@@ -31,11 +33,8 @@ struct Cli {
 fn main() {
     let args = Cli::parse();
 
-    let in_file = OpenOptions::new().read(true).open(args.input_file).expect("unable to open input file");
-    let out_file = OpenOptions::new().write(true).open(args.output_file).expect("unable to open output file");
-
-    let reader = BufReader::new(in_file);
-    let mut writer = BufWriter::new(out_file);
+    let reader = open_read(&args.input_file);
+    let mut writer = open_write(&args.output_file);
 
     let mut current_pept: String = String::new();
 
