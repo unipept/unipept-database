@@ -60,8 +60,8 @@ pub fn parse_taxon_file_basic(pb: &PathBuf) -> Vec<Option<bool>> {
 
     for line in reader.lines() {
         let line = line.unwrap();
-        let spl: Vec<&str> = line.split('\t').collect();
-        let id: u32 = spl[0].parse().expect("unable to parse id");
+        let spl = line.split_once('\t').expect("unable to split taxon file on tabs");
+        let id: u32 = spl.0.parse().expect("unable to parse id");
 
         while entries.len() <= id as usize {
             entries.push(None);
