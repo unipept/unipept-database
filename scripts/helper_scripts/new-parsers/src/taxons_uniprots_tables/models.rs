@@ -22,7 +22,17 @@ pub struct Entry {
 }
 
 impl Entry {
-    pub fn new(min_length: u32, max_length: u32, type_: String, accession_number: String, sequence: String, name: String, version: String, taxon_id: String) -> Self {
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        min_length: u32,
+        max_length: u32,
+        type_: String,
+        accession_number: String,
+        sequence: String,
+        name: String,
+        version: String,
+        taxon_id: String,
+    ) -> Self {
         Entry {
             min_length,
             max_length,
@@ -49,7 +59,9 @@ impl Entry {
 
         for (i, c) in content.iter().enumerate() {
             if (*c == b'K' || *c == b'R') && (i + 1 < length && content[i + 1] != b'P') {
-                if i + 1 - start >= self.min_length as usize && i + 1 - start <= self.max_length as usize {
+                if i + 1 - start >= self.min_length as usize
+                    && i + 1 - start <= self.max_length as usize
+                {
                     result.push(String::from_utf8_lossy(&content[start..i + 1]).to_string());
                 }
 
@@ -58,7 +70,8 @@ impl Entry {
         }
 
         // Add last one
-        if length - start >= self.min_length as usize && length - start <= self.max_length as usize {
+        if length - start >= self.min_length as usize && length - start <= self.max_length as usize
+        {
             result.push(String::from_utf8_lossy(&content[start..length]).to_string())
         }
 
@@ -113,7 +126,7 @@ impl FromStr for Rank {
     type Err = RankParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.to_uppercase().replace(" ", "_").as_str() {
+        match s.to_uppercase().replace(' ', "_").as_str() {
             "CLASS" => Ok(Self::Class),
             "FAMILY" => Ok(Self::Family),
             "FORMA" => Ok(Self::Forma),
@@ -142,26 +155,9 @@ impl FromStr for Rank {
             "SUPERPHYLUM" => Ok(Self::SuperPhylum),
             "TRIBE" => Ok(Self::Tribe),
             "VARIETAS" => Ok(Self::Varietas),
-            _ => Err(RankParseError { input: s.to_string() })
-        }
-    }
-}
-
-#[derive(Debug)]
-pub struct Taxon {
-    name: String,
-    rank: Rank,
-    parent: u32,
-    valid: bool,
-}
-
-impl Taxon {
-    pub fn new(name: String, rank: Rank, parent: u32, valid: bool) -> Self {
-        Taxon {
-            name,
-            rank,
-            parent,
-            valid,
+            _ => Err(RankParseError {
+                input: s.to_string(),
+            }),
         }
     }
 }

@@ -6,7 +6,7 @@ use std::time::Instant;
 
 use crate::taxons_uniprots_tables::models::Entry;
 use crate::taxons_uniprots_tables::taxon_list::TaxonList;
-use crate::taxons_uniprots_tables::utils::{now};
+use crate::taxons_uniprots_tables::utils::now;
 use crate::utils::files::open_write;
 
 /// Note: this is single-threaded
@@ -29,7 +29,14 @@ pub struct TableWriter {
 }
 
 impl TableWriter {
-    pub fn new(taxons: &PathBuf, peptides: &PathBuf, uniprot_entries: &PathBuf, go_references: &PathBuf, ec_references: &PathBuf, interpro_references: &PathBuf) -> Self {
+    pub fn new(
+        taxons: &PathBuf,
+        peptides: &PathBuf,
+        uniprot_entries: &PathBuf,
+        go_references: &PathBuf,
+        ec_references: &PathBuf,
+        interpro_references: &PathBuf,
+    ) -> Self {
         TableWriter {
             taxons: TaxonList::from_file(taxons),
             wrong_ids: HashSet::new(),
@@ -52,7 +59,9 @@ impl TableWriter {
         let id = self.add_uniprot_entry(&entry);
 
         // Failed to add entry
-        if id == -1 { return; }
+        if id == -1 {
+            return;
+        }
 
         for r in &entry.go_references {
             self.add_go_ref(r.clone(), id);
@@ -68,25 +77,41 @@ impl TableWriter {
 
         let digest = entry.digest();
         let go_ids = entry.go_references.into_iter();
-        let ec_ids = entry.ec_references.iter().filter(|x| !x.is_empty()).map(|x| format!("EC:{}", x)).into_iter();
-        let ip_ids = entry.ip_references.iter().filter(|x| !x.is_empty()).map(|x| format!("IPR:{}", x)).into_iter();
+        let ec_ids = entry
+            .ec_references
+            .iter()
+            .filter(|x| !x.is_empty())
+            .map(|x| format!("EC:{}", x));
+        let ip_ids = entry
+            .ip_references
+            .iter()
+            .filter(|x| !x.is_empty())
+            .map(|x| format!("IPR:{}", x));
 
-        let summary = go_ids.chain(ec_ids).chain(ip_ids).collect::<Vec<String>>().join(";");
+        let summary = go_ids
+            .chain(ec_ids)
+            .chain(ip_ids)
+            .collect::<Vec<String>>()
+            .join(";");
 
         for sequence in digest {
-            self.add_peptide(sequence.replace("I", "L"), id, sequence, summary.clone());
+            self.add_peptide(sequence.replace('I', "L"), id, sequence, summary.clone());
         }
     }
 
-    fn add_peptide(&mut self, sequence: String, id: i64, original_sequence: String, annotations: String) {
+    fn add_peptide(
+        &mut self,
+        sequence: String,
+        id: i64,
+        original_sequence: String,
+        annotations: String,
+    ) {
         self.peptide_count += 1;
 
         if let Err(e) = writeln!(
             &mut self.peptides,
             "{}\t{}\t{}\t{}\t{}",
-            self.peptide_count,
-            sequence, original_sequence,
-            id, annotations
+            self.peptide_count, sequence, original_sequence, id, annotations
         ) {
             eprintln!("{}\tError writing to CSV.\n{:?}", now(), e);
         }
@@ -94,7 +119,10 @@ impl TableWriter {
 
     // Store the entry info and return the generated id
     fn add_uniprot_entry(&mut self, entry: &Entry) -> i64 {
-        if 0 <= entry.taxon_id && entry.taxon_id < self.taxons.len() as i32 && self.taxons.get(entry.taxon_id as usize).is_some() {
+        if 0 <= entry.taxon_id
+            && entry.taxon_id < self.taxons.len() as i32
+            && self.taxons.get(entry.taxon_id as usize).is_some()
+        {
             self.uniprot_count += 1;
 
             let accession_number = entry.accession_number.clone();
@@ -107,25 +135,20 @@ impl TableWriter {
             if let Err(e) = writeln!(
                 &mut self.uniprot_entries,
                 "{}\t{}\t{}\t{}\t{}\t{}\t{}",
-                self.uniprot_count, accession_number,
-                version, taxon_id,
-                type_, name,
-                sequence
+                self.uniprot_count, accession_number, version, taxon_id, type_, name, sequence
             ) {
                 eprintln!("{}\tError writing to CSV.\n{:?}", now(), e);
             } else {
                 return self.uniprot_count;
             }
-        } else {
-            if !self.wrong_ids.contains(&entry.taxon_id) {
-                self.wrong_ids.insert(entry.taxon_id);
-                eprintln!(
-                    "{}\t{} added to the list of {} invalid taxonIds.",
-                    now(),
-                    entry.taxon_id,
-                    self.wrong_ids.len()
-                );
-            }
+        } else if !self.wrong_ids.contains(&entry.taxon_id) {
+            self.wrong_ids.insert(entry.taxon_id);
+            eprintln!(
+                "{}\t{} added to the list of {} invalid taxonIds.",
+                now(),
+                entry.taxon_id,
+                self.wrong_ids.len()
+            );
         }
 
         -1
@@ -139,7 +162,11 @@ impl TableWriter {
             "{}\t{}\t{}",
             self.go_count, uniprot_entry_id, ref_id
         ) {
-            eprintln!("{}\tError adding GO reference to the database.\n{:?}", Instant::now().elapsed().as_millis(), e);
+            eprintln!(
+                "{}\tError adding GO reference to the database.\n{:?}",
+                Instant::now().elapsed().as_millis(),
+                e
+            );
         }
     }
 
@@ -151,7 +178,11 @@ impl TableWriter {
             "{}\t{}\t{}",
             self.ec_count, uniprot_entry_id, ref_id
         ) {
-            eprintln!("{}\tError adding EC reference to the database.\n{:?}", Instant::now().elapsed().as_millis(), e);
+            eprintln!(
+                "{}\tError adding EC reference to the database.\n{:?}",
+                Instant::now().elapsed().as_millis(),
+                e
+            );
         }
     }
 
@@ -163,7 +194,11 @@ impl TableWriter {
             "{}\t{}\t{}",
             self.ip_count, uniprot_entry_id, ref_id,
         ) {
-            eprintln!("{}\tError adding InterPro reference to the database.\n{:?}", Instant::now().elapsed().as_millis(), e);
+            eprintln!(
+                "{}\tError adding InterPro reference to the database.\n{:?}",
+                Instant::now().elapsed().as_millis(),
+                e
+            );
         }
     }
 }

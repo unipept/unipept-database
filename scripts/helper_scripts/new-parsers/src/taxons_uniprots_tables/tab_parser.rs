@@ -15,7 +15,7 @@ pub struct TabParser {
 impl TabParser {
     pub fn new(peptide_min: u32, peptide_max: u32, verbose: bool) -> Self {
         // First read the header line
-        let mut reader = open_sin();
+        let reader = open_sin();
         let mut map = HashMap::new();
 
         let mut lines = reader.lines();
@@ -24,11 +24,11 @@ impl TabParser {
             None => {
                 eprintln!("unable to read header line");
                 std::process::exit(1)
-            },
-            Some(s) => s.expect("unable to read header line")
+            }
+            Some(s) => s.expect("unable to read header line"),
         };
 
-        for (i, l) in line.split("\t").enumerate() {
+        for (i, l) in line.split('\t').enumerate() {
             map.insert(l.trim().to_string(), i);
         }
 
@@ -47,7 +47,7 @@ impl Iterator for TabParser {
 
     fn next(&mut self) -> Option<Self::Item> {
         let line = self.lines.next()?.unwrap();
-        let fields: Vec<&str> = line.trim().split("\t").collect();
+        let fields: Vec<&str> = line.trim().split('\t').collect();
 
         let mut entry = Entry::new(
             self.min_length,
@@ -56,20 +56,26 @@ impl Iterator for TabParser {
             fields[self.header_map["Entry"]].trim().to_string(),
             fields[self.header_map["Sequence"]].trim().to_string(),
             fields[self.header_map["Protein names"]].trim().to_string(),
-            fields[self.header_map["Version (entry)"]].trim().to_string(),
+            fields[self.header_map["Version (entry)"]]
+                .trim()
+                .to_string(),
             fields[self.header_map["Organism ID"]].trim().to_string(),
         );
 
-        for ec in fields[self.header_map["EC number"]].split(";") {
+        for ec in fields[self.header_map["EC number"]].split(';') {
             entry.ec_references.push(ec.trim().to_string());
         }
 
-        for go in fields[self.header_map["Gene ontology IDs"]].split(";") {
+        for go in fields[self.header_map["Gene ontology IDs"]].split(';') {
             entry.go_references.push(go.trim().to_string());
         }
 
-        for ip in fields[self.header_map["Cross-reference (InterPro)"]].split(";") {
+        for ip in fields[self.header_map["Cross-reference (InterPro)"]].split(';') {
             entry.ip_references.push(ip.trim().to_string());
+        }
+
+        if self.verbose {
+            eprintln!("INFO VERBOSE: TSV line parsed: {}", line);
         }
 
         Some(entry)
