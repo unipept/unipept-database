@@ -5,15 +5,15 @@ use std::path::PathBuf;
 use std::time::Instant;
 
 use crate::taxons_uniprots_tables::models::Entry;
-use crate::taxons_uniprots_tables::taxon_list::TaxonList;
-use crate::taxons_uniprots_tables::utils::now;
+use crate::taxons_uniprots_tables::taxon_list::parse_taxon_file_basic;
+use crate::taxons_uniprots_tables::utils::now_str;
 use crate::utils::files::open_write;
 
 /// Note: this is single-threaded
 ///       we attempted a parallel version that wrote to all files at the same time,
 ///       but this didn't achieve any speed increase, so we decided not to go forward with it
 pub struct TableWriter {
-    taxons: TaxonList,
+    taxons: Vec<Option<bool>>,
     wrong_ids: HashSet<i32>,
     peptides: BufWriter<File>,
     uniprot_entries: BufWriter<File>,
@@ -38,7 +38,7 @@ impl TableWriter {
         interpro_references: &PathBuf,
     ) -> Self {
         TableWriter {
-            taxons: TaxonList::from_file(taxons),
+            taxons: parse_taxon_file_basic(taxons),
             wrong_ids: HashSet::new(),
             peptides: open_write(peptides),
             uniprot_entries: open_write(uniprot_entries),
@@ -113,7 +113,7 @@ impl TableWriter {
             "{}\t{}\t{}\t{}\t{}",
             self.peptide_count, sequence, original_sequence, id, annotations
         ) {
-            eprintln!("{}\tError writing to CSV.\n{:?}", now(), e);
+            eprintln!("{}\tError writing to CSV.\n{:?}", now_str(), e);
         }
     }
 
@@ -137,15 +137,15 @@ impl TableWriter {
                 "{}\t{}\t{}\t{}\t{}\t{}\t{}",
                 self.uniprot_count, accession_number, version, taxon_id, type_, name, sequence
             ) {
-                eprintln!("{}\tError writing to CSV.\n{:?}", now(), e);
+                eprintln!("{}\tError writing to CSV.\n{:?}", now_str(), e);
             } else {
                 return self.uniprot_count;
             }
         } else if !self.wrong_ids.contains(&entry.taxon_id) {
             self.wrong_ids.insert(entry.taxon_id);
             eprintln!(
-                "{}\t{} added to the list of {} invalid taxonIds.",
-                now(),
+                "[{}]\t{} added to the list of {} invalid taxonIds.",
+                now_str(),
                 entry.taxon_id,
                 self.wrong_ids.len()
             );

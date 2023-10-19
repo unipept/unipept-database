@@ -161,3 +161,23 @@ impl FromStr for Rank {
         }
     }
 }
+
+#[allow(dead_code)] // The fields in this struct aren't used YET, but will be later on
+#[derive(Debug)]
+pub struct Taxon {
+    name: String,
+    rank: Rank,
+    parent: u32,
+    valid: bool,
+}
+
+impl Taxon {
+    pub fn new(name: String, rank: Rank, parent: u32, valid: bool) -> Self {
+        Taxon {
+            name,
+            rank,
+            parent,
+            valid,
+        }
+    }
+}
