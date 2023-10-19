@@ -1,5 +1,5 @@
 use std::fs::{File, OpenOptions};
-use std::io::{BufReader, BufWriter, Stdin, stdin};
+use std::io::{stdin, BufReader, BufWriter, Stdin};
 use std::path::PathBuf;
 
 /// Create a BufReader that reads from StdIn

@@ -24,8 +24,8 @@ impl TabParser {
             None => {
                 eprintln!("unable to read header line");
                 std::process::exit(1)
-            },
-            Some(s) => s.expect("unable to read header line")
+            }
+            Some(s) => s.expect("unable to read header line"),
         };
 
         for (i, l) in line.split("\t").enumerate() {
@@ -56,7 +56,9 @@ impl Iterator for TabParser {
             fields[self.header_map["Entry"]].trim().to_string(),
             fields[self.header_map["Sequence"]].trim().to_string(),
             fields[self.header_map["Protein names"]].trim().to_string(),
-            fields[self.header_map["Version (entry)"]].trim().to_string(),
+            fields[self.header_map["Version (entry)"]]
+                .trim()
+                .to_string(),
             fields[self.header_map["Organism ID"]].trim().to_string(),
         );
 

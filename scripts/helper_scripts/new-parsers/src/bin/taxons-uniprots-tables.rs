@@ -1,13 +1,17 @@
-use std::path::PathBuf;
 use clap::Parser;
+use std::path::PathBuf;
 use unipept::taxons_uniprots_tables::tab_parser::TabParser;
 use unipept::taxons_uniprots_tables::table_writer::TableWriter;
 
 fn main() {
     let args = Cli::parse();
     let mut writer = TableWriter::new(
-        &args.taxons, &args.peptides, &args.uniprot_entries,
-        &args.go, &args.ec, &args.interpro
+        &args.taxons,
+        &args.peptides,
+        &args.uniprot_entries,
+        &args.go,
+        &args.ec,
+        &args.interpro,
     );
 
     let parser = TabParser::new(args.peptide_min, args.peptide_max, args.verbose);

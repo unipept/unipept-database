@@ -28,7 +28,8 @@ fn main() {
             } else {
                 ThreadedParser::with_threads(
                     reader,
-                    NonZeroUsize::new(n as usize).expect("number of threads is not a valid non-zero usize"),
+                    NonZeroUsize::new(n as usize)
+                        .expect("number of threads is not a valid non-zero usize"),
                 )
             };
 
@@ -69,7 +70,7 @@ fn write_header() {
         "Gene ontology IDs",
         "Cross-reference (InterPro)",
         "Status",
-        "Organism ID"
+        "Organism ID",
     ];
 
     let result_string = fields.join("\t");
@@ -84,7 +85,9 @@ fn parse_name(entry: &uniprot::uniprot::Entry) -> SmartStr {
     // otherwise store the last "submitted" name of these components for later
     for component in entry.protein.components.iter().rev() {
         match &component.recommended {
-            Some(n) => { return n.full.clone(); }
+            Some(n) => {
+                return n.full.clone();
+            }
             None => {}
         }
 
@@ -98,7 +101,9 @@ fn parse_name(entry: &uniprot::uniprot::Entry) -> SmartStr {
     // Do the same thing for the domains
     for domain in entry.protein.domains.iter().rev() {
         match &domain.recommended {
-            Some(n) => { return n.full.clone(); }
+            Some(n) => {
+                return n.full.clone();
+            }
             None => {}
         }
 
@@ -113,7 +118,7 @@ fn parse_name(entry: &uniprot::uniprot::Entry) -> SmartStr {
     // otherwise return the submitted name from above if there was one,
     // otherwise the last submitted name from the protein itself
     match &entry.protein.name.recommended {
-        Some(n) => { n.full.clone() }
+        Some(n) => n.full.clone(),
         None => {
             if !submitted_name.is_empty() {
                 submitted_name
@@ -154,7 +159,7 @@ fn write_entry(entry: &uniprot::uniprot::Entry, verbose: bool) {
             "EC" => Some(&mut ec_references),
             "GO" => Some(&mut go_references),
             "InterPro" => Some(&mut ip_references),
-            _ => None
+            _ => None,
         };
 
         if let Some(v) = vector {
@@ -170,7 +175,7 @@ fn write_entry(entry: &uniprot::uniprot::Entry, verbose: bool) {
         SmartStr::from(ec_references.join(";")),
         SmartStr::from(go_references.join(";")),
         SmartStr::from(ip_references.join(";")),
-        SmartStr::from("swissprot"),  // TODO check if this is supposed to be swissprot
+        SmartStr::from("swissprot"), // TODO check if this is supposed to be swissprot
         taxon_id,
     ];
 

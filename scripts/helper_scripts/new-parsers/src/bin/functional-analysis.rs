@@ -29,7 +29,15 @@ fn main() {
                 let row: Vec<String> = s.split("\t").map(String::from).collect();
                 if row[0] != current_pept {
                     if !current_pept.is_empty() && !m.is_empty() {
-                        write_entry(&mut writer, current_pept, num_prot, num_annotated_go, num_annotated_ec, num_annotated_ip, &m);
+                        write_entry(
+                            &mut writer,
+                            current_pept,
+                            num_prot,
+                            num_annotated_go,
+                            num_annotated_ec,
+                            num_annotated_ip,
+                            &m,
+                        );
                     }
 
                     m.clear();
@@ -82,12 +90,29 @@ fn main() {
     }
 
     if !m.is_empty() {
-        write_entry(&mut writer, current_pept, num_prot, num_annotated_go, num_annotated_ec, num_annotated_ip, &m);
+        write_entry(
+            &mut writer,
+            current_pept,
+            num_prot,
+            num_annotated_go,
+            num_annotated_ec,
+            num_annotated_ip,
+            &m,
+        );
     }
 }
 
-fn write_entry(writer: &mut BufWriter<File>, current_peptide: String, num_prot: u32, num_go: u32, num_ec: u32, num_ip: u32, m: &HashMap<String, u32>) {
-    let data = m.iter()
+fn write_entry(
+    writer: &mut BufWriter<File>,
+    current_peptide: String,
+    num_prot: u32,
+    num_go: u32,
+    num_ec: u32,
+    num_ip: u32,
+    m: &HashMap<String, u32>,
+) {
+    let data = m
+        .iter()
         .map(|(key, value)| format!(r#""{key}":{value}"#))
         .collect::<Vec<String>>()
         .join(",");
