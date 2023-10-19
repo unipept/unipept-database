@@ -22,7 +22,6 @@ pub struct Entry {
 }
 
 impl Entry {
-
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         min_length: u32,
