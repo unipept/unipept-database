@@ -3,6 +3,20 @@ use clap::Parser;
 use unipept::taxons_uniprots_tables::tab_parser::TabParser;
 use unipept::taxons_uniprots_tables::table_writer::TableWriter;
 
+fn main() {
+    let args = Cli::parse();
+    let mut writer = TableWriter::new(
+        &args.taxons, &args.peptides, &args.uniprot_entries,
+        &args.go, &args.ec, &args.interpro
+    );
+
+    let parser = TabParser::new(args.peptide_min, args.peptide_max, args.verbose);
+
+    for entry in parser {
+        writer.store(entry);
+    }
+}
+
 #[derive(Parser, Debug)]
 pub struct Cli {
     /// Minimum peptide length
@@ -40,18 +54,4 @@ pub struct Cli {
     /// Enable verbose mode
     #[clap(short, long, default_value_t = false)]
     verbose: bool,
-}
-
-fn main() {
-    let args = Cli::parse();
-    let mut writer = TableWriter::new(
-        &args.taxons, &args.peptides, &args.uniprot_entries,
-        &args.go, &args.ec, &args.interpro
-    );
-
-    let parser = TabParser::new(args.peptide_min, args.peptide_max, args.verbose);
-
-    for entry in parser {
-        writer.store(entry);
-    }
 }

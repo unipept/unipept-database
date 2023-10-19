@@ -7,29 +7,6 @@ use clap::Parser;
 
 use unipept::utils::files::{open_read, open_write};
 
-fn write_entry(writer: &mut BufWriter<File>, current_peptide: String, num_prot: u32, num_go: u32, num_ec: u32, num_ip: u32, m: &HashMap<String, u32>) {
-    let data = m.iter()
-        .map(|(key, value)| format!(r#""{key}":{value}"#))
-        .collect::<Vec<String>>()
-        .join(",");
-
-    let format_string = format!(
-        "{current_peptide}\t{{\"num\":{{\"all\":{num_prot},\"EC\":{num_ec},\"GO\":{num_go},\"IPR\":{num_ip},\"data\":{{{data}}}}}}}\n"
-    );
-
-    if let Err(e) = writer.write_all(format_string.as_bytes()) {
-        eprintln!("Error writing to output file: {:?}", e);
-    }
-}
-
-#[derive(Parser, Debug)]
-struct Cli {
-    #[clap(short, long)]
-    input_file: PathBuf,
-    #[clap(short, long)]
-    output_file: PathBuf,
-}
-
 fn main() {
     let args = Cli::parse();
 
@@ -107,4 +84,27 @@ fn main() {
     if !m.is_empty() {
         write_entry(&mut writer, current_pept, num_prot, num_annotated_go, num_annotated_ec, num_annotated_ip, &m);
     }
+}
+
+fn write_entry(writer: &mut BufWriter<File>, current_peptide: String, num_prot: u32, num_go: u32, num_ec: u32, num_ip: u32, m: &HashMap<String, u32>) {
+    let data = m.iter()
+        .map(|(key, value)| format!(r#""{key}":{value}"#))
+        .collect::<Vec<String>>()
+        .join(",");
+
+    let format_string = format!(
+        "{current_peptide}\t{{\"num\":{{\"all\":{num_prot},\"EC\":{num_ec},\"GO\":{num_go},\"IPR\":{num_ip},\"data\":{{{data}}}}}}}\n"
+    );
+
+    if let Err(e) = writer.write_all(format_string.as_bytes()) {
+        eprintln!("Error writing to output file: {:?}", e);
+    }
+}
+
+#[derive(Parser, Debug)]
+struct Cli {
+    #[clap(short, long)]
+    input_file: PathBuf,
+    #[clap(short, long)]
+    output_file: PathBuf,
 }
