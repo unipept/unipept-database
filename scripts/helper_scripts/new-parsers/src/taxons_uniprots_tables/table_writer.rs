@@ -81,14 +81,12 @@ impl TableWriter {
             .ec_references
             .iter()
             .filter(|x| !x.is_empty())
-            .map(|x| format!("EC:{}", x))
-            .into_iter();
+            .map(|x| format!("EC:{}", x));
         let ip_ids = entry
             .ip_references
             .iter()
             .filter(|x| !x.is_empty())
-            .map(|x| format!("IPR:{}", x))
-            .into_iter();
+            .map(|x| format!("IPR:{}", x));
 
         let summary = go_ids
             .chain(ec_ids)
@@ -97,7 +95,7 @@ impl TableWriter {
             .join(";");
 
         for sequence in digest {
-            self.add_peptide(sequence.replace("I", "L"), id, sequence, summary.clone());
+            self.add_peptide(sequence.replace('I', "L"), id, sequence, summary.clone());
         }
     }
 
@@ -143,16 +141,14 @@ impl TableWriter {
             } else {
                 return self.uniprot_count;
             }
-        } else {
-            if !self.wrong_ids.contains(&entry.taxon_id) {
-                self.wrong_ids.insert(entry.taxon_id);
-                eprintln!(
-                    "{}\t{} added to the list of {} invalid taxonIds.",
-                    now(),
-                    entry.taxon_id,
-                    self.wrong_ids.len()
-                );
-            }
+        } else if !self.wrong_ids.contains(&entry.taxon_id) {
+            self.wrong_ids.insert(entry.taxon_id);
+            eprintln!(
+                "{}\t{} added to the list of {} invalid taxonIds.",
+                now(),
+                entry.taxon_id,
+                self.wrong_ids.len()
+            );
         }
 
         -1

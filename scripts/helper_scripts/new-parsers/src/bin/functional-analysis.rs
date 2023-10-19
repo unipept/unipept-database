@@ -26,7 +26,7 @@ fn main() {
     for line in reader.lines() {
         match line {
             Ok(s) => {
-                let row: Vec<String> = s.split("\t").map(String::from).collect();
+                let row: Vec<String> = s.split('\t').map(String::from).collect();
                 if row[0] != current_pept {
                     if !current_pept.is_empty() && !m.is_empty() {
                         write_entry(
@@ -51,7 +51,7 @@ fn main() {
                 num_prot += 1;
 
                 if row.len() > 1 {
-                    let terms = row[1].split(";").map(String::from);
+                    let terms = row[1].split(';').map(String::from);
                     let mut has_ec = false;
                     let mut has_go = false;
                     let mut has_ip = false;
@@ -61,9 +61,9 @@ fn main() {
                             continue;
                         }
 
-                        if term.starts_with("G") {
+                        if term.starts_with('G') {
                             has_go = true;
-                        } else if term.starts_with("E") {
+                        } else if term.starts_with('E') {
                             has_ec = true;
                         } else {
                             has_ip = true;

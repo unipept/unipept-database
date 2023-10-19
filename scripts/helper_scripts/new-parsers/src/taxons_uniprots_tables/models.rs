@@ -22,6 +22,8 @@ pub struct Entry {
 }
 
 impl Entry {
+
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         min_length: u32,
         max_length: u32,
@@ -125,7 +127,7 @@ impl FromStr for Rank {
     type Err = RankParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.to_uppercase().replace(" ", "_").as_str() {
+        match s.to_uppercase().replace(' ', "_").as_str() {
             "CLASS" => Ok(Self::Class),
             "FAMILY" => Ok(Self::Family),
             "FORMA" => Ok(Self::Forma),
@@ -157,25 +159,6 @@ impl FromStr for Rank {
             _ => Err(RankParseError {
                 input: s.to_string(),
             }),
-        }
-    }
-}
-
-#[derive(Debug)]
-pub struct Taxon {
-    name: String,
-    rank: Rank,
-    parent: u32,
-    valid: bool,
-}
-
-impl Taxon {
-    pub fn new(name: String, rank: Rank, parent: u32, valid: bool) -> Self {
-        Taxon {
-            name,
-            rank,
-            parent,
-            valid,
         }
     }
 }
