@@ -20,7 +20,7 @@ jobs:
         with:
           shared-key: ${{ env.CACHE_KEY }}
       - run: cd scripts/helper_scripts/new-parsers && cargo fetch
-        if: ${{ steps.cache.outputs.cache-hit }}
+        if: ${{ !steps.cache.outputs.cache-hit }}
 
   build:
     name: Build binaries
