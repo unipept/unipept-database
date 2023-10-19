@@ -1,8 +1,8 @@
 use std::io::BufRead;
 use std::path::PathBuf;
 use std::str::FromStr;
-use crate::models::{Rank, Taxon};
-use crate::utils::open_read;
+use crate::taxons_uniprots_tables::models::{Rank, Taxon};
+use crate::utils::files::open_read;
 
 // TODO check if content of taxon is ever used - if not, just use something simple instead of a struct
 pub struct TaxonList {
@@ -28,8 +28,6 @@ impl TaxonList {
                 valid
             );
 
-            // TODO check if this makes sense?
-            //  If most entries are usually null, use a map instead
             while entries.len() <= id as usize {
                 entries.push(None);
             }

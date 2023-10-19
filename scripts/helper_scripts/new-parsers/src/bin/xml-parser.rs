@@ -1,9 +1,44 @@
-use std::io::{BufReader, stdin, Stdin};
+use std::io::{BufReader, Stdin};
 use std::num::NonZeroUsize;
 
 use clap::Parser;
 use smartstring::{LazyCompact, SmartString};
 use uniprot::uniprot::{SequentialParser, ThreadedParser};
+
+use unipept::utils::files::open_sin;
+
+fn main() {
+    let args = Cli::parse();
+
+    let reader = open_sin();
+
+    write_header();
+
+    // Create a different parser based on the amount of threads requested
+    match args.threads {
+        1 => {
+            for r in SequentialParser::new(reader) {
+                let entry = r.unwrap();
+                write_entry(&entry, args.verbose);
+            }
+        }
+        n => {
+            let parser: ThreadedParser<BufReader<Stdin>> = if n == 0 {
+                ThreadedParser::new(reader)
+            } else {
+                ThreadedParser::with_threads(
+                    reader,
+                    NonZeroUsize::new(n as usize).expect("number of threads is not a valid non-zero usize"),
+                )
+            };
+
+            for r in parser {
+                let entry = r.unwrap();
+                write_entry(&entry, args.verbose);
+            }
+        }
+    }
+}
 
 type SmartStr = SmartString<LazyCompact>;
 
@@ -146,37 +181,4 @@ fn write_entry(entry: &uniprot::uniprot::Entry, verbose: bool) {
     }
 
     println!("{}", line);
-}
-
-fn main() {
-    let args = Cli::parse();
-
-    let reader = BufReader::new(stdin());
-
-    write_header();
-
-    // Create a different parser based on the amount of threads requested
-    match args.threads {
-        1 => {
-            for r in SequentialParser::new(reader) {
-                let entry = r.unwrap();
-                write_entry(&entry, args.verbose);
-            }
-        }
-        n => {
-            let parser: ThreadedParser<BufReader<Stdin>> = if n == 0 {
-                ThreadedParser::new(reader)
-            } else {
-                ThreadedParser::with_threads(
-                    reader,
-                    NonZeroUsize::new(n as usize).expect("number of threads is not a valid non-zero usize"),
-                )
-            };
-
-            for r in parser {
-                let entry = r.unwrap();
-                write_entry(&entry, args.verbose);
-            }
-        }
-    }
 }

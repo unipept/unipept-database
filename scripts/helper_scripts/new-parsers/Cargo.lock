@@ -246,15 +246,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f665ee40bc4a3c5590afb1e9677db74a508659dfd71e126420da8274909a0167"
 
 [[package]]
-name = "new-parsers"
-version = "0.1.0"
-dependencies = [
- "clap",
- "smartstring",
- "uniprot",
-]
-
-[[package]]
 name = "num-traits"
 version = "0.2.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -347,9 +338,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3354b9ac3fae1ff6755cb6db53683adb661634f67557942dea4facebec0fee4b"
 
 [[package]]
+name = "unipept"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "smartstring",
+ "uniprot",
+]
+
+[[package]]
 name = "uniprot"
-version = "0.6.0"
-source = "git+https://github.com/althonos/uniprot.rs.git?rev=02b23d0#02b23d09aac6b4d5ba729f8d107743c5f7815140"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "10f630b7076a88cb10cbc0bd3f118dc9995eae2668e704c751644bff70fbed8a"
 dependencies = [
  "chrono",
  "crossbeam-channel",
