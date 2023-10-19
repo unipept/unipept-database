@@ -1,0 +1,51 @@
+on:
+  pull_request:
+
+jobs:
+  dependencies:
+    name: Install dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cd scripts/helper-scripts/new-parsers && cargo fetch
+
+  build:
+    name: Build binaries
+    runs-on: ubuntu-latest
+    needs: [dependencies]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cd scripts/helper-scripts/new-parsers && cargo build --release
+
+  format:
+    name: Check formatting
+    runs-on: ubuntu-latest
+    needs: [dependencies]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - uses: Swatinem/rust-cache@v2
+      - run: cd scripts/helper-scripts/new-parsers && cargo fmt --all --check
+
+  lint:
+    name: Linting
+    runs-on: ubuntu-latest
+    needs: [dependencies]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - uses: giraffate/clippy-action@v1
+        with:
+          clippy_flags: -- -D warnings
+          reporter: 'github-pr-check'
+          fail_on_error: true
+          github_token: ${{ secrets.GITHUB_TOKEN }}
