@@ -1,7 +1,7 @@
+use crate::taxons_uniprots_tables::models::{Rank, Taxon};
 use std::io::BufRead;
 use std::path::PathBuf;
 use std::str::FromStr;
-use crate::taxons_uniprots_tables::models::{Rank, Taxon};
 
 use crate::utils::files::open_read;
 
@@ -25,7 +25,7 @@ impl TaxonList {
                 spl[1].to_string(),
                 Rank::from_str(spl[2]).expect("unable to parse rank"),
                 parent,
-                valid
+                valid,
             );
 
             while entries.len() <= id as usize {
@@ -60,7 +60,9 @@ pub fn parse_taxon_file_basic(pb: &PathBuf) -> Vec<Option<bool>> {
 
     for line in reader.lines() {
         let line = line.unwrap();
-        let spl = line.split_once('\t').expect("unable to split taxon file on tabs");
+        let spl = line
+            .split_once('\t')
+            .expect("unable to split taxon file on tabs");
         let id: u32 = spl.0.parse().expect("unable to parse id");
 
         while entries.len() <= id as usize {
