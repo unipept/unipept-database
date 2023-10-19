@@ -64,3 +64,4 @@ jobs:
           reporter: 'github-pr-check'
           fail_on_error: true
           github_token: ${{ secrets.GITHUB_TOKEN }}
+          workdir: scripts/helper_scripts/new-parsers
