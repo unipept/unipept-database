@@ -27,12 +27,12 @@ then
 
   if [[ ${#QUERIES[@]} -gt 0 ]]
   then
-    parallel --jobs 8 --max-args 2 "cat {2} | lz4 -dc | sed 's/$/$/' | grep -F -f {1} | sed 's/\$$//'" ::: "${QUERIES[@]}"
+    parallel --jobs 8 --max-args 2 "lz4 -dc {2} | sed 's/$/$/' | grep -F -f {1} | sed 's/\$$//'" ::: "${QUERIES[@]}"
   fi
 else
 
   # If the root ID has been passed to this script, we simply print out all database items (without filtering).
-  find "$DATABASE_INDEX" -name "*.chunk.lz4" | xargs lz4 -dc
+  find "$DATABASE_INDEX" -name "*.chunk.lz4" | xargs lz4 -mdc
 fi
 
 # Remove temporary files
