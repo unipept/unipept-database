@@ -610,7 +610,7 @@ substitute_equalized_aas() {
 	log "Started the substitution of equalized AA's by ID's for the peptides."
 	$CMD_LZ4CAT "$INTDIR/peptides.tsv.lz4" \
 		| LC_ALL=C $CMD_SORT -k 2b,2 \
-		| join -t '	' -o '1.1,2.1,1.3,1.4,1.5' -1 2 -2 2 - "$(luz "$INTDIR/sequences.tsv.lz")" \
+		| join -t '	' -o '1.1,2.1,1.3,1.4,1.5' -1 2 -2 2 - "$(luz "$INTDIR/sequences.tsv.lz4")" \
 		| $CMD_LZ4 - > "$INTDIR/peptides_by_equalized.tsv.lz4"
 	log "Finished the substitution of equalized AA's by ID's for the peptides with status $?."
 }
