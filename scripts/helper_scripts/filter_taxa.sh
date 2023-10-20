@@ -32,7 +32,7 @@ then
 else
 
   # If the root ID has been passed to this script, we simply print out all database items (without filtering).
-  find "$DATABASE_INDEX" -name "*.chunk.lz4" | xargs lz4 -mdc
+  find "$DATABASE_INDEX" -name "*.chunk.lz4" -exec lz4 -mdc {} +
 fi
 
 # Remove temporary files
