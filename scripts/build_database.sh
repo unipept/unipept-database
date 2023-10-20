@@ -264,7 +264,7 @@ JAVA_MEM="2g" # How much memory should Java use?
 CMD_SORT="sort --buffer-size=$SORT_MEMORY --parallel=4" # Which sort command should I use?
 CMD_GZIP="pigz -" # Which pipe compression command should I use for .gz files?
 CMD_ZCAT="pigz -dc" # Which decompression command should I use for .gz files?
-CMD_LZ4="lz4 -c -" # Which pipe compression command should I use for .lz4 files?
+CMD_LZ4="lz4 -c" # Which pipe compression command should I use for .lz4 files?
 CMD_LZ4CAT="lz4 -dc" # Which decompression command should I use for .lz4 files?
 ENTREZ_BATCH_SIZE=1000 # Which batch size should I use for communication with Entrez?
 
