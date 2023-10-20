@@ -261,7 +261,7 @@ KMER_LENGTH=9 # What is the length (k) of the K-mer peptides?
 JAVA_MEM="2g" # How much memory should Java use?
 CMD_SORT="sort --buffer-size=$SORT_MEMORY --parallel=4" # Which sort command should I use?
 CMD_GZIP="pigz -" # Which pipe compression command should I use?
-CMD_ZCAT="pigz -dc -" # Which pipe decompression command should I use?
+CMD_ZCAT="pigz -dc" # Which pipe decompression command should I use?
 ENTREZ_BATCH_SIZE=1000 # Which batch size should I use for communication with Entrez?
 
 TAXON_URL="https://ftp.ncbi.nih.gov/pub/taxonomy/taxdmp.zip"
