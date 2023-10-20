@@ -314,7 +314,7 @@ lz() {
 	mkfifo "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/$fifo"
 	echo "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/$fifo"
 	mkdir -p "$(dirname "$1")"
-	{ $CMD_CMD_LZ4 - < "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/$fifo" > "$1" && rm "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/$fifo" || kill "$self"; } > /dev/null &
+	{ $CMD_LZ4 - < "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/$fifo" > "$1" && rm "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/$fifo" || kill "$self"; } > /dev/null &
 }
 
 luz() {
