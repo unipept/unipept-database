@@ -386,7 +386,7 @@ download_and_convert_all_sources() {
       # TODO resumability
 #      XML_FILE=$(cd "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT" && curl "$DB_SOURCE" --silent -O --remote-name -w "%{filename_effective}")
 #      zcat "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/$XML_FILE" | "$CURRENT_LOCATION/helper_scripts/xml-parser" -t "$DB_TYPE" --threads 0 --verbose "$VERBOSE" | node "$CURRENT_LOCATION/helper_scripts/WriteToChunk.js" "$DB_INDEX_OUTPUT" "$VERBOSE"
-      zcat "/uniprot_sprot.xml.gz" | java -jar "$CURRENT_LOCATION/helper_scripts/XmlToTabConverter.jar" 5 50 "$DB_TYPE" false | node "$CURRENT_LOCATION/helper_scripts/WriteToChunk.js" "$DB_INDEX_OUTPUT" "$VERBOSE"
+      zcat "/uniprot_sprot.xml.gz" | $CURRENT_LOCATION/helper_scripts/xml-parser -t "$DB_TYPE" | node "$CURRENT_LOCATION/helper_scripts/WriteToChunk.js" "$DB_INDEX_OUTPUT" "$VERBOSE"
 #      rm "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/$XML_FILE"
 
       # Now, compress the different chunks
@@ -431,7 +431,7 @@ download_and_convert_all_sources() {
 
         SIZE="$(curl -I "$DB_SOURCE" -s | grep -i content-length | tr -cd '[0-9]')"
 
-        zcat "/uniprot_sprot.xml.gz" | java -jar "$CURRENT_LOCATION/helper_scripts/XmlToTabConverter.jar" 5 50 "$DB_TYPE" false | node "$CURRENT_LOCATION/helper_scripts/WriteToChunk.js" "$DB_INDEX_OUTPUT" "$VERBOSE"
+        zcat "/uniprot_sprot.xml.gz" | $CURRENT_LOCATION/helper_scripts/xml-parser -t "$DB_TYPE" | node "$CURRENT_LOCATION/helper_scripts/WriteToChunk.js" "$DB_INDEX_OUTPUT" "$VERBOSE"
 
         # Now, compress the different chunks
         CHUNKS=$(find "$DB_INDEX_OUTPUT" -name "*.chunk")
@@ -496,12 +496,7 @@ create_most_tables() {
 
 	mkdir -p "$OUTPUT_DIR" "$INTDIR"
 
-	if [ $VERBOSE = "true" ]
-	then
-	  $VERBOSE_FLAG="--verbose"
-  fi
-
-	cat - | java -Xms"$JAVA_MEM" -Xmx"$JAVA_MEM" -jar "$CURRENT_LOCATION/helper_scripts/TaxonsUniprots2Tables.jar" \
+	cat - | $CURRENT_LOCATION/helper_scripts/taxons-uniprots-tables \
 		--peptide-min "$PEPTIDE_MIN_LENGTH" \
 		--peptide-max "$PEPTIDE_MAX_LENGTH" \
 		--taxons "$(guz "$OUTPUT_DIR/taxons.tsv.gz")" \
@@ -509,8 +504,7 @@ create_most_tables() {
 		--uniprot-entries "$(gz "$OUTPUT_DIR/uniprot_entries.tsv.gz")" \
 		--ec "$(gz "$OUTPUT_DIR/ec_cross_references.tsv.gz")" \
 		--go "$(gz "$OUTPUT_DIR/go_cross_references.tsv.gz")" \
-		--interpro "$(gz "$OUTPUT_DIR/interpro_cross_references.tsv.gz")" \
-		$VERBOSE_FLAG
+		--interpro "$(gz "$OUTPUT_DIR/interpro_cross_references.tsv.gz")"
 
 	log "Finished calculation of most tables with status $?"
 }
@@ -601,7 +595,7 @@ calculate_equalized_fas() {
 	log "Started the calculation of equalized FA's."
 	mkfifo "peptides_eq"
 	zcat "$INTDIR/peptides_by_equalized.tsv.gz" | cut -f2,5 > "peptides_eq" &
-	node  "$CURRENT_LOCATION/helper_scripts/FunctionalAnalysisPeptides.js" "peptides_eq" "$(gz "$INTDIR/FAs_equalized.tsv.gz")"
+	$CURRENT_LOCATION/helper_scripts/functional-analysis -i "peptides_eq" -o "$(gz "$INTDIR/FAs_equalized.tsv.gz")"
 	rm "peptides_eq"
 	log "Finished the calculation of equalized FA's with status $?."
 }
@@ -622,7 +616,7 @@ calculate_original_fas() {
 	log "Started the calculation of original FA's."
 	mkfifo "peptides_orig"
 	zcat "$INTDIR/peptides_by_original.tsv.gz" | cut -f3,5 > "peptides_orig" &
-	node "$CURRENT_LOCATION/helper_scripts/FunctionalAnalysisPeptides.js" "peptides_orig" "$(gz "$INTDIR/FAs_original.tsv.gz")"
+	$CURRENT_LOCATION/helper_scripts/functional-analysis -i "peptides_orig" -o "$(gz "$INTDIR/FAs_original.tsv.gz")"
 	rm "peptides_orig"
 	log "Finished the calculation of original FA's."
 }
