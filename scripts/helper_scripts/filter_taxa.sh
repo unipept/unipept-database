@@ -14,7 +14,7 @@ mkdir -p "$TMP_DIR"
 
 filter_taxa() {
 	QUERY=$(echo "\s$1\s" | sed "s/,/\\\s\\\|\\\s/g")
-	RESULT=$(cat "$LINEAGE_ARCHIVE" | zcat  | grep "$QUERY" | cut -f1 | sort -n | uniq | tr '\n' ',')
+	RESULT=$(lz4 -dc "$LINEAGE_ARCHIVE" | grep "$QUERY" | cut -f1 | sort -n | uniq | tr '\n' ',')
 	echo "$RESULT"
 }
 
@@ -27,12 +27,12 @@ then
 
   if [[ ${#QUERIES[@]} -gt 0 ]]
   then
-    parallel --jobs 8 --max-args 2 "cat {2} | zcat | sed 's/$/$/' | grep -F -f {1} | sed 's/\$$//'" ::: "${QUERIES[@]}"
+    parallel --jobs 8 --max-args 2 "cat {2} | lz4 -dc | sed 's/$/$/' | grep -F -f {1} | sed 's/\$$//'" ::: "${QUERIES[@]}"
   fi
 else
 
   # If the root ID has been passed to this script, we simply print out all database items (without filtering).
-  find "$DATABASE_INDEX" -name "*.chunk.gz" | xargs zcat
+  find "$DATABASE_INDEX" -name "*.chunk.lz4" | xargs lz4 -dc
 fi
 
 # Remove temporary files
