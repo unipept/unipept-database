@@ -387,7 +387,7 @@ download_and_convert_all_sources() {
 #      XML_FILE=$(cd "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT" && curl "$DB_SOURCE" --silent -O --remote-name -w "%{filename_effective}")
 #      zcat "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/$XML_FILE" | "$CURRENT_LOCATION/helper_scripts/xml-parser" -t "$DB_TYPE" --threads 0 --verbose "$VERBOSE" | node "$CURRENT_LOCATION/helper_scripts/WriteToChunk.js" "$DB_INDEX_OUTPUT" "$VERBOSE"
       zcat "/uniprot_sprot.xml.gz" | java -jar "$CURRENT_LOCATION/helper_scripts/XmlToTabConverter.jar" 5 50 "$DB_TYPE" false | node "$CURRENT_LOCATION/helper_scripts/WriteToChunk.js" "$DB_INDEX_OUTPUT" "$VERBOSE"
-      rm "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/$XML_FILE"
+#      rm "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/$XML_FILE"
 
       # Now, compress the different chunks
       CHUNKS=$(find "$DB_INDEX_OUTPUT" -name "*.chunk")
