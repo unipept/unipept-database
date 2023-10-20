@@ -549,7 +549,7 @@ join_equalized_pepts_and_entries() {
 
 
 join_original_pepts_and_entries() {
-	have "$INTDIR/peptides.tsv.gz" "$OUTPUT_DIR/uniprot_entries.tsv.gz" || return
+	have "$INTDIR/peptides.tsv.lz4" "$OUTPUT_DIR/uniprot_entries.tsv.lz4" || return
 	log "Started the joining of original peptides and uniprot entries."
 	mkfifo "peptides_orig" "entries_orig"
 	$CMD_LZ4CAT "$INTDIR/peptides.tsv.lz4" | gawk '{ printf("%012d\t%s\n", $4, $3) }' > "peptides_orig" &
@@ -790,10 +790,10 @@ database)
 	pid2=$!
 	wait $pid1
 	wait $pid2
-	rm "$INTDIR/aa_sequence_taxon_equalized.tsv.gz"
-	rm "$INTDIR/aa_sequence_taxon_original.tsv.gz"
+	rm "$INTDIR/aa_sequence_taxon_equalized.tsv.lz4"
+	rm "$INTDIR/aa_sequence_taxon_original.tsv.lz4"
 	substitute_equalized_aas
-	rm "$INTDIR/peptides.tsv.gz"
+	rm "$INTDIR/peptides.tsv.lz4"
 	substitute_original_aas
 	reportProgress "-1" "Calculating functional annotations." 7
 	calculate_equalized_fas &
@@ -802,17 +802,17 @@ database)
 	pid2=$!
 	wait $pid1
 	wait $pid2
-	rm "$INTDIR/peptides_by_equalized.tsv.gz"
+	rm "$INTDIR/peptides_by_equalized.tsv.lz4"
 	reportProgress "-1" "Sorting peptides." 8
 	sort_peptides
-	rm "$INTDIR/peptides_by_original.tsv.gz"
+	rm "$INTDIR/peptides_by_original.tsv.lz4"
 	reportProgress "-1" "Creating sequence table." 9
 	create_sequence_table
-	rm "$INTDIR/LCAs_original.tsv.gz"
-	rm "$INTDIR/LCAs_equalized.tsv.gz"
-	rm "$INTDIR/FAs_original.tsv.gz"
-	rm "$INTDIR/FAs_equalized.tsv.gz"
-	rm "$INTDIR/sequences.tsv.gz"
+	rm "$INTDIR/LCAs_original.tsv.lz4"
+	rm "$INTDIR/LCAs_equalized.tsv.lz4"
+	rm "$INTDIR/FAs_original.tsv.lz4"
+	rm "$INTDIR/FAs_equalized.tsv.lz4"
+	rm "$INTDIR/sequences.tsv.lz4"
 	reportProgress "-1" "Fetching EC numbers." 10
 	fetch_ec_numbers
 	reportProgress "-1" "Fetching GO terms." 11
@@ -820,7 +820,7 @@ database)
 	reportProgress "-1" "Fetching InterPro entries." 12
 	fetch_interpro_entries
 	reportProgress "-1" "Computing database indices" 13
-	ENTRIES=$($CMD_ZCAT "$OUTPUT_DIR/uniprot_entries.tsv.gz" | wc -l)
+	ENTRIES=$($CMD_LZ4CAT "$OUTPUT_DIR/uniprot_entries.tsv.lz4" | wc -l)
 	echo "Database contains: ##$ENTRIES##"
 	;;
 static-database)
