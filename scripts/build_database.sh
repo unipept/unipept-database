@@ -343,6 +343,8 @@ create_taxon_tables() {
 	unzip "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/taxdmp.zip" "names.dmp" "nodes.dmp" -d "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT"
 	rm "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/taxdmp.zip"
 
+  echo "Downloaded file"
+
 	sed -i'' -e 's/subcohort/no rank/' -e 's/cohort/no rank/' \
 		-e 's/subsection/no rank/' -e 's/section/no rank/' \
 		-e 's/series/no rank/' -e 's/biotype/no rank/' \
@@ -353,11 +355,15 @@ create_taxon_tables() {
 		-e 's/isolate/no rank/' -e 's/infraclass/no rank/' \
 		-e 's/parvorder/no rank/' "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/nodes.dmp"
 
+  echo "Modified node ranks"
+
 	mkdir -p "$OUTPUT_DIR"
 	java -Xms"$JAVA_MEM" -Xmx"$JAVA_MEM" -jar "$CURRENT_LOCATION/helper_scripts/NamesNodes2TaxonsLineages.jar" \
 		--names "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/names.dmp" --nodes "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/nodes.dmp" \
 		--taxons "$(lz "$OUTPUT_DIR/taxons.tsv.lz4")" \
 		--lineages "$(lz "$OUTPUT_DIR/lineages.tsv.lz4")"
+
+  echo "Generated taxons and lineages"
 
 	rm "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/names.dmp" "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/nodes.dmp"
 	log "Finished creating the taxon tables."
