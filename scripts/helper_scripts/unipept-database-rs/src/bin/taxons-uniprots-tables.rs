@@ -1,10 +1,11 @@
 use clap::Parser;
 use std::path::PathBuf;
-use anyhow::Context;
+use anyhow::{Context, Result};
 use unipept_database::taxons_uniprots_tables::tab_parser::TabParser;
 use unipept_database::taxons_uniprots_tables::table_writer::TableWriter;
 
-fn main() {
+
+fn main() -> Result<()> {
     let args = Cli::parse();
     let mut writer = TableWriter::new(
         &args.taxons,
@@ -20,6 +21,8 @@ fn main() {
     for entry in parser {
         writer.store(entry.context("Error getting entry from TabParser")?);
     }
+
+    Ok(())
 }
 
 #[derive(Parser, Debug)]

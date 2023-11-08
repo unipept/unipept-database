@@ -55,34 +55,34 @@ impl Entry {
             ip_references,
         })
     }
+}
 
-    pub fn digest(self) -> Vec<String> {
-        let mut result = Vec::new();
+pub fn calculate_entry_digest(sequence: String, min_length: usize, max_length: usize) -> Vec<String> {
+    let mut result = Vec::new();
 
-        let mut start: usize = 0;
-        let length = self.sequence.len();
-        let content = self.sequence.as_bytes();
+    let mut start: usize = 0;
+    let length = sequence.len();
+    let content = sequence.as_bytes();
 
-        for (i, c) in content.iter().enumerate() {
-            if (*c == b'K' || *c == b'R') && (i + 1 < length && content[i + 1] != b'P') {
-                if i + 1 - start >= self.min_length as usize
-                    && i + 1 - start <= self.max_length as usize
-                {
-                    result.push(String::from_utf8_lossy(&content[start..i + 1]).to_string());
-                }
-
-                start = i + 1;
+    for (i, c) in content.iter().enumerate() {
+        if (*c == b'K' || *c == b'R') && (i + 1 < length && content[i + 1] != b'P') {
+            if i + 1 - start >= min_length as usize
+                && i + 1 - start <= max_length as usize
+            {
+                result.push(String::from_utf8_lossy(&content[start..i + 1]).to_string());
             }
-        }
 
-        // Add last one
-        if length - start >= self.min_length as usize && length - start <= self.max_length as usize
-        {
-            result.push(String::from_utf8_lossy(&content[start..length]).to_string())
+            start = i + 1;
         }
-
-        result
     }
+
+    // Add last one
+    if length - start >= min_length && length - start <= max_length
+    {
+        result.push(String::from_utf8_lossy(&content[start..length]).to_string())
+    }
+
+    result
 }
 
 #[derive(Debug)]

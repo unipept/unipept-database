@@ -2,12 +2,13 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufRead, BufWriter, Write};
 use std::path::PathBuf;
+use anyhow::Result;
 
 use clap::Parser;
 
 use unipept_database::utils::files::{open_read, open_write};
 
-fn main() {
+fn main() -> Result<()> {
     let args = Cli::parse();
 
     let reader = open_read(&args.input_file)?;
@@ -100,6 +101,8 @@ fn main() {
             &m,
         );
     }
+
+    Ok(())
 }
 
 fn write_entry(

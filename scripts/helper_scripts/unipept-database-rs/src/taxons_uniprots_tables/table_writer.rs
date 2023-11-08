@@ -6,7 +6,7 @@ use std::time::Instant;
 use anyhow::{Context, Result};
 use bit_vec::BitVec;
 
-use crate::taxons_uniprots_tables::models::Entry;
+use crate::taxons_uniprots_tables::models::{Entry, calculate_entry_digest};
 use crate::taxons_uniprots_tables::taxon_list::parse_taxon_file_basic;
 use crate::taxons_uniprots_tables::utils::now_str;
 use crate::utils::files::open_write;
@@ -77,25 +77,25 @@ impl TableWriter {
             self.write_ip_ref(r, id);
         }
 
-        let go_ids = entry.go_references.iter();
+        let go_ids = entry.go_references.into_iter();
         let ec_ids = entry
             .ec_references
             .iter()
             .filter(|x| !x.is_empty())
-            .map(|x| &format!("EC:{}", x));
+            .map(|x| format!("EC:{}", x));
         let ip_ids = entry
             .ip_references
             .iter()
             .filter(|x| !x.is_empty())
-            .map(|x| &format!("IPR:{}", x));
+            .map(|x| format!("IPR:{}", x));
 
         let summary = go_ids
             .chain(ec_ids)
             .chain(ip_ids)
-            .collect::<Vec<&String>>()
+            .collect::<Vec<String>>()
             .join(";");
 
-        for sequence in entry.digest() {
+        for sequence in calculate_entry_digest(entry.sequence, entry.min_length as usize, entry.max_length as usize) {
             self.write_peptide(sequence.replace('I', "L"), id, sequence, &summary);
         }
     }
