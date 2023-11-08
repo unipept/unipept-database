@@ -1,13 +1,14 @@
 use std::io::{BufReader, Stdin};
 use std::num::NonZeroUsize;
 
+use anyhow::{Context, Result};
 use clap::Parser;
 use smartstring::{LazyCompact, SmartString};
 use uniprot::uniprot::{SequentialParser, ThreadedParser};
 
-use unipept::utils::files::open_sin;
+use unipept_database::utils::files::open_sin;
 
-fn main() {
+fn main() -> Result<()> {
     let args = Cli::parse();
 
     let reader = open_sin();
@@ -18,7 +19,7 @@ fn main() {
     match args.threads {
         1 => {
             for r in SequentialParser::new(reader) {
-                let entry = r.unwrap();
+                let entry = r.context("Error reading UniProt entry from SequentialParser")?;
                 write_entry(&entry, args.verbose);
             }
         }
@@ -29,16 +30,18 @@ fn main() {
                 ThreadedParser::with_threads(
                     reader,
                     NonZeroUsize::new(n as usize)
-                        .expect("number of threads is not a valid non-zero usize"),
+                        .context("Error parsing number of threads as usize")?,
                 )
             };
 
             for r in parser {
-                let entry = r.unwrap();
+                let entry = r.context("Error reading UniProt entry from ThreadedParser")?;
                 write_entry(&entry, args.verbose);
             }
         }
     }
+
+    Ok(())
 }
 
 type SmartStr = SmartString<LazyCompact>;
@@ -84,11 +87,8 @@ fn parse_name(entry: &uniprot::uniprot::Entry) -> SmartStr {
     // Check the last "recommended" name from a protein's components,
     // otherwise store the last "submitted" name of these components for later
     for component in entry.protein.components.iter().rev() {
-        match &component.recommended {
-            Some(n) => {
-                return n.full.clone();
-            }
-            None => {}
+        if let Some(n) = &component.recommended {
+            return n.full.clone();
         }
 
         if submitted_name.is_empty() {
@@ -100,11 +100,8 @@ fn parse_name(entry: &uniprot::uniprot::Entry) -> SmartStr {
 
     // Do the same thing for the domains
     for domain in entry.protein.domains.iter().rev() {
-        match &domain.recommended {
-            Some(n) => {
-                return n.full.clone();
-            }
-            None => {}
+        if let Some(n) = &domain.recommended {
+            return n.full.clone();
         }
 
         if submitted_name.is_empty() {
@@ -117,18 +114,15 @@ fn parse_name(entry: &uniprot::uniprot::Entry) -> SmartStr {
     // First check the protein's own recommended name,
     // otherwise return the submitted name from above if there was one,
     // otherwise the last submitted name from the protein itself
-    match &entry.protein.name.recommended {
-        Some(n) => n.full.clone(),
-        None => {
-            if !submitted_name.is_empty() {
-                submitted_name
-            } else if let Some(n) = entry.protein.name.submitted.last() {
-                n.full.clone()
-            } else {
-                eprintln!("Could not find a name for entry {}", entry.accessions[0]);
-                SmartStr::new()
-            }
-        }
+    if let Some(n) = &entry.protein.name.recommended {
+        n.full.clone()
+    } else if !submitted_name.is_empty() {
+        submitted_name
+    } else if let Some(n) = entry.protein.name.submitted.last() {
+        n.full.clone()
+    } else {
+        eprintln!("Could not find a name for entry {}", entry.accessions[0]);
+        SmartStr::new()
     }
 }
 

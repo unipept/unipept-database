@@ -1,14 +1,14 @@
-use std::fmt;
-use std::fmt::Formatter;
 use std::str::FromStr;
+
+use anyhow::{Context, Error, Result};
 
 #[derive(Debug)]
 pub struct Entry {
     pub min_length: u32,
     pub max_length: u32,
 
-    // These three are actually ints, but sthey are never used as ints,
-    // so there is no use converting/parsing them as such
+    // The "version" and "accession_number" fields are actually integers, but they are never used as such,
+    // so there is no use converting/parsing them
     pub accession_number: String,
     pub version: String,
     pub taxon_id: i32,
@@ -32,62 +32,59 @@ impl Entry {
         name: String,
         version: String,
         taxon_id: String,
-    ) -> Self {
-        Entry {
+        ec_references: Vec<String>,
+        go_references: Vec<String>,
+        ip_references: Vec<String>,
+    ) -> Result<Self> {
+        let parsed_id = taxon_id
+            .parse()
+            .with_context(|| format!("Failed to parse {} to i32", taxon_id))?;
+
+        Ok(Entry {
             min_length,
             max_length,
 
             accession_number,
             version,
-            taxon_id: taxon_id.parse().unwrap(),
+            taxon_id: parsed_id,
             type_,
             name,
             sequence,
 
-            ec_references: Vec::new(),
-            go_references: Vec::new(),
-            ip_references: Vec::new(),
-        }
+            ec_references,
+            go_references,
+            ip_references,
+        })
     }
+}
 
-    pub fn digest(&mut self) -> Vec<String> {
-        let mut result = Vec::new();
+pub fn calculate_entry_digest(
+    sequence: &String,
+    min_length: usize,
+    max_length: usize,
+) -> Vec<&[u8]> {
+    let mut result = Vec::new();
 
-        let mut start: usize = 0;
-        let length = self.sequence.len();
-        let content = self.sequence.as_bytes();
+    let mut start: usize = 0;
+    let length = sequence.len();
+    let content = sequence.as_bytes();
 
-        for (i, c) in content.iter().enumerate() {
-            if (*c == b'K' || *c == b'R') && (i + 1 < length && content[i + 1] != b'P') {
-                if i + 1 - start >= self.min_length as usize
-                    && i + 1 - start <= self.max_length as usize
-                {
-                    result.push(String::from_utf8_lossy(&content[start..i + 1]).to_string());
-                }
-
-                start = i + 1;
+    for (i, c) in content.iter().enumerate() {
+        if (*c == b'K' || *c == b'R') && (i + 1 < length && content[i + 1] != b'P') {
+            if i + 1 - start >= min_length && i + 1 - start <= max_length {
+                result.push(&content[start..i + 1]);
             }
+
+            start = i + 1;
         }
-
-        // Add last one
-        if length - start >= self.min_length as usize && length - start <= self.max_length as usize
-        {
-            result.push(String::from_utf8_lossy(&content[start..length]).to_string())
-        }
-
-        result
     }
-}
 
-#[derive(Debug, Clone)]
-pub struct RankParseError {
-    input: String,
-}
-
-impl fmt::Display for RankParseError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "unable to parse {} as Rank", self.input)
+    // Add last one
+    if length - start >= min_length && length - start <= max_length {
+        result.push(&content[start..length]);
     }
+
+    result
 }
 
 #[derive(Debug)]
@@ -123,7 +120,7 @@ pub enum Rank {
 }
 
 impl FromStr for Rank {
-    type Err = RankParseError;
+    type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_uppercase().replace(' ', "_").as_str() {
@@ -155,9 +152,10 @@ impl FromStr for Rank {
             "SUPERPHYLUM" => Ok(Self::SuperPhylum),
             "TRIBE" => Ok(Self::Tribe),
             "VARIETAS" => Ok(Self::Varietas),
-            _ => Err(RankParseError {
-                input: s.to_string(),
-            }),
+            _ => Err(Error::msg(format!(
+                "Value {} does not match any known ranks",
+                s
+            ))),
         }
     }
 }
@@ -167,12 +165,12 @@ impl FromStr for Rank {
 pub struct Taxon {
     name: String,
     rank: Rank,
-    parent: u32,
+    parent: usize,
     valid: bool,
 }
 
 impl Taxon {
-    pub fn new(name: String, rank: Rank, parent: u32, valid: bool) -> Self {
+    pub fn new(name: String, rank: Rank, parent: usize, valid: bool) -> Self {
         Taxon {
             name,
             rank,
