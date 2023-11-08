@@ -1,4 +1,4 @@
-# unipept-rs
+# unipept-database-rs
 
 This is a Rust package that implements custom tools for the Unipept database construction pipeline.
 

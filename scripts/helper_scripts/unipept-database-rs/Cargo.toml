@@ -1,5 +1,5 @@
 [package]
-name = "unipept"
+name = "unipept-database"
 version = "0.1.0"
 edition = "2021"
 authors = ["unipept@ugent.be", "Stijn De Clercq", "Bart Mesuere", "Pieter Verschaffelt", "Tibo Vande Moortele"]
