@@ -2,7 +2,7 @@
 name = "unipept"
 version = "0.1.0"
 edition = "2021"
-authors = ["Stijn De Clercq", "Bart Mesuere", "Pieter Verschaffelt", "Tibo Vande Moortele"]
+authors = ["unipept@ugent.be", "Stijn De Clercq", "Bart Mesuere", "Pieter Verschaffelt", "Tibo Vande Moortele"]
 categories = ["command-line-utilities", "parser-implementations", "science"]
 keywords = ["uniprot", "unipept", "metaproteomics"]
 readme = "README.md"
