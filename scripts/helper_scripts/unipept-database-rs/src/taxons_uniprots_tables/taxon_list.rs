@@ -2,6 +2,7 @@ use crate::taxons_uniprots_tables::models::{Rank, Taxon};
 use std::io::BufRead;
 use std::path::PathBuf;
 use std::str::FromStr;
+use anyhow::{Context, Result};
 
 use crate::utils::files::open_read;
 
@@ -10,32 +11,32 @@ pub struct TaxonList {
 }
 
 impl TaxonList {
-    pub fn from_file(pb: &PathBuf) -> Self {
+    pub fn from_file(pb: &PathBuf) -> Result<Self> {
         let mut entries = Vec::new();
         let reader = open_read(pb);
 
         for line in reader.lines() {
             let line = line.unwrap();
             let spl: Vec<&str> = line.split('\t').collect();
-            let id: u32 = spl[0].parse().expect("unable to parse id");
-            let parent: u32 = spl[3].parse().expect("unable to parse parent id");
+            let id: usize = spl[0].parse().with_context(|| format!("Unable to parse {} as usize", spl[0]))?;
+            let parent: usize = spl[3].parse().with_context(|| format!("Unable to parse {} as usize", spl[3]))?;
             let valid = spl[4].trim() == "true";
 
             let taxon = Taxon::new(
                 spl[1].to_string(),
-                Rank::from_str(spl[2]).expect("unable to parse rank"),
+                Rank::from_str(spl[2]).with_context(|| format!("Unable to parse {} into Rank", spl[2]))?,
                 parent,
                 valid,
             );
 
-            while entries.len() <= id as usize {
+            while entries.len() <= id {
                 entries.push(None);
             }
 
-            entries[id as usize] = Some(taxon);
+            entries[id] = Some(taxon);
         }
 
-        TaxonList { entries }
+        Ok(TaxonList { entries })
     }
 
     pub fn get(&self, i: usize) -> &Option<Taxon> {
@@ -54,23 +55,22 @@ impl TaxonList {
 /// Parse a taxons TSV-file into a vector that can be accessed by id
 /// The actual content of these Taxons is never used, so we don't try to parse a struct
 /// TODO a form of bitvector would be even more efficient
-pub fn parse_taxon_file_basic(pb: &PathBuf) -> Vec<Option<bool>> {
+pub fn parse_taxon_file_basic(pb: &PathBuf) -> Result<Vec<bool>> {
     let mut entries = Vec::new();
     let reader = open_read(pb);
 
     for line in reader.lines() {
         let line = line.unwrap();
         let spl = line
-            .split_once('\t')
-            .expect("unable to split taxon file on tabs");
-        let id: u32 = spl.0.parse().expect("unable to parse id");
+            .split_once('\t').with_context("Unable to split taxon file on tabs")?;
+        let id: usize = spl.0.parse().with_context(|| format!("Unable to parse {} as usize", spl.0))?;
 
-        while entries.len() <= id as usize {
-            entries.push(None);
+        while entries.len() <= id {
+            entries.push(false);
         }
 
-        entries[id as usize] = Some(true);
+        entries[id] = true;
     }
 
-    entries
+    Ok(entries)
 }

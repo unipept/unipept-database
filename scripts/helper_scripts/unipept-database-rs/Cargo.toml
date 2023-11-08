@@ -1,5 +1,5 @@
 [package]
-name = "unipept-database"
+name = "unipept_database"
 version = "0.1.0"
 edition = "2021"
 authors = ["unipept@ugent.be", "Stijn De Clercq", "Bart Mesuere", "Pieter Verschaffelt", "Tibo Vande Moortele"]
@@ -8,8 +8,10 @@ keywords = ["uniprot", "unipept", "metaproteomics"]
 readme = "README.md"
 repository = "https://github.com/unipept/unipept-database"
 homepage = "https://unipept.ugent.be/"
+license = "MIT"
 
 [dependencies]
+anyhow = "1.0.75"
 chrono = "0.4.31"
 clap = { version = "4.4.6", features = ["derive"] }
 smartstring = { version = "1.0" }

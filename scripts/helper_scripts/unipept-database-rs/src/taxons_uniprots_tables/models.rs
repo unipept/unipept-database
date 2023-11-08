@@ -1,6 +1,7 @@
 use std::fmt;
 use std::fmt::Formatter;
 use std::str::FromStr;
+use anyhow::{Context, Result};
 
 #[derive(Debug)]
 pub struct Entry {
@@ -32,25 +33,31 @@ impl Entry {
         name: String,
         version: String,
         taxon_id: String,
-    ) -> Self {
-        Entry {
+        ec_references: Vec<String>,
+        go_references: Vec<String>,
+        ip_references: Vec<String>,
+    ) -> Result<Self> {
+        let parsed_id = taxon_id.parse()
+            .with_context(|| format!("Failed to parse {} to i32", taxon_id))?;
+
+        Ok(Entry {
             min_length,
             max_length,
 
             accession_number,
             version,
-            taxon_id: taxon_id.parse().unwrap(),
+            taxon_id: parsed_id,
             type_,
             name,
             sequence,
 
-            ec_references: Vec::new(),
-            go_references: Vec::new(),
-            ip_references: Vec::new(),
-        }
+            ec_references,
+            go_references,
+            ip_references,
+        })
     }
 
-    pub fn digest(&mut self) -> Vec<String> {
+    pub fn digest(self) -> Vec<String> {
         let mut result = Vec::new();
 
         let mut start: usize = 0;
@@ -167,12 +174,12 @@ impl FromStr for Rank {
 pub struct Taxon {
     name: String,
     rank: Rank,
-    parent: u32,
+    parent: usize,
     valid: bool,
 }
 
 impl Taxon {
-    pub fn new(name: String, rank: Rank, parent: u32, valid: bool) -> Self {
+    pub fn new(name: String, rank: Rank, parent: usize, valid: bool) -> Self {
         Taxon {
             name,
             rank,

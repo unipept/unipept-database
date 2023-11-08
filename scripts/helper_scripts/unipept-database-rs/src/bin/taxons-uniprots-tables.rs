@@ -1,7 +1,7 @@
 use clap::Parser;
 use std::path::PathBuf;
-use unipept::taxons_uniprots_tables::tab_parser::TabParser;
-use unipept::taxons_uniprots_tables::table_writer::TableWriter;
+use unipept_database::taxons_uniprots_tables::tab_parser::TabParser;
+use unipept_database::taxons_uniprots_tables::table_writer::TableWriter;
 
 fn main() {
     let args = Cli::parse();

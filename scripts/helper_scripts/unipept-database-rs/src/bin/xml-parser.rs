@@ -5,7 +5,7 @@ use clap::Parser;
 use smartstring::{LazyCompact, SmartString};
 use uniprot::uniprot::{SequentialParser, ThreadedParser};
 
-use unipept::utils::files::open_sin;
+use unipept_database::utils::files::open_sin;
 
 fn main() {
     let args = Cli::parse();

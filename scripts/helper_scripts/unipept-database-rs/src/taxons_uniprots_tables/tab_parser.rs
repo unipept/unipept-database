@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Lines, Stdin};
+use anyhow::{Context, Result};
 
 use crate::taxons_uniprots_tables::models::Entry;
 use crate::utils::files::open_sin;
@@ -45,11 +46,16 @@ impl TabParser {
 impl Iterator for TabParser {
     type Item = Entry;
 
-    fn next(&mut self) -> Option<Self::Item> {
-        let line = self.lines.next()?.unwrap();
+    fn next(&mut self) -> Option<Result<Self::Item>> {
+        let line = self.lines.next()?
+            .with_context("Unable to read line from TSV file")?;
         let fields: Vec<&str> = line.trim().split('\t').collect();
 
-        let mut entry = Entry::new(
+        let ec_references: Vec<String> = fields[self.header_map["EC number"]].split(';').map(|x| x.trim().to_string()).collect();
+        let go_references: Vec<String> = fields[self.header_map["Gene ontology IDs"]].split(';').map(|x| x.trim().to_string()).collect();
+        let ip_references: Vec<String> = fields[self.header_map["Cross-reference (InterPro)"]].split(';').map(|x| x.trim().to_string()).collect();
+
+        let entry = Entry::new(
             self.min_length,
             self.max_length,
             fields[self.header_map["Status"]].trim().to_string(),
@@ -60,19 +66,10 @@ impl Iterator for TabParser {
                 .trim()
                 .to_string(),
             fields[self.header_map["Organism ID"]].trim().to_string(),
+            ec_references,
+            go_references,
+            ip_references
         );
-
-        for ec in fields[self.header_map["EC number"]].split(';') {
-            entry.ec_references.push(ec.trim().to_string());
-        }
-
-        for go in fields[self.header_map["Gene ontology IDs"]].split(';') {
-            entry.go_references.push(go.trim().to_string());
-        }
-
-        for ip in fields[self.header_map["Cross-reference (InterPro)"]].split(';') {
-            entry.ip_references.push(ip.trim().to_string());
-        }
 
         if self.verbose {
             eprintln!("INFO VERBOSE: TSV line parsed: {}", line);

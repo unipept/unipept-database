@@ -5,13 +5,13 @@ use std::path::PathBuf;
 
 use clap::Parser;
 
-use unipept::utils::files::{open_read, open_write};
+use unipept_database::utils::files::{open_read, open_write};
 
 fn main() {
     let args = Cli::parse();
 
-    let reader = open_read(&args.input_file);
-    let mut writer = open_write(&args.output_file);
+    let reader = open_read(&args.input_file)?;
+    let mut writer = open_write(&args.output_file)?;
 
     let mut current_pept: String = String::new();
 
@@ -26,7 +26,7 @@ fn main() {
     for line in reader.lines() {
         match line {
             Ok(s) => {
-                let row: Vec<String> = s.split('\t').map(String::from).collect();
+                let row: Vec<&str> = s.split('\t').collect();
                 if row[0] != current_pept {
                     if !current_pept.is_empty() && !m.is_empty() {
                         write_entry(
@@ -45,7 +45,7 @@ fn main() {
                     num_annotated_go = 0;
                     num_annotated_ec = 0;
                     num_annotated_ip = 0;
-                    current_pept = row[0].clone();
+                    current_pept = row[0].to_string();
                 }
 
                 num_prot += 1;
@@ -72,9 +72,9 @@ fn main() {
                         *m.entry(term).or_insert(0) += 1;
                     }
 
-                    num_annotated_go += if has_go { 1 } else { 0 };
-                    num_annotated_ec += if has_ec { 1 } else { 0 };
-                    num_annotated_ip += if has_ip { 1 } else { 0 };
+                    if has_go { num_annotated_go += 1 };
+                    if has_ec { num_annotated_ec += 1 };
+                    if has_ip { num_annotated_ip += 1 };
                 }
 
                 done += 1;

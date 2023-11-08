@@ -3,6 +3,7 @@ use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::path::PathBuf;
 use std::time::Instant;
+use anyhow::{Context, Result};
 
 use crate::taxons_uniprots_tables::models::Entry;
 use crate::taxons_uniprots_tables::taxon_list::parse_taxon_file_basic;
@@ -36,27 +37,27 @@ impl TableWriter {
         go_references: &PathBuf,
         ec_references: &PathBuf,
         interpro_references: &PathBuf,
-    ) -> Self {
-        TableWriter {
+    ) -> Result<Self> {
+        Ok(TableWriter {
             taxons: parse_taxon_file_basic(taxons),
             wrong_ids: HashSet::new(),
-            peptides: open_write(peptides),
-            uniprot_entries: open_write(uniprot_entries),
-            go_cross_references: open_write(go_references),
-            ec_cross_references: open_write(ec_references),
-            ip_cross_references: open_write(interpro_references),
+            peptides: open_write(peptides).with_context("Unable to instantiate TableWriter")?,
+            uniprot_entries: open_write(uniprot_entries).with_context("Unable to instantiate TableWriter")?,
+            go_cross_references: open_write(go_references).with_context("Unable to instantiate TableWriter")?,
+            ec_cross_references: open_write(ec_references).with_context("Unable to instantiate TableWriter")?,
+            ip_cross_references: open_write(interpro_references).with_context("Unable to instantiate TableWriter")?,
 
             peptide_count: 0,
             uniprot_count: 0,
             go_count: 0,
             ec_count: 0,
             ip_count: 0,
-        }
+        })
     }
 
     // Store a complete entry in the database
     pub fn store(&mut self, mut entry: Entry) {
-        let id = self.add_uniprot_entry(&entry);
+        let id = self.write_uniprot_entry(&entry);
 
         // Failed to add entry
         if id == -1 {
@@ -64,18 +65,17 @@ impl TableWriter {
         }
 
         for r in &entry.go_references {
-            self.add_go_ref(r.clone(), id);
+            self.write_go_ref(r, id);
         }
 
         for r in &entry.ec_references {
-            self.add_ec_ref(r.clone(), id);
+            self.write_ec_ref(r, id);
         }
 
         for r in &entry.ip_references {
-            self.add_ip_ref(r.clone(), id);
+            self.write_ip_ref(r, id);
         }
 
-        let digest = entry.digest();
         let go_ids = entry.go_references.into_iter();
         let ec_ids = entry
             .ec_references
@@ -94,17 +94,17 @@ impl TableWriter {
             .collect::<Vec<String>>()
             .join(";");
 
-        for sequence in digest {
-            self.add_peptide(sequence.replace('I', "L"), id, sequence, summary.clone());
+        for sequence in entry.digest() {
+            self.write_peptide(sequence.replace('I', "L"), id, sequence, &summary);
         }
     }
 
-    fn add_peptide(
+    fn write_peptide(
         &mut self,
         sequence: String,
         id: i64,
         original_sequence: String,
-        annotations: String,
+        annotations: &String,
     ) {
         self.peptide_count += 1;
 
@@ -118,14 +118,14 @@ impl TableWriter {
     }
 
     // Store the entry info and return the generated id
-    fn add_uniprot_entry(&mut self, entry: &Entry) -> i64 {
+    fn write_uniprot_entry(&mut self, entry: &Entry) -> i64 {
         if 0 <= entry.taxon_id
             && entry.taxon_id < self.taxons.len() as i32
             && self.taxons.get(entry.taxon_id as usize).is_some()
         {
             self.uniprot_count += 1;
 
-            let accession_number = entry.accession_number.clone();
+            let accession_number = &entry.accession_number;
             let version = entry.version.clone();
             let taxon_id = entry.taxon_id;
             let type_ = entry.type_.clone();
@@ -154,7 +154,7 @@ impl TableWriter {
         -1
     }
 
-    fn add_go_ref(&mut self, ref_id: String, uniprot_entry_id: i64) {
+    fn write_go_ref(&mut self, ref_id: &String, uniprot_entry_id: i64) {
         self.go_count += 1;
 
         if let Err(e) = writeln!(
@@ -170,7 +170,7 @@ impl TableWriter {
         }
     }
 
-    fn add_ec_ref(&mut self, ref_id: String, uniprot_entry_id: i64) {
+    fn write_ec_ref(&mut self, ref_id: &String, uniprot_entry_id: i64) {
         self.ec_count += 1;
 
         if let Err(e) = writeln!(
@@ -186,7 +186,7 @@ impl TableWriter {
         }
     }
 
-    fn add_ip_ref(&mut self, ref_id: String, uniprot_entry_id: i64) {
+    fn write_ip_ref(&mut self, ref_id: &String, uniprot_entry_id: i64) {
         self.ip_count += 1;
 
         if let Err(e) = writeln!(
