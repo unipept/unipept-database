@@ -84,11 +84,8 @@ fn parse_name(entry: &uniprot::uniprot::Entry) -> SmartStr {
     // Check the last "recommended" name from a protein's components,
     // otherwise store the last "submitted" name of these components for later
     for component in entry.protein.components.iter().rev() {
-        match &component.recommended {
-            Some(n) => {
-                return n.full.clone();
-            }
-            None => {}
+        if let Some(n) = &component.recommended {
+            return n.full.clone();
         }
 
         if submitted_name.is_empty() {
@@ -100,11 +97,8 @@ fn parse_name(entry: &uniprot::uniprot::Entry) -> SmartStr {
 
     // Do the same thing for the domains
     for domain in entry.protein.domains.iter().rev() {
-        match &domain.recommended {
-            Some(n) => {
-                return n.full.clone();
-            }
-            None => {}
+        if let Some(n) = &domain.recommended {
+            return n.full.clone();
         }
 
         if submitted_name.is_empty() {
@@ -117,17 +111,16 @@ fn parse_name(entry: &uniprot::uniprot::Entry) -> SmartStr {
     // First check the protein's own recommended name,
     // otherwise return the submitted name from above if there was one,
     // otherwise the last submitted name from the protein itself
-    match &entry.protein.name.recommended {
-        Some(n) => n.full.clone(),
-        None => {
-            if !submitted_name.is_empty() {
-                submitted_name
-            } else if let Some(n) = entry.protein.name.submitted.last() {
-                n.full.clone()
-            } else {
-                eprintln!("Could not find a name for entry {}", entry.accessions[0]);
-                SmartStr::new()
-            }
+    if let Some(n) = &entry.protein.name.recommended {
+        n.full.clone()
+    } else {
+        if !submitted_name.is_empty() {
+            submitted_name
+        } else if let Some(n) = entry.protein.name.submitted.last() {
+            n.full.clone()
+        } else {
+            eprintln!("Could not find a name for entry {}", entry.accessions[0]);
+            SmartStr::new()
         }
     }
 }

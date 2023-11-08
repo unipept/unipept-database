@@ -7,8 +7,8 @@ pub struct Entry {
     pub min_length: u32,
     pub max_length: u32,
 
-    // These three are actually ints, but sthey are never used as ints,
-    // so there is no use converting/parsing them as such
+    // The "version" and "accession_number" fields are actually integers, but they are never used as such,
+    // so there is no use converting/parsing them
     pub accession_number: String,
     pub version: String,
     pub taxon_id: i32,
@@ -57,7 +57,7 @@ impl Entry {
     }
 }
 
-pub fn calculate_entry_digest(sequence: String, min_length: usize, max_length: usize) -> Vec<String> {
+pub fn calculate_entry_digest(sequence: &String, min_length: usize, max_length: usize) -> Vec<&[u8]> {
     let mut result = Vec::new();
 
     let mut start: usize = 0;
@@ -66,10 +66,8 @@ pub fn calculate_entry_digest(sequence: String, min_length: usize, max_length: u
 
     for (i, c) in content.iter().enumerate() {
         if (*c == b'K' || *c == b'R') && (i + 1 < length && content[i + 1] != b'P') {
-            if i + 1 - start >= min_length as usize
-                && i + 1 - start <= max_length as usize
-            {
-                result.push(String::from_utf8_lossy(&content[start..i + 1]).to_string());
+            if i + 1 - start >= min_length && i + 1 - start <= max_length {
+                result.push(&content[start..i + 1]);
             }
 
             start = i + 1;
@@ -77,9 +75,8 @@ pub fn calculate_entry_digest(sequence: String, min_length: usize, max_length: u
     }
 
     // Add last one
-    if length - start >= min_length && length - start <= max_length
-    {
-        result.push(String::from_utf8_lossy(&content[start..length]).to_string())
+    if length - start >= min_length && length - start <= max_length {
+        result.push(&content[start..length]);
     }
 
     result

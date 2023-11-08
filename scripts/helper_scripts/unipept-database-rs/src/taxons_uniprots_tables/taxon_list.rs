@@ -67,7 +67,7 @@ pub fn parse_taxon_file_basic(pb: &PathBuf) -> Result<BitVec> {
         let id: usize = spl.0.parse().with_context(|| format!("Unable to parse {} as usize", spl.0))?;
 
         if entries.len() <= id {
-            entries.grow(id - entries.len(), false)
+            entries.grow(id - entries.len() + 1, false)
         }
 
         entries.set(id, true);

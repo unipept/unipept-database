@@ -95,23 +95,26 @@ impl TableWriter {
             .collect::<Vec<String>>()
             .join(";");
 
-        for sequence in calculate_entry_digest(entry.sequence, entry.min_length as usize, entry.max_length as usize) {
-            self.write_peptide(sequence.replace('I', "L"), id, sequence, &summary);
+        for sequence in calculate_entry_digest(&entry.sequence, entry.min_length as usize, entry.max_length as usize) {
+            self.write_peptide(
+                sequence.iter().map(|&x| if x == b'I' { b'L' } else { x }).collect(),
+                id, sequence, &summary
+            );
         }
     }
 
     fn write_peptide(
         &mut self,
-        sequence: String,
+        sequence: Vec<u8>,
         id: i64,
-        original_sequence: String,
+        original_sequence: &[u8],
         annotations: &String,
     ) {
         self.peptide_count += 1;
 
         if let Err(e) = writeln!(
             &mut self.peptides,
-            "{}\t{}\t{}\t{}\t{}",
+            "{}\t{:?}\t{:?}\t{}\t{}",
             self.peptide_count, sequence, original_sequence, id, annotations
         ) {
             eprintln!("{}\tError writing to TSV.\n{:?}", now_str(), e);
