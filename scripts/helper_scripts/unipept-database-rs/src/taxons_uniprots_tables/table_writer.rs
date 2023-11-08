@@ -57,12 +57,12 @@ impl TableWriter {
     }
 
     // Store a complete entry in the database
-    pub fn store(&mut self, entry: Entry) {
-        let id = self.write_uniprot_entry(&entry);
+    pub fn store(&mut self, entry: Entry) -> Result<()> {
+        let id = self.write_uniprot_entry(&entry).context("Failed to write Uniprot entry")?;
 
         // Failed to add entry
         if id == -1 {
-            return;
+            return Ok(());
         }
 
         for r in &entry.go_references {
@@ -99,8 +99,10 @@ impl TableWriter {
             self.write_peptide(
                 sequence.iter().map(|&x| if x == b'I' { b'L' } else { x }).collect(),
                 id, sequence, &summary
-            );
+            ).context("Failed to write peptide")?;
         }
+
+        Ok(())
     }
 
     fn write_peptide(
@@ -109,7 +111,7 @@ impl TableWriter {
         id: i64,
         original_sequence: &[u8],
         annotations: &String,
-    ) {
+    ) -> Result<()> {
         self.peptide_count += 1;
 
         if let Err(e) = writeln!(
@@ -117,12 +119,14 @@ impl TableWriter {
             "{}\t{:?}\t{:?}\t{}\t{}",
             self.peptide_count, sequence, original_sequence, id, annotations
         ) {
-            eprintln!("{}\tError writing to TSV.\n{:?}", now_str(), e);
+            eprintln!("{}\tError writing to TSV.\n{:?}", now_str()?, e);
         }
+
+        Ok(())
     }
 
     // Store the entry info and return the generated id
-    fn write_uniprot_entry(&mut self, entry: &Entry) -> i64 {
+    fn write_uniprot_entry(&mut self, entry: &Entry) -> Result<i64> {
         if 0 <= entry.taxon_id
             && entry.taxon_id < self.taxons.len() as i32
             && self.taxons[entry.taxon_id as usize]  // This indexing is safe due to the line above
@@ -141,21 +145,21 @@ impl TableWriter {
                 "{}\t{}\t{}\t{}\t{}\t{}\t{}",
                 self.uniprot_count, accession_number, version, taxon_id, type_, name, sequence
             ) {
-                eprintln!("{}\tError writing to TSV.\n{:?}", now_str(), e);
+                eprintln!("{}\tError writing to TSV.\n{:?}", now_str()?, e);
             } else {
-                return self.uniprot_count;
+                return Ok(self.uniprot_count);
             }
         } else if !self.wrong_ids.contains(&entry.taxon_id) {
             self.wrong_ids.insert(entry.taxon_id);
             eprintln!(
                 "[{}]\t{} added to the list of {} invalid taxonIds.",
-                now_str(),
+                now_str()?,
                 entry.taxon_id,
                 self.wrong_ids.len()
             );
         }
 
-        -1
+        Ok(-1)
     }
 
     fn write_go_ref(&mut self, ref_id: &String, uniprot_entry_id: i64) {

@@ -19,7 +19,7 @@ fn main() -> Result<()> {
     let parser = TabParser::new(args.peptide_min, args.peptide_max, args.verbose).context("Unable to instantiate TabParser")?;
 
     for entry in parser {
-        writer.store(entry.context("Error getting entry from TabParser")?);
+        writer.store(entry.context("Error getting entry from TabParser")?).context("Error storing entry")?;
     }
 
     Ok(())

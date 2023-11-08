@@ -1,15 +1,15 @@
 use chrono::{DateTime, Utc};
 use std::time::{SystemTime, UNIX_EPOCH};
+use anyhow::{Context, Result};
 
-pub fn now() -> u128 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_millis()
+pub fn now() -> Result<u128> {
+    Ok(SystemTime::now()
+        .duration_since(UNIX_EPOCH).context("Unable to get system time")?
+        .as_millis())
 }
 
-pub fn now_str() -> String {
-    let n = now();
+pub fn now_str() -> Result<String> {
+    let n = now().context("Unable to get current time")?;
     let dt: DateTime<Utc> = SystemTime::now().into();
-    format!("{} ({})", n, dt.format("%+"))
+    Ok(format!("{} ({})", n, dt.format("%+")))
 }
