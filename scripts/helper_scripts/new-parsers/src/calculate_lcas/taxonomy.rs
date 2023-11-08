@@ -54,7 +54,7 @@ impl Taxonomy {
         let mut taxa: Vec<i32> = Vec::new();
 
         for (i, line) in reader.lines().enumerate() {
-            if i % 10000000 == 0 {
+            if i % 10000000 == 0 && i != 0 {
                 eprintln!("{}: {}", now_str(), i);
             }
 
@@ -78,7 +78,7 @@ impl Taxonomy {
         self.handle_lca(&current_sequence, self.calculate_lca(&taxa));
     }
 
-    fn calculate_lca(&self, taxa: &Vec<i32>) -> i32 {
+    fn calculate_lca(&self, taxa: &[i32]) -> i32 {
         let mut lca = 1;
 
         let lineages: Vec<&Vec<i32>> = taxa.iter().map(|x| &self.taxonomy[*x as usize]).filter(|x| !x.is_empty()).collect();
@@ -98,11 +98,9 @@ impl Taxonomy {
             for item in iterator {
                 if value == -1 {
                     value = item;
-                } else {
-                    if item != value {
+                } else if item != value {
                         all_match = false;
                         break;
-                    }
                 }
             }
 
