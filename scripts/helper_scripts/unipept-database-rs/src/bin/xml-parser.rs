@@ -135,9 +135,9 @@ fn write_entry(entry: &uniprot::uniprot::Entry, verbose: bool) {
 
     let version: SmartStr = SmartStr::from(entry.version.to_string());
 
-    let mut ec_references: Vec<SmartStr> = Vec::new();
-    let mut go_references: Vec<SmartStr> = Vec::new();
-    let mut ip_references: Vec<SmartStr> = Vec::new();
+    let mut ec_references: Vec<&str> = Vec::new();
+    let mut go_references: Vec<&str> = Vec::new();
+    let mut ip_references: Vec<&str> = Vec::new();
     let mut taxon_id: SmartStr = SmartStr::new();
 
     // Find the taxon id in the organism
@@ -149,7 +149,7 @@ fn write_entry(entry: &uniprot::uniprot::Entry, verbose: bool) {
 
     // Find the EC, GO and InterPro references in the entry itself
     for reference in &entry.db_references {
-        let vector: Option<&mut Vec<SmartStr>> = match reference.ty.as_str() {
+        let vector: Option<&mut Vec<&str>> = match reference.ty.as_str() {
             "EC" => Some(&mut ec_references),
             "GO" => Some(&mut go_references),
             "InterPro" => Some(&mut ip_references),
@@ -157,7 +157,7 @@ fn write_entry(entry: &uniprot::uniprot::Entry, verbose: bool) {
         };
 
         if let Some(v) = vector {
-            v.push(reference.id.clone());
+            v.push(&reference.id);
         }
     }
 
