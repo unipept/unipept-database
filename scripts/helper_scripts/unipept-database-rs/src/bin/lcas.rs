@@ -1,7 +1,8 @@
 use std::path::PathBuf;
 use clap::Parser;
-use unipept::calculate_lcas::taxonomy::Taxonomy;
-use unipept::taxons_uniprots_tables::utils::now_str;
+use unipept_database::calculate_lcas::taxonomy::Taxonomy;
+use unipept_database::taxons_uniprots_tables::utils::now_str;
+use anyhow::{Context, Result};
 
 #[derive(Parser)]
 struct Cli {
@@ -9,12 +10,12 @@ struct Cli {
     infile: PathBuf
 }
 
-fn main() {
+fn main() -> Result<()> {
     let args = Cli::parse();
 
-    eprintln!("{}: reading taxonomy", now_str());
-    let tax = Taxonomy::build(&args.infile);
+    eprintln!("{}: reading taxonomy", now_str()?);
+    let tax = Taxonomy::build(&args.infile).context("Unable to build taxonomy")?;
 
-    eprintln!("{}: reading sequences", now_str());
-    tax.calculate_lcas();
+    eprintln!("{}: reading sequences", now_str()?);
+    Ok(tax.calculate_lcas()?)
 }
