@@ -13,10 +13,10 @@ pub struct TaxonList {
 impl TaxonList {
     pub fn from_file(pb: &PathBuf) -> Result<Self> {
         let mut entries = Vec::new();
-        let reader = open_read(pb);
+        let reader = open_read(pb).context("Unable to open input file")?;
 
         for line in reader.lines() {
-            let line = line.unwrap();
+            let line = line.with_context(|| format!("Error reading line from input file {}", pb.display().to_string()))?;
             let spl: Vec<&str> = line.split('\t').collect();
             let id: usize = spl[0].parse().with_context(|| format!("Unable to parse {} as usize", spl[0]))?;
             let parent: usize = spl[3].parse().with_context(|| format!("Unable to parse {} as usize", spl[3]))?;
@@ -57,12 +57,12 @@ impl TaxonList {
 /// TODO a form of bitvector would be even more efficient
 pub fn parse_taxon_file_basic(pb: &PathBuf) -> Result<Vec<bool>> {
     let mut entries = Vec::new();
-    let reader = open_read(pb);
+    let reader = open_read(pb).context("Unable to open input file")?;
 
     for line in reader.lines() {
         let line = line.unwrap();
         let spl = line
-            .split_once('\t').with_context("Unable to split taxon file on tabs")?;
+            .split_once('\t').context("Unable to split taxon file on tabs")?;
         let id: usize = spl.0.parse().with_context(|| format!("Unable to parse {} as usize", spl.0))?;
 
         while entries.len() <= id {

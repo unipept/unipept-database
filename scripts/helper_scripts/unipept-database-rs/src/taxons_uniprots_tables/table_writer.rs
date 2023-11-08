@@ -14,7 +14,7 @@ use crate::utils::files::open_write;
 ///       we attempted a parallel version that wrote to all files at the same time,
 ///       but this didn't achieve any speed increase, so we decided not to go forward with it
 pub struct TableWriter {
-    taxons: Vec<Option<bool>>,
+    taxons: Vec<bool>,
     wrong_ids: HashSet<i32>,
     peptides: BufWriter<File>,
     uniprot_entries: BufWriter<File>,
@@ -39,13 +39,13 @@ impl TableWriter {
         interpro_references: &PathBuf,
     ) -> Result<Self> {
         Ok(TableWriter {
-            taxons: parse_taxon_file_basic(taxons),
+            taxons: parse_taxon_file_basic(taxons).context("Unable to parse taxonomy file")?,
             wrong_ids: HashSet::new(),
-            peptides: open_write(peptides).with_context("Unable to instantiate TableWriter")?,
-            uniprot_entries: open_write(uniprot_entries).with_context("Unable to instantiate TableWriter")?,
-            go_cross_references: open_write(go_references).with_context("Unable to instantiate TableWriter")?,
-            ec_cross_references: open_write(ec_references).with_context("Unable to instantiate TableWriter")?,
-            ip_cross_references: open_write(interpro_references).with_context("Unable to instantiate TableWriter")?,
+            peptides: open_write(peptides).context("Unable to open output file")?,
+            uniprot_entries: open_write(uniprot_entries).context("Unable to open output file")?,
+            go_cross_references: open_write(go_references).context("Unable to open output file")?,
+            ec_cross_references: open_write(ec_references).context("Unable to open output file")?,
+            ip_cross_references: open_write(interpro_references).context("Unable to open output file")?,
 
             peptide_count: 0,
             uniprot_count: 0,
@@ -56,7 +56,7 @@ impl TableWriter {
     }
 
     // Store a complete entry in the database
-    pub fn store(&mut self, mut entry: Entry) {
+    pub fn store(&mut self, entry: Entry) {
         let id = self.write_uniprot_entry(&entry);
 
         // Failed to add entry
@@ -121,7 +121,7 @@ impl TableWriter {
     fn write_uniprot_entry(&mut self, entry: &Entry) -> i64 {
         if 0 <= entry.taxon_id
             && entry.taxon_id < self.taxons.len() as i32
-            && self.taxons.get(entry.taxon_id as usize).is_some()
+            && self.taxons[entry.taxon_id as usize]  // This indexing is safe due to the line above
         {
             self.uniprot_count += 1;
 

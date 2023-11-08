@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Lines, Stdin};
-use anyhow::{Context, Result};
+use anyhow::{Context, Error, Result};
 
 use crate::taxons_uniprots_tables::models::Entry;
 use crate::utils::files::open_sin;
@@ -44,11 +44,17 @@ impl TabParser {
 }
 
 impl Iterator for TabParser {
-    type Item = Entry;
+    type Item = Result<Entry, Error>;
 
-    fn next(&mut self) -> Option<Result<Self::Item>> {
+    fn next(&mut self) -> Option<Self::Item> {
         let line = self.lines.next()?
-            .with_context("Unable to read line from TSV file")?;
+            .context("Unable to read line from TSV file");
+
+        let line = match line {
+            Ok(s) => s,
+            Err(e) => { return Some(Result::Err(e)); }
+        };
+
         let fields: Vec<&str> = line.trim().split('\t').collect();
 
         let ec_references: Vec<String> = fields[self.header_map["EC number"]].split(';').map(|x| x.trim().to_string()).collect();

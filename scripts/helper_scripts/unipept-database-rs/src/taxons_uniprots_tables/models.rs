@@ -1,7 +1,6 @@
-use std::fmt;
-use std::fmt::Formatter;
 use std::str::FromStr;
-use anyhow::{Context, Result};
+
+use anyhow::{Context, Error, Result};
 
 #[derive(Debug)]
 pub struct Entry {
@@ -86,17 +85,6 @@ impl Entry {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct RankParseError {
-    input: String,
-}
-
-impl fmt::Display for RankParseError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "unable to parse {} as Rank", self.input)
-    }
-}
-
 #[derive(Debug)]
 pub enum Rank {
     NoRank,
@@ -130,7 +118,7 @@ pub enum Rank {
 }
 
 impl FromStr for Rank {
-    type Err = RankParseError;
+    type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_uppercase().replace(' ', "_").as_str() {
@@ -162,9 +150,7 @@ impl FromStr for Rank {
             "SUPERPHYLUM" => Ok(Self::SuperPhylum),
             "TRIBE" => Ok(Self::Tribe),
             "VARIETAS" => Ok(Self::Varietas),
-            _ => Err(RankParseError {
-                input: s.to_string(),
-            }),
+            _ => Err(Error::msg(format!("Value {} does not match any known ranks", s))),
         }
     }
 }
