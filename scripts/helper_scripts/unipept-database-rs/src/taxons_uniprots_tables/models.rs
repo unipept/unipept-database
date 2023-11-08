@@ -36,7 +36,8 @@ impl Entry {
         go_references: Vec<String>,
         ip_references: Vec<String>,
     ) -> Result<Self> {
-        let parsed_id = taxon_id.parse()
+        let parsed_id = taxon_id
+            .parse()
             .with_context(|| format!("Failed to parse {} to i32", taxon_id))?;
 
         Ok(Entry {
@@ -57,7 +58,11 @@ impl Entry {
     }
 }
 
-pub fn calculate_entry_digest(sequence: &String, min_length: usize, max_length: usize) -> Vec<&[u8]> {
+pub fn calculate_entry_digest(
+    sequence: &String,
+    min_length: usize,
+    max_length: usize,
+) -> Vec<&[u8]> {
     let mut result = Vec::new();
 
     let mut start: usize = 0;
@@ -147,7 +152,10 @@ impl FromStr for Rank {
             "SUPERPHYLUM" => Ok(Self::SuperPhylum),
             "TRIBE" => Ok(Self::Tribe),
             "VARIETAS" => Ok(Self::Varietas),
-            _ => Err(Error::msg(format!("Value {} does not match any known ranks", s))),
+            _ => Err(Error::msg(format!(
+                "Value {} does not match any known ranks",
+                s
+            ))),
         }
     }
 }

@@ -1,12 +1,12 @@
+use anyhow::{Context, Result};
+use bit_vec::BitVec;
 use std::collections::HashSet;
 use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::path::PathBuf;
 use std::time::Instant;
-use anyhow::{Context, Result};
-use bit_vec::BitVec;
 
-use crate::taxons_uniprots_tables::models::{Entry, calculate_entry_digest};
+use crate::taxons_uniprots_tables::models::{calculate_entry_digest, Entry};
 use crate::taxons_uniprots_tables::taxon_list::parse_taxon_file_basic;
 use crate::taxons_uniprots_tables::utils::now_str;
 use crate::utils::files::open_write;
@@ -46,7 +46,8 @@ impl TableWriter {
             uniprot_entries: open_write(uniprot_entries).context("Unable to open output file")?,
             go_cross_references: open_write(go_references).context("Unable to open output file")?,
             ec_cross_references: open_write(ec_references).context("Unable to open output file")?,
-            ip_cross_references: open_write(interpro_references).context("Unable to open output file")?,
+            ip_cross_references: open_write(interpro_references)
+                .context("Unable to open output file")?,
 
             peptide_count: 0,
             uniprot_count: 0,
@@ -58,7 +59,9 @@ impl TableWriter {
 
     // Store a complete entry in the database
     pub fn store(&mut self, entry: Entry) -> Result<()> {
-        let id = self.write_uniprot_entry(&entry).context("Failed to write Uniprot entry")?;
+        let id = self
+            .write_uniprot_entry(&entry)
+            .context("Failed to write Uniprot entry")?;
 
         // Failed to add entry
         if id == -1 {
@@ -95,11 +98,21 @@ impl TableWriter {
             .collect::<Vec<String>>()
             .join(";");
 
-        for sequence in calculate_entry_digest(&entry.sequence, entry.min_length as usize, entry.max_length as usize) {
+        for sequence in calculate_entry_digest(
+            &entry.sequence,
+            entry.min_length as usize,
+            entry.max_length as usize,
+        ) {
             self.write_peptide(
-                sequence.iter().map(|&x| if x == b'I' { b'L' } else { x }).collect(),
-                id, sequence, &summary
-            ).context("Failed to write peptide")?;
+                sequence
+                    .iter()
+                    .map(|&x| if x == b'I' { b'L' } else { x })
+                    .collect(),
+                id,
+                sequence,
+                &summary,
+            )
+            .context("Failed to write peptide")?;
         }
 
         Ok(())
@@ -129,7 +142,8 @@ impl TableWriter {
     fn write_uniprot_entry(&mut self, entry: &Entry) -> Result<i64> {
         if 0 <= entry.taxon_id
             && entry.taxon_id < self.taxons.len() as i32
-            && self.taxons[entry.taxon_id as usize]  // This indexing is safe due to the line above
+            && self.taxons[entry.taxon_id as usize]
+        // This indexing is safe due to the line above
         {
             self.uniprot_count += 1;
 

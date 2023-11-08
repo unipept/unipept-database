@@ -1,9 +1,9 @@
 use crate::taxons_uniprots_tables::models::{Rank, Taxon};
+use anyhow::{Context, Result};
+use bit_vec::BitVec;
 use std::io::BufRead;
 use std::path::PathBuf;
 use std::str::FromStr;
-use anyhow::{Context, Result};
-use bit_vec::BitVec;
 
 use crate::utils::files::open_read;
 
@@ -17,15 +17,21 @@ impl TaxonList {
         let reader = open_read(pb).context("Unable to open input file")?;
 
         for line in reader.lines() {
-            let line = line.with_context(|| format!("Error reading line from input file {}", pb.display()))?;
+            let line = line
+                .with_context(|| format!("Error reading line from input file {}", pb.display()))?;
             let spl: Vec<&str> = line.split('\t').collect();
-            let id: usize = spl[0].parse().with_context(|| format!("Unable to parse {} as usize", spl[0]))?;
-            let parent: usize = spl[3].parse().with_context(|| format!("Unable to parse {} as usize", spl[3]))?;
+            let id: usize = spl[0]
+                .parse()
+                .with_context(|| format!("Unable to parse {} as usize", spl[0]))?;
+            let parent: usize = spl[3]
+                .parse()
+                .with_context(|| format!("Unable to parse {} as usize", spl[3]))?;
             let valid = spl[4].trim() == "true";
 
             let taxon = Taxon::new(
                 spl[1].to_string(),
-                Rank::from_str(spl[2]).with_context(|| format!("Unable to parse {} into Rank", spl[2]))?,
+                Rank::from_str(spl[2])
+                    .with_context(|| format!("Unable to parse {} into Rank", spl[2]))?,
                 parent,
                 valid,
             );
@@ -62,8 +68,12 @@ pub fn parse_taxon_file_basic(pb: &PathBuf) -> Result<BitVec> {
     for line in reader.lines() {
         let line = line.context("Error reading line from taxon file")?;
         let spl = line
-            .split_once('\t').context("Unable to split taxon file on tabs")?;
-        let id: usize = spl.0.parse().with_context(|| format!("Unable to parse {} as usize", spl.0))?;
+            .split_once('\t')
+            .context("Unable to split taxon file on tabs")?;
+        let id: usize = spl
+            .0
+            .parse()
+            .with_context(|| format!("Unable to parse {} as usize", spl.0))?;
 
         if entries.len() <= id {
             entries.grow(id - entries.len() + 1, false)

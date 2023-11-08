@@ -1,10 +1,11 @@
+use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use std::time::{SystemTime, UNIX_EPOCH};
-use anyhow::{Context, Result};
 
 pub fn now() -> Result<u128> {
     Ok(SystemTime::now()
-        .duration_since(UNIX_EPOCH).context("Unable to get system time")?
+        .duration_since(UNIX_EPOCH)
+        .context("Unable to get system time")?
         .as_millis())
 }
 

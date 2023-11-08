@@ -1,8 +1,8 @@
+use anyhow::{Context, Result};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufRead, BufWriter, Write};
 use std::path::PathBuf;
-use anyhow::{Context, Result};
 
 use clap::Parser;
 
@@ -72,9 +72,15 @@ fn main() -> Result<()> {
                 *m.entry(term).or_insert(0) += 1;
             }
 
-            if has_go { num_annotated_go += 1 };
-            if has_ec { num_annotated_ec += 1 };
-            if has_ip { num_annotated_ip += 1 };
+            if has_go {
+                num_annotated_go += 1
+            };
+            if has_ec {
+                num_annotated_ec += 1
+            };
+            if has_ip {
+                num_annotated_ip += 1
+            };
         }
 
         done += 1;

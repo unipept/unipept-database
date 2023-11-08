@@ -1,6 +1,6 @@
+use anyhow::{Context, Error, Result};
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Lines, Stdin};
-use anyhow::{Context, Error, Result};
 
 use crate::taxons_uniprots_tables::models::Entry;
 use crate::utils::files::open_sin;
@@ -22,7 +22,7 @@ impl TabParser {
         let mut lines = reader.lines();
 
         let line = match lines.next() {
-            None => { return Err(Error::msg("Missing header line")) },
+            None => return Err(Error::msg("Missing header line")),
             Some(s) => s.context("Unable to read header line")?,
         };
 
@@ -44,19 +44,32 @@ impl Iterator for TabParser {
     type Item = Result<Entry, Error>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let line = self.lines.next()?
+        let line = self
+            .lines
+            .next()?
             .context("Unable to read line from TSV file");
 
         let line = match line {
             Ok(s) => s,
-            Err(e) => { return Some(Err(e)); }
+            Err(e) => {
+                return Some(Err(e));
+            }
         };
 
         let fields: Vec<&str> = line.trim().split('\t').collect();
 
-        let ec_references: Vec<String> = fields[self.header_map["EC number"]].split(';').map(|x| x.trim().to_string()).collect();
-        let go_references: Vec<String> = fields[self.header_map["Gene ontology IDs"]].split(';').map(|x| x.trim().to_string()).collect();
-        let ip_references: Vec<String> = fields[self.header_map["Cross-reference (InterPro)"]].split(';').map(|x| x.trim().to_string()).collect();
+        let ec_references: Vec<String> = fields[self.header_map["EC number"]]
+            .split(';')
+            .map(|x| x.trim().to_string())
+            .collect();
+        let go_references: Vec<String> = fields[self.header_map["Gene ontology IDs"]]
+            .split(';')
+            .map(|x| x.trim().to_string())
+            .collect();
+        let ip_references: Vec<String> = fields[self.header_map["Cross-reference (InterPro)"]]
+            .split(';')
+            .map(|x| x.trim().to_string())
+            .collect();
 
         let entry = Entry::new(
             self.min_length,
@@ -71,7 +84,7 @@ impl Iterator for TabParser {
             fields[self.header_map["Organism ID"]].trim().to_string(),
             ec_references,
             go_references,
-            ip_references
+            ip_references,
         );
 
         if self.verbose {
