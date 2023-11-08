@@ -14,7 +14,7 @@ pub struct TabParser {
 }
 
 impl TabParser {
-    pub fn new(peptide_min: u32, peptide_max: u32, verbose: bool) -> Self {
+    pub fn new(peptide_min: u32, peptide_max: u32, verbose: bool) -> Result<Self> {
         // First read the header line
         let reader = open_sin();
         let mut map = HashMap::new();
@@ -22,24 +22,21 @@ impl TabParser {
         let mut lines = reader.lines();
 
         let line = match lines.next() {
-            None => {
-                eprintln!("unable to read header line");
-                std::process::exit(1)
-            }
-            Some(s) => s.expect("unable to read header line"),
+            None => { return Err(Error::msg("Missing header line")) },
+            Some(s) => s.context("Unable to read header line")?,
         };
 
         for (i, l) in line.split('\t').enumerate() {
             map.insert(l.trim().to_string(), i);
         }
 
-        TabParser {
+        Ok(TabParser {
             lines,
             header_map: map,
             min_length: peptide_min,
             max_length: peptide_max,
             verbose,
-        }
+        })
     }
 }
 
@@ -52,7 +49,7 @@ impl Iterator for TabParser {
 
         let line = match line {
             Ok(s) => s,
-            Err(e) => { return Some(Result::Err(e)); }
+            Err(e) => { return Some(Err(e)); }
         };
 
         let fields: Vec<&str> = line.trim().split('\t').collect();

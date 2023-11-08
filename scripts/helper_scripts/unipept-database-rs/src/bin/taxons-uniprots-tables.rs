@@ -1,5 +1,6 @@
 use clap::Parser;
 use std::path::PathBuf;
+use anyhow::Context;
 use unipept_database::taxons_uniprots_tables::tab_parser::TabParser;
 use unipept_database::taxons_uniprots_tables::table_writer::TableWriter;
 
@@ -12,12 +13,12 @@ fn main() {
         &args.go,
         &args.ec,
         &args.interpro,
-    );
+    ).context("Unable to instantiate TableWriter")?;
 
-    let parser = TabParser::new(args.peptide_min, args.peptide_max, args.verbose);
+    let parser = TabParser::new(args.peptide_min, args.peptide_max, args.verbose).context("Unable to instantiate TabParser")?;
 
     for entry in parser {
-        writer.store(entry);
+        writer.store(entry.context("Error getting entry from TabParser")?);
     }
 }
 

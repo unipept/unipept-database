@@ -4,6 +4,7 @@ use std::io::{BufWriter, Write};
 use std::path::PathBuf;
 use std::time::Instant;
 use anyhow::{Context, Result};
+use bit_vec::BitVec;
 
 use crate::taxons_uniprots_tables::models::Entry;
 use crate::taxons_uniprots_tables::taxon_list::parse_taxon_file_basic;
@@ -14,7 +15,7 @@ use crate::utils::files::open_write;
 ///       we attempted a parallel version that wrote to all files at the same time,
 ///       but this didn't achieve any speed increase, so we decided not to go forward with it
 pub struct TableWriter {
-    taxons: Vec<bool>,
+    taxons: BitVec,
     wrong_ids: HashSet<i32>,
     peptides: BufWriter<File>,
     uniprot_entries: BufWriter<File>,
@@ -113,7 +114,7 @@ impl TableWriter {
             "{}\t{}\t{}\t{}\t{}",
             self.peptide_count, sequence, original_sequence, id, annotations
         ) {
-            eprintln!("{}\tError writing to CSV.\n{:?}", now_str(), e);
+            eprintln!("{}\tError writing to TSV.\n{:?}", now_str(), e);
         }
     }
 
@@ -137,7 +138,7 @@ impl TableWriter {
                 "{}\t{}\t{}\t{}\t{}\t{}\t{}",
                 self.uniprot_count, accession_number, version, taxon_id, type_, name, sequence
             ) {
-                eprintln!("{}\tError writing to CSV.\n{:?}", now_str(), e);
+                eprintln!("{}\tError writing to TSV.\n{:?}", now_str(), e);
             } else {
                 return self.uniprot_count;
             }

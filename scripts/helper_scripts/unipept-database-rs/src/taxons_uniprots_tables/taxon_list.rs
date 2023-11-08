@@ -3,6 +3,7 @@ use std::io::BufRead;
 use std::path::PathBuf;
 use std::str::FromStr;
 use anyhow::{Context, Result};
+use bit_vec::BitVec;
 
 use crate::utils::files::open_read;
 
@@ -55,8 +56,8 @@ impl TaxonList {
 /// Parse a taxons TSV-file into a vector that can be accessed by id
 /// The actual content of these Taxons is never used, so we don't try to parse a struct
 /// TODO a form of bitvector would be even more efficient
-pub fn parse_taxon_file_basic(pb: &PathBuf) -> Result<Vec<bool>> {
-    let mut entries = Vec::new();
+pub fn parse_taxon_file_basic(pb: &PathBuf) -> Result<BitVec> {
+    let mut entries = BitVec::new();
     let reader = open_read(pb).context("Unable to open input file")?;
 
     for line in reader.lines() {
@@ -65,11 +66,11 @@ pub fn parse_taxon_file_basic(pb: &PathBuf) -> Result<Vec<bool>> {
             .split_once('\t').context("Unable to split taxon file on tabs")?;
         let id: usize = spl.0.parse().with_context(|| format!("Unable to parse {} as usize", spl.0))?;
 
-        while entries.len() <= id {
-            entries.push(false);
+        if entries.len() <= id {
+            entries.grow(id - entries.len(), false)
         }
 
-        entries[id] = true;
+        entries.set(id, true);
     }
 
     Ok(entries)
