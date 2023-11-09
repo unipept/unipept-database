@@ -37,7 +37,7 @@ fn main() -> Result<()> {
                     num_annotated_ec,
                     num_annotated_ip,
                     &m,
-                );
+                )?;
             }
 
             m.clear();
@@ -99,7 +99,7 @@ fn main() -> Result<()> {
             num_annotated_ec,
             num_annotated_ip,
             &m,
-        );
+        )?;
     }
 
     Ok(())
@@ -113,7 +113,7 @@ fn write_entry(
     num_ec: u32,
     num_ip: u32,
     m: &HashMap<String, u32>,
-) {
+) -> Result<()> {
     let data = m
         .iter()
         .map(|(key, value)| format!(r#""{key}":{value}"#))
@@ -124,9 +124,9 @@ fn write_entry(
         "{current_peptide}\t{{\"num\":{{\"all\":{num_prot},\"EC\":{num_ec},\"GO\":{num_go},\"IPR\":{num_ip},\"data\":{{{data}}}}}}}\n"
     );
 
-    if let Err(e) = writer.write_all(format_string.as_bytes()) {
-        eprintln!("Error writing to output file: {:?}", e);
-    }
+    writer.write_all(format_string.as_bytes()).context("Error writing to output file")?;
+
+    Ok(())
 }
 
 #[derive(Parser, Debug)]
