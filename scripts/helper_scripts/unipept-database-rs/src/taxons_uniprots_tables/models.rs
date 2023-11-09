@@ -87,7 +87,7 @@ pub fn calculate_entry_digest(
     result
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Rank {
     NoRank,
     SuperKingdom,
@@ -160,13 +160,12 @@ impl FromStr for Rank {
     }
 }
 
-#[allow(dead_code)] // The fields in this struct aren't used YET, but will be later on
 #[derive(Debug)]
 pub struct Taxon {
-    name: String,
-    rank: Rank,
-    parent: usize,
-    valid: bool,
+    pub name: String,
+    pub rank: Rank,
+    pub parent: usize,
+    pub valid: bool,
 }
 
 impl Taxon {
