@@ -11,6 +11,7 @@ use crate::utils::files::{open_read, open_write};
 
 pub struct TaxonList {
     entries: Vec<Option<Taxon>>,
+    validation_regex: Regex,
 }
 
 impl TaxonList {
@@ -67,12 +68,12 @@ impl TaxonList {
 
         Ok(TaxonList {
             entries,
+            validation_regex: Regex::new(r".*\d.*").context("Failed to initialize regex")?,
         })
     }
 
     pub fn invalidate(&mut self) -> Result<()> {
         for i in 0..self.entries.len() {
-            eprintln!("Validating {}", i);
             self.validate(i)?;
         }
 
@@ -80,8 +81,6 @@ impl TaxonList {
     }
 
     fn validate(&mut self, id: usize) -> Result<bool> {
-        let re = Regex::new(r".*\\d.*").context("Failed to initialize regex")?;
-
         let taxon = self.entries.get_mut(id).with_context(|| format!("Missing Taxon with id {}", id))?;
         let taxon = match taxon {
             Some(t) => t,
@@ -91,10 +90,10 @@ impl TaxonList {
         if !taxon.valid
             || (taxon.rank == Rank::Species
             && (
-            (re.is_match(taxon.name.as_str()) && !taxon.name.contains("virus"))
+            (self.validation_regex.is_match(taxon.name.as_str()) && !taxon.name.contains("virus"))
                 || taxon.name.ends_with(" sp.")
                 || taxon.name.ends_with(" genomosp.")
-                || taxon.name.ends_with(" bacterium")
+                || taxon.name.contains(" bacterium")
         )
         )
             || taxon.name.contains("enrichment culture")
@@ -133,7 +132,7 @@ impl TaxonList {
             taxon.valid = false;
         }
 
-        return Ok(taxon.valid);
+        Ok(taxon.valid)
     }
 
     pub fn write_taxons(&self, pb: &PathBuf) -> Result<()> {
@@ -143,13 +142,15 @@ impl TaxonList {
             let taxon = if let Some(t) = taxon {
                 t
             } else {
-                continue
+                continue;
             };
+
+            let valid = if taxon.valid { '\u{0001}' } else { '\u{0000}' };
 
             writeln!(
                 &mut writer,
                 "{}\t{}\t{}\t{}\t{}",
-                id, taxon.name, taxon.rank.to_string(), taxon.parent, taxon.valid
+                id, taxon.name, taxon.rank, taxon.parent, valid
             ).context("Error writing to taxon TSV file")?;
         }
 
@@ -165,16 +166,16 @@ impl TaxonList {
                 continue;
             }
 
-            let mut lineage: Vec<String> = Vec::with_capacity(n_ranks);
+            let mut lineage: Vec<String> = vec![String::from("\\N"); n_ranks];
             lineage[0] = i.to_string();
 
             let mut tid = self.ranked_ancestor(i)?;
             let mut taxon = self.get_taxon_some(tid)?;
             let mut valid = taxon.valid;
 
-            for j in ((n_ranks-1)..=1).rev() {
+            for j in (1..=(n_ranks - 1)).rev() {
                 if j > taxon.rank.index() {
-                    lineage[j] = if valid { "null".to_string() } else { "-1".to_string() };
+                    lineage[j] = if valid { "\\N".to_string() } else { "-1".to_string() };
                 } else {
                     valid = taxon.valid;
                     lineage[j] = (if valid { 1 } else { -1 } * (tid as i32)).to_string();
