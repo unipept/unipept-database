@@ -17,4 +17,6 @@ chrono = "0.4.31"
 clap = { version = "4.4.6", features = ["derive"] }
 regex = "1.10.2"
 smartstring = { version = "1.0" }
+strum = "0.25.0"
+strum_macros = "0.25.3"
 uniprot = "0.7.0"

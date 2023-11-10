@@ -1,12 +1,13 @@
-use std::io::{BufRead, Read};
+use std::io::{BufRead, Read, Write};
 use std::path::PathBuf;
 use std::str::FromStr;
 
 use anyhow::{Context, Error, Result};
 use regex::Regex;
+use strum::IntoEnumIterator;
 
 use crate::taxons_uniprots_tables::models::{Rank, Taxon};
-use crate::utils::files::open_read;
+use crate::utils::files::{open_read, open_write};
 
 pub struct TaxonList {
     entries: Vec<Option<Taxon>>,
@@ -15,8 +16,8 @@ pub struct TaxonList {
 impl TaxonList {
     /// Parse a list of Taxons from the names and nodes dumps
     pub fn from_dumps(names_pb: &PathBuf, nodes_pb: &PathBuf) -> Result<Self> {
-        let scientific_name = "SCIENTIFIC_NAME";
-        let pattern = "\\|";
+        let scientific_name = "scientific name";
+        let pattern = "|";
 
         let mut entries = vec![];
 
@@ -71,6 +72,7 @@ impl TaxonList {
 
     pub fn invalidate(&mut self) -> Result<()> {
         for i in 0..self.entries.len() {
+            eprintln!("Validating {}", i);
             self.validate(i)?;
         }
 
@@ -86,7 +88,6 @@ impl TaxonList {
             None => return Ok(false),
         };
 
-        // TODO big if statement
         if !taxon.valid
             || (taxon.rank == Rank::Species
             && (
@@ -122,7 +123,7 @@ impl TaxonList {
         // I don't like this duplication but we have to do it because of the borrow checker
         // Otherwise, the recursive call above ^ will cause two mutable references at the same time
         // And we need one to mark the taxon as invalid
-        let taxon = self.entries.get_mut(id).with_context(|| format!("Missing Taxon with id {}", id))?;
+        let taxon = self.entries.get_mut(id).with_context(|| format!("Missing taxon with id {}", id))?;
         let taxon = match taxon {
             Some(t) => t,
             None => return Ok(false),
@@ -133,6 +134,95 @@ impl TaxonList {
         }
 
         return Ok(taxon.valid);
+    }
+
+    pub fn write_taxons(&self, pb: &PathBuf) -> Result<()> {
+        let mut writer = open_write(pb).context("Unable to open taxon output file")?;
+
+        for (id, taxon) in self.entries.iter().enumerate() {
+            let taxon = if let Some(t) = taxon {
+                t
+            } else {
+                continue
+            };
+
+            writeln!(
+                &mut writer,
+                "{}\t{}\t{}\t{}\t{}",
+                id, taxon.name, taxon.rank.to_string(), taxon.parent, taxon.valid
+            ).context("Error writing to taxon TSV file")?;
+        }
+
+        Ok(())
+    }
+
+    pub fn write_lineages(&self, pb: &PathBuf) -> Result<()> {
+        let mut writer = open_write(pb).context("Unable to open lineage output file")?;
+        let n_ranks = Rank::iter().count();
+
+        for (i, taxon) in self.entries.iter().enumerate() {
+            if taxon.is_none() {
+                continue;
+            }
+
+            let mut lineage: Vec<String> = Vec::with_capacity(n_ranks);
+            lineage[0] = i.to_string();
+
+            let mut tid = self.ranked_ancestor(i)?;
+            let mut taxon = self.get_taxon_some(tid)?;
+            let mut valid = taxon.valid;
+
+            for j in ((n_ranks-1)..=1).rev() {
+                if j > taxon.rank.index() {
+                    lineage[j] = if valid { "null".to_string() } else { "-1".to_string() };
+                } else {
+                    valid = taxon.valid;
+                    lineage[j] = (if valid { 1 } else { -1 } * (tid as i32)).to_string();
+                    tid = self.ranked_ancestor(taxon.parent)?;
+                    taxon = self.get_taxon_some(tid)?;
+                }
+            }
+
+            writeln!(
+                &mut writer,
+                "{}",
+                lineage.join("\t")
+            ).context("Error writing to lineage TSV file")?;
+        }
+
+        Ok(())
+    }
+
+    fn ranked_ancestor(&self, mut tid: usize) -> Result<usize> {
+        let mut taxon = self.get_taxon(tid)?;
+        let mut pid = usize::MAX;
+
+        // Note: this unwrap() call is safe because of the is_some() beforehand
+        while taxon.is_some() && tid != pid && taxon.as_ref().unwrap().rank == Rank::NoRank {
+            pid = tid;
+            tid = taxon.as_ref().unwrap().parent;
+            taxon = self.get_taxon(tid)?;
+        }
+
+        if taxon.is_some() {
+            return Ok(tid);
+        }
+
+        Ok(1) // Used in case a taxon is no descendant of the root
+    }
+
+    fn get_taxon(&self, id: usize) -> Result<&Option<Taxon>> {
+        self.entries.get(id).with_context(|| format!("Invalid taxon id {}", id))
+    }
+
+    /// Similar to get_taxon, but unwraps the Option and gives a reference to the Taxon inside of it
+    /// This will throw an error if the Taxon is None
+    fn get_taxon_some(&self, id: usize) -> Result<&Taxon> {
+        if let Some(t) = self.get_taxon(id)? {
+            Ok(t)
+        } else {
+            Err(Error::msg(format!("Missing taxon with id {}", id)))
+        }
     }
 
     pub fn get(&self, i: usize) -> &Option<Taxon> {
