@@ -124,7 +124,9 @@ fn write_entry(
         "{current_peptide}\t{{\"num\":{{\"all\":{num_prot},\"EC\":{num_ec},\"GO\":{num_go},\"IPR\":{num_ip},\"data\":{{{data}}}}}}}\n"
     );
 
-    writer.write_all(format_string.as_bytes()).context("Error writing to output file")?;
+    writer
+        .write_all(format_string.as_bytes())
+        .context("Error writing to output file")?;
 
     Ok(())
 }

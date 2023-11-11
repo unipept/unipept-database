@@ -77,7 +77,8 @@ impl TableWriter {
         }
 
         for r in &entry.ip_references {
-            self.write_ip_ref(r, id).context("Error writing Interpro ref")?;
+            self.write_ip_ref(r, id)
+                .context("Error writing Interpro ref")?;
         }
 
         let go_ids = entry.go_references.into_iter();
@@ -131,7 +132,8 @@ impl TableWriter {
             &mut self.peptides,
             "{}\t{:?}\t{:?}\t{}\t{}",
             self.peptide_count, sequence, original_sequence, id, annotations
-        ).context("Error writing to TSV")?;
+        )
+        .context("Error writing to TSV")?;
 
         Ok(())
     }
@@ -156,7 +158,8 @@ impl TableWriter {
                 &mut self.uniprot_entries,
                 "{}\t{}\t{}\t{}\t{}\t{}\t{}",
                 self.uniprot_count, accession_number, version, taxon_id, type_, name, sequence
-            ).context("Error writing to TSV")?;
+            )
+            .context("Error writing to TSV")?;
 
             return Ok(self.uniprot_count);
         } else if !self.wrong_ids.contains(&entry.taxon_id) {
@@ -179,7 +182,8 @@ impl TableWriter {
             &mut self.go_cross_references,
             "{}\t{}\t{}",
             self.go_count, uniprot_entry_id, ref_id
-        ).context("Error writing to TSV")?;
+        )
+        .context("Error writing to TSV")?;
 
         Ok(())
     }
@@ -191,7 +195,8 @@ impl TableWriter {
             &mut self.ec_cross_references,
             "{}\t{}\t{}",
             self.ec_count, uniprot_entry_id, ref_id
-        ).context("Error writing to TSV")?;
+        )
+        .context("Error writing to TSV")?;
 
         Ok(())
     }
@@ -203,7 +208,8 @@ impl TableWriter {
             &mut self.ip_cross_references,
             "{}\t{}\t{}",
             self.ip_count, uniprot_entry_id, ref_id,
-        ).context("Error writing to TSV")?;
+        )
+        .context("Error writing to TSV")?;
 
         Ok(())
     }
