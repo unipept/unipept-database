@@ -1,10 +1,10 @@
-use anyhow::{Context, Result};
-use bit_vec::BitVec;
 use std::collections::HashSet;
 use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::path::PathBuf;
-use std::time::Instant;
+
+use anyhow::{Context, Result};
+use bit_vec::BitVec;
 
 use crate::taxons_uniprots_tables::models::{calculate_entry_digest, Entry};
 use crate::taxons_uniprots_tables::taxon_list::parse_taxon_file_basic;
@@ -69,15 +69,15 @@ impl TableWriter {
         }
 
         for r in &entry.go_references {
-            self.write_go_ref(r, id);
+            self.write_go_ref(r, id).context("Error writing GO ref")?;
         }
 
         for r in &entry.ec_references {
-            self.write_ec_ref(r, id);
+            self.write_ec_ref(r, id).context("Error writing EC ref")?;
         }
 
         for r in &entry.ip_references {
-            self.write_ip_ref(r, id);
+            self.write_ip_ref(r, id).context("Error writing Interpro ref")?;
         }
 
         let go_ids = entry.go_references.into_iter();
@@ -127,13 +127,11 @@ impl TableWriter {
     ) -> Result<()> {
         self.peptide_count += 1;
 
-        if let Err(e) = writeln!(
+        writeln!(
             &mut self.peptides,
             "{}\t{:?}\t{:?}\t{}\t{}",
             self.peptide_count, sequence, original_sequence, id, annotations
-        ) {
-            eprintln!("{}\tError writing to TSV.\n{:?}", now_str()?, e);
-        }
+        ).context("Error writing to TSV")?;
 
         Ok(())
     }
@@ -154,20 +152,18 @@ impl TableWriter {
             let name = entry.name.clone();
             let sequence = entry.sequence.clone();
 
-            if let Err(e) = writeln!(
+            writeln!(
                 &mut self.uniprot_entries,
                 "{}\t{}\t{}\t{}\t{}\t{}\t{}",
                 self.uniprot_count, accession_number, version, taxon_id, type_, name, sequence
-            ) {
-                eprintln!("{}\tError writing to TSV.\n{:?}", now_str()?, e);
-            } else {
-                return Ok(self.uniprot_count);
-            }
+            ).context("Error writing to TSV")?;
+
+            return Ok(self.uniprot_count);
         } else if !self.wrong_ids.contains(&entry.taxon_id) {
             self.wrong_ids.insert(entry.taxon_id);
             eprintln!(
-                "[{}]\t{} added to the list of {} invalid taxonIds.",
-                now_str()?,
+                "[{}]\t{} added to the list of {} invalid taxonIds",
+                now_str(),
                 entry.taxon_id,
                 self.wrong_ids.len()
             );
@@ -176,51 +172,39 @@ impl TableWriter {
         Ok(-1)
     }
 
-    fn write_go_ref(&mut self, ref_id: &String, uniprot_entry_id: i64) {
+    fn write_go_ref(&mut self, ref_id: &String, uniprot_entry_id: i64) -> Result<()> {
         self.go_count += 1;
 
-        if let Err(e) = writeln!(
+        writeln!(
             &mut self.go_cross_references,
             "{}\t{}\t{}",
             self.go_count, uniprot_entry_id, ref_id
-        ) {
-            eprintln!(
-                "{}\tError adding GO reference to the database.\n{:?}",
-                Instant::now().elapsed().as_millis(),
-                e
-            );
-        }
+        ).context("Error writing to TSV")?;
+
+        Ok(())
     }
 
-    fn write_ec_ref(&mut self, ref_id: &String, uniprot_entry_id: i64) {
+    fn write_ec_ref(&mut self, ref_id: &String, uniprot_entry_id: i64) -> Result<()> {
         self.ec_count += 1;
 
-        if let Err(e) = writeln!(
+        writeln!(
             &mut self.ec_cross_references,
             "{}\t{}\t{}",
             self.ec_count, uniprot_entry_id, ref_id
-        ) {
-            eprintln!(
-                "{}\tError adding EC reference to the database.\n{:?}",
-                Instant::now().elapsed().as_millis(),
-                e
-            );
-        }
+        ).context("Error writing to TSV")?;
+
+        Ok(())
     }
 
-    fn write_ip_ref(&mut self, ref_id: &String, uniprot_entry_id: i64) {
+    fn write_ip_ref(&mut self, ref_id: &String, uniprot_entry_id: i64) -> Result<()> {
         self.ip_count += 1;
 
-        if let Err(e) = writeln!(
+        writeln!(
             &mut self.ip_cross_references,
             "{}\t{}\t{}",
             self.ip_count, uniprot_entry_id, ref_id,
-        ) {
-            eprintln!(
-                "{}\tError adding InterPro reference to the database.\n{:?}",
-                Instant::now().elapsed().as_millis(),
-                e
-            );
-        }
+        ).context("Error writing to TSV")?;
+
+        Ok(())
     }
 }
