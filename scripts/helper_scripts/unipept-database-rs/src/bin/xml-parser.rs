@@ -20,7 +20,7 @@ fn main() -> Result<()> {
         1 => {
             for r in SequentialParser::new(reader) {
                 let entry = r.context("Error reading UniProt entry from SequentialParser")?;
-                write_entry(&entry, args.verbose);
+                write_entry(&entry, &args.uniprot_type, args.verbose);
             }
         }
         n => {
@@ -36,7 +36,7 @@ fn main() -> Result<()> {
 
             for r in parser {
                 let entry = r.context("Error reading UniProt entry from ThreadedParser")?;
-                write_entry(&entry, args.verbose);
+                write_entry(&entry, &args.uniprot_type, args.verbose);
             }
         }
     }
@@ -52,6 +52,15 @@ enum UniprotType {
     Trembl,
 }
 
+impl UniprotType {
+    pub fn to_str(&self) -> &str {
+        match self {
+            UniprotType::Swissprot => "swissprot",
+            UniprotType::Trembl => "trembl"
+        }
+    }
+}
+
 // Parse a Uniprot XML file and convert it into a TSV-file
 #[derive(Parser, Debug)]
 struct Cli {
@@ -63,6 +72,7 @@ struct Cli {
     verbose: bool,
 }
 
+/// Write the header line to stdout
 fn write_header() {
     let fields: [&str; 9] = [
         "Entry",
@@ -80,7 +90,7 @@ fn write_header() {
     println!("{}", result_string);
 }
 
-// Resolve the name of a single entry
+/// Resolve the name of a single entry
 fn parse_name(entry: &uniprot::uniprot::Entry) -> SmartStr {
     let mut submitted_name: SmartStr = SmartStr::new();
 
@@ -126,8 +136,8 @@ fn parse_name(entry: &uniprot::uniprot::Entry) -> SmartStr {
     }
 }
 
-// Write a single entry to stdout
-fn write_entry(entry: &uniprot::uniprot::Entry, verbose: bool) {
+/// Write a single UniProt entry to stdout
+fn write_entry(entry: &uniprot::uniprot::Entry, db_type: &UniprotType, verbose: bool) {
     let accession_number: SmartStr = entry.accessions[0].clone();
     let sequence: SmartStr = entry.sequence.value.clone();
 
@@ -169,7 +179,7 @@ fn write_entry(entry: &uniprot::uniprot::Entry, verbose: bool) {
         SmartStr::from(ec_references.join(";")),
         SmartStr::from(go_references.join(";")),
         SmartStr::from(ip_references.join(";")),
-        SmartStr::from("swissprot"), // TODO check if this is supposed to be swissprot
+        SmartStr::from(db_type.to_str()),
         taxon_id,
     ];
 
