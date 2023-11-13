@@ -56,7 +56,7 @@ impl UniprotType {
     pub fn to_str(&self) -> &str {
         match self {
             UniprotType::Swissprot => "swissprot",
-            UniprotType::Trembl => "trembl"
+            UniprotType::Trembl => "trembl",
         }
     }
 }
