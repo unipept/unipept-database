@@ -130,8 +130,12 @@ impl TableWriter {
 
         writeln!(
             &mut self.peptides,
-            "{}\t{:?}\t{:?}\t{}\t{}",
-            self.peptide_count, sequence, original_sequence, id, annotations
+            "{}\t{}\t{}\t{}\t{}",
+            self.peptide_count,
+            String::from_utf8(sequence)?,
+            String::from_utf8_lossy(original_sequence),
+            id,
+            annotations
         )
         .context("Error writing to TSV")?;
 
