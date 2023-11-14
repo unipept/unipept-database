@@ -1,0 +1,70 @@
+on:
+  pull_request:
+
+permissions:
+  pull-requests: write
+  checks: write
+
+env:
+  CACHE_KEY: CI
+
+jobs:
+  dependencies:
+    name: Install dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        id: cache
+        with:
+          shared-key: ${{ env.CACHE_KEY }}
+      - run: cd scripts/helper_scripts/unipept-database-rs && cargo fetch
+        if: ${{ !steps.cache.outputs.cache-hit }}
+
+  build:
+    name: Build binaries
+    runs-on: ubuntu-latest
+    needs: [dependencies]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ${{ env.CACHE_KEY }}
+      - run: cd scripts/helper_scripts/unipept-database-rs && cargo build --release
+
+  format:
+    name: Check formatting
+    runs-on: ubuntu-latest
+    needs: [dependencies]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ${{ env.CACHE_KEY }}
+      - run: cd scripts/helper_scripts/unipept-database-rs && cargo fmt --all --check
+
+  lint:
+    name: Linting
+    runs-on: ubuntu-latest
+    needs: [dependencies]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ${{ env.CACHE_KEY }}
+      - uses: giraffate/clippy-action@v1
+        with:
+          clippy_flags: -- -D warnings
+          reporter: 'github-pr-check'
+          fail_on_error: true
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          workdir: scripts/helper_scripts/unipept-database-rs
+

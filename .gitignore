@@ -17,3 +17,5 @@ data/
 out
 scripts/helper_scripts/parser/output
 scripts/helper_scripts/parser/src/META-INF
+.idea/
+
