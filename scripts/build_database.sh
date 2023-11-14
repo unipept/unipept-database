@@ -572,8 +572,6 @@ number_sequences() {
 
 	rm "p_eq" "p_or"
 
-	$CMD_LZ4CAT "$INTDIR/sequences.tsv.lz4" | wc -l
-
 	log "Finished the numbering of sequences with status $?."
 }
 
