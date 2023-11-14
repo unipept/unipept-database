@@ -639,7 +639,7 @@ create_sequence_table() {
 		| join --nocheck-order -a1 -e '\N' -t '	' -o '1.1 1.2 1.3 1.4 1.5 2.2' - "efas" \
 		| sed 's/^0*//' \
 		# Undo the Z-trick: replace Z in the first column with K again
-		| awk -F'\t' 'BEGIN {OFS="\t"} {gsub(/K/, "Z", $2); print}'
+		| awk -F'\t' 'BEGIN {OFS="\t"} {gsub(/K/, "Z", $2); print}' \
 		| $CMD_LZ4 - > "$OUTPUT_DIR/sequences.tsv.lz4"
 	rm "olcas" "elcas" "ofas" "efas"
 	log "Finished the creation of the sequences table."
