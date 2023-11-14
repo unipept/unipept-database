@@ -1,13 +1,13 @@
-use std::path::PathBuf;
+use anyhow::{Context, Result};
 use clap::Parser;
+use std::path::PathBuf;
 use unipept_database::calculate_lcas::taxonomy::Taxonomy;
 use unipept_database::taxons_uniprots_tables::utils::now_str;
-use anyhow::{Context, Result};
 
 #[derive(Parser)]
 struct Cli {
     #[clap(long)]
-    infile: PathBuf
+    infile: PathBuf,
 }
 
 fn main() -> Result<()> {
@@ -17,5 +17,5 @@ fn main() -> Result<()> {
     let tax = Taxonomy::build(&args.infile).context("Unable to build taxonomy")?;
 
     eprintln!("{}: reading sequences", now_str());
-    Ok(tax.calculate_lcas()?)
+    tax.calculate_lcas()
 }
