@@ -156,6 +156,5 @@ fn parse_int(s: &String) -> Result<i32> {
         return Ok(0);
     }
 
-    s.parse::<i32>()
-        .with_context(|| format!("Error parsing {} as an integer", s))
+    s.parse::<i32>().with_context(|| format!("Error parsing {} as an integer", s))
 }
