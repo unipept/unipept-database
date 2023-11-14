@@ -13,9 +13,9 @@ struct Cli {
 fn main() -> Result<()> {
     let args = Cli::parse();
 
-    eprintln!("{}: reading taxonomy", now_str()?);
+    eprintln!("{}: reading taxonomy", now_str());
     let tax = Taxonomy::build(&args.infile).context("Unable to build taxonomy")?;
 
-    eprintln!("{}: reading sequences", now_str()?);
+    eprintln!("{}: reading sequences", now_str());
     Ok(tax.calculate_lcas()?)
 }

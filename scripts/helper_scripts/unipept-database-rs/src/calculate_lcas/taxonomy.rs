@@ -61,13 +61,13 @@ impl Taxonomy {
 
         for (i, line) in reader.lines().enumerate() {
             if i % 10000000 == 0 && i != 0 {
-                eprintln!("{}: {}", now_str()?, i);
+                eprintln!("{}: {}", now_str(), i);
             }
 
-            let line = line.expect("error reading line from stdin");
+            let line = line.context("error reading line from stdin")?;
 
-            let (sequence, taxon_id) = line.split_once(SEPARATOR).expect("error splitting line");
-            let taxon_id: i32 = taxon_id.trim_end().parse().expect("error parsing taxon id to int");
+            let (sequence, taxon_id) = line.split_once(SEPARATOR).context("error splitting line")?;
+            let taxon_id: i32 = taxon_id.trim_end().parse().context("error parsing taxon id to int")?;
 
             if current_sequence.is_empty() || current_sequence != sequence {
                 if !current_sequence.is_empty() {
