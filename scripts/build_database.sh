@@ -526,11 +526,22 @@ create_most_tables() {
 		--peptide-min "$PEPTIDE_MIN_LENGTH" \
 		--peptide-max "$PEPTIDE_MAX_LENGTH" \
 		--taxons "$(luz "$OUTPUT_DIR/taxons.tsv.lz4")" \
-		--peptides "$(lz "$INTDIR/peptides.tsv.lz4")" \
+		--peptides "$(lz "$INTDIR/peptides-out.tsv.lz4")" \
 		--uniprot-entries "$(lz "$OUTPUT_DIR/uniprot_entries.tsv.lz4")" \
 		--ec "$(lz "$OUTPUT_DIR/ec_cross_references.tsv.lz4")" \
 		--go "$(lz "$OUTPUT_DIR/go_cross_references.tsv.lz4")" \
 		--interpro "$(lz "$OUTPUT_DIR/interpro_cross_references.tsv.lz4")"
+
+  log "Started sorting petipdes table"
+
+  # The Z-trick: replace all K's by Z's so that sorting by original peptide sequence
+  # will also sort by equalized peptide sequence
+  $CMD_LZ4CAT $INTDIR/peptides-out.tsv.lz4 \
+    | awk -F'\t' 'BEGIN {OFS="\t"} {gsub(/K/, "Z", $2); gsub(/K/, "Z", $3); print}' \
+    | LC_ALL=C $CMD_SORT -k3 \
+    | $CMD_LZ4 > $INTDIR/peptides.tsv.lz4
+
+  rm $INTDIR/peptides-out.tsv.lz4
 
 	log "Finished calculation of most tables with status $?"
 }
@@ -539,50 +550,21 @@ create_tables_and_filter() {
   filter_sources_by_taxa | create_most_tables
 }
 
-join_equalized_pepts_and_entries() {
-  echo "Test if files for joining peptides are available."
-	have "$INTDIR/peptides.tsv.lz4" "$OUTPUT_DIR/uniprot_entries.tsv.lz4" || return
-	log "Started the joining of equalized peptides and uniprot entries."
-	mkfifo "peptides_eq" "entries_eq"
-	$CMD_LZ4CAT "$INTDIR/peptides.tsv.lz4" | gawk '{ printf("%012d\t%s\n", $4, $2) }' > "peptides_eq" &
-	$CMD_LZ4CAT "$OUTPUT_DIR/uniprot_entries.tsv.lz4" | gawk '{ printf("%012d\t%s\n", $1, $4) }' > "entries_eq" &
-	join -t '	' -o '1.2,2.2' -j 1 "peptides_eq" "entries_eq" \
-		| LC_ALL=C $CMD_SORT -k1 \
-		| $CMD_LZ4 - > "$INTDIR/aa_sequence_taxon_equalized.tsv.lz4"
-	rm "peptides_eq" "entries_eq"
-	log "Finished the joining of equalized peptides and uniprot entries with status $?."
-}
-
-
-join_original_pepts_and_entries() {
-	have "$INTDIR/peptides.tsv.lz4" "$OUTPUT_DIR/uniprot_entries.tsv.lz4" || return
-	log "Started the joining of original peptides and uniprot entries."
-	mkfifo "peptides_orig" "entries_orig"
-	$CMD_LZ4CAT "$INTDIR/peptides.tsv.lz4" | gawk '{ printf("%012d\t%s\n", $4, $3) }' > "peptides_orig" &
-	$CMD_LZ4CAT "$OUTPUT_DIR/uniprot_entries.tsv.lz4" | gawk '{ printf("%012d\t%s\n", $1, $4) }' > "entries_orig" &
-	join -t '	' -o '1.2,2.2' -j 1 "peptides_orig" "entries_orig" \
-		| LC_ALL=C $CMD_SORT -k1 \
-		| $CMD_LZ4 - > "$INTDIR/aa_sequence_taxon_original.tsv.lz4"
-	rm "peptides_orig" "entries_orig"
-	log "Finished the joining of original peptides and uniprot entries with status $?."
-}
-
 
 number_sequences() {
-	have "$INTDIR/aa_sequence_taxon_equalized.tsv.lz4" "$INTDIR/aa_sequence_taxon_original.tsv.lz4" || return
+  have "$INTDIR/peptides.tsv.lz4" || return
 	log "Started the numbering of sequences."
-	mkfifo "equalized" "original"
-	$CMD_LZ4CAT "$INTDIR/aa_sequence_taxon_equalized.tsv.lz4" | cut -f1 | uniq > "equalized" &
-	$CMD_LZ4CAT "$INTDIR/aa_sequence_taxon_original.tsv.lz4" | cut -f1 | uniq > "original" &
-	LC_ALL=C $CMD_SORT -m "equalized" "original" | uniq | cat -n \
+	# Cut the second and third column (equalized and original sequence) out of the peptides file,
+	# split the data across multiple lines, take the unique lines, and number these
+	# cat -n adds some whitespace at the beginning for fancy printing, so strip that off again as well
+	$CMD_LZ4CAT peptides.tsv.lz4 | cut -f 2,3 | awk '{print $1 "\n" $2}' | uniq | cat -n \
 		| sed 's/^ *//' | $CMD_LZ4 - > "$INTDIR/sequences.tsv.lz4"
-	rm "equalized" "original"
 	log "Finished the numbering of sequences with status $?."
 }
 
 
 calculate_equalized_lcas() {
-	have "$INTDIR/sequences.tsv.lz4" "$INTDIR/aa_sequence_taxon_equalized.tsv.lz4" "$OUTPUT_DIR/lineages.tsv.lz4" || return
+	have "$INTDIR/peptides.tsv.lz4" "$INTDIR/peptides.tsv.lz4" || return
 	log "Started the calculation of equalized LCA's (after substituting AA's by ID's)."
 	join -t '	' -o '1.1,2.2' -1 2 -2 1 \
 			"$(luz "$INTDIR/sequences.tsv.lz4")" \
@@ -594,7 +576,7 @@ calculate_equalized_lcas() {
 
 
 calculate_original_lcas() {
-	have "$INTDIR/sequences.tsv.lz4" "$INTDIR/aa_sequence_taxon_original.tsv.lz4" "$OUTPUT_DIR/lineages.tsv.lz4" || return
+	have "$INTDIR/sequences.tsv.lz4" "$INTDIR/peptides.tsv.lz4" || return
 	log "Started the calculation of original LCA's (after substituting AA's by ID's)."
 	join -t '	' -o '1.1,2.2' -1 2 -2 1 \
 			"$(luz "$INTDIR/sequences.tsv.lz4")" \
@@ -782,12 +764,6 @@ database)
 	download_and_convert_all_sources
 	create_tables_and_filter
 	echo "Created tables!"
-	join_equalized_pepts_and_entries &
-	pid1=$!
-	join_original_pepts_and_entries &
-	pid2=$!
-	wait $pid1
-	wait $pid2
 	number_sequences
 	reportProgress "-1" "Calculating lowest common ancestors." 6
 	calculate_equalized_lcas &
@@ -796,8 +772,6 @@ database)
 	pid2=$!
 	wait $pid1
 	wait $pid2
-	rm "$INTDIR/aa_sequence_taxon_equalized.tsv.lz4"
-	rm "$INTDIR/aa_sequence_taxon_original.tsv.lz4"
 	substitute_equalized_aas
 	rm "$INTDIR/peptides.tsv.lz4"
 	substitute_original_aas
@@ -860,8 +834,6 @@ tryptic-index)
 	if ! have "$TABDIR/sequences.tsv.gz"; then
 		download_and_convert_all_sources
 		create_tables_and_filter
-		join_equalized_pepts_and_entries
-		join_original_pepts_and_entries
 		number_sequences
 		calculate_equalized_lcas
 		calculate_original_lcas
