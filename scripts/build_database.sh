@@ -343,8 +343,6 @@ create_taxon_tables() {
 	unzip "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/taxdmp.zip" "names.dmp" "nodes.dmp" -d "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT"
 	rm "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/taxdmp.zip"
 
-  echo "Downloaded file"
-
 	sed -i'' -e 's/subcohort/no rank/' -e 's/cohort/no rank/' \
 		-e 's/subsection/no rank/' -e 's/section/no rank/' \
 		-e 's/series/no rank/' -e 's/biotype/no rank/' \
@@ -355,15 +353,11 @@ create_taxon_tables() {
 		-e 's/isolate/no rank/' -e 's/infraclass/no rank/' \
 		-e 's/parvorder/no rank/' "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/nodes.dmp"
 
-  echo "Modified node ranks"
-
 	mkdir -p "$OUTPUT_DIR"
 	java -Xms"$JAVA_MEM" -Xmx"$JAVA_MEM" -jar "$CURRENT_LOCATION/helper_scripts/NamesNodes2TaxonsLineages.jar" \
 		--names "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/names.dmp" --nodes "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/nodes.dmp" \
 		--taxons "$(lz "$OUTPUT_DIR/taxons.tsv.lz4")" \
 		--lineages "$(lz "$OUTPUT_DIR/lineages.tsv.lz4")"
-
-  echo "Generated taxons and lineages"
 
 	rm "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/names.dmp" "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/nodes.dmp"
 	log "Finished creating the taxon tables."
@@ -532,20 +526,27 @@ create_most_tables() {
 		--go "$(lz "$OUTPUT_DIR/go_cross_references.tsv.lz4")" \
 		--interpro "$(lz "$OUTPUT_DIR/interpro_cross_references.tsv.lz4")"
 
-  log "Started sorting petipdes table"
+  log "Started sorting peptides table"
 
   # The Z-trick: replace all K's by Z's so that sorting by original peptide sequence
   # will also sort by equalized peptide sequence
   # TODO this doesn't fix everything yet so we need 2 sorts, but it's still an improvement
+  # TODO find a way to eliminate the second sort, or do both at the same time
   $CMD_LZ4CAT $INTDIR/peptides-out.tsv.lz4 \
     | awk -F'\t' 'BEGIN {OFS="\t"} {gsub(/K/, "Z", $2); gsub(/K/, "Z", $3); print}' \
     | LC_ALL=C $CMD_SORT -k3 \
     | $CMD_LZ4 > $INTDIR/peptides-original.tsv.lz4
 
-    $CMD_LZ4CAT $INTDIR/peptides-out.tsv.lz4 \
-      | awk -F'\t' 'BEGIN {OFS="\t"} {gsub(/K/, "Z", $2); gsub(/K/, "Z", $3); print}' \
-      | LC_ALL=C $CMD_SORT -k2 \
-      | $CMD_LZ4 > $INTDIR/peptides-equalized.tsv.lz4
+  # The second time, use the first file that is already sorted, as it prevents having to do the awk again
+  # and it is already _roughly_ sorted so less operations have to happen
+  $CMD_LZ4CAT $INTDIR/peptides-original.tsv.lz4 \
+    | LC_ALL=C $CMD_SORT -k2 \
+    | $CMD_LZ4 > $INTDIR/peptides-equalized.tsv.lz4
+
+#  $CMD_LZ4CAT $INTDIR/peptides-out.tsv.lz4 \
+#    | awk -F'\t' 'BEGIN {OFS="\t"} {gsub(/K/, "Z", $2); gsub(/K/, "Z", $3); print}' \
+#    | LC_ALL=C $CMD_SORT -k2 \
+#    | $CMD_LZ4 > $INTDIR/peptides-equalized.tsv.lz4
 
   rm $INTDIR/peptides-out.tsv.lz4
   log "Finished calculation of most tables with status $?"
@@ -570,6 +571,8 @@ number_sequences() {
 		| sed 's/^ *//' | $CMD_LZ4 - > "$INTDIR/sequences.tsv.lz4"
 
 	rm "p_eq" "p_or"
+
+	$CMD_LZ4CAT "$INTDIR/sequences.tsv.lz4" | wc -l
 
 	log "Finished the numbering of sequences with status $?."
 }
