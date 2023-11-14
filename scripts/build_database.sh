@@ -539,7 +539,7 @@ create_most_tables() {
   $CMD_LZ4CAT $INTDIR/peptides-out.tsv.lz4 \
     | awk -F'\t' 'BEGIN {OFS="\t"} {gsub(/K/, "Z", $2); gsub(/K/, "Z", $3); print}' \
     | LC_ALL=C $CMD_SORT -k3 \
-    | $CMD_LZ4 > $INTDIR/peptides.tsv.lz4
+    | $CMD_LZ4 > $OUTPUT_DIR/peptides.tsv.lz4
 
   rm $INTDIR/peptides-out.tsv.lz4
 
@@ -552,23 +552,24 @@ create_tables_and_filter() {
 
 
 number_sequences() {
-  have "$INTDIR/peptides.tsv.lz4" || return
+  have "$OUTPUT_DIR/peptides.tsv.lz4" || return
 	log "Started the numbering of sequences."
 	# Cut the second and third column (equalized and original sequence) out of the peptides file,
 	# split the data across multiple lines, take the unique lines, and number these
 	# cat -n adds some whitespace at the beginning for fancy printing, so strip that off again as well
-	$CMD_LZ4CAT peptides.tsv.lz4 | cut -f 2,3 | awk '{print $1 "\n" $2}' | uniq | cat -n \
+	$CMD_LZ4CAT $OUTPUT_DIR/peptides.tsv.lz4 | cut -f 2,3 | awk '{print $1 "\n" $2}' | uniq | cat -n \
 		| sed 's/^ *//' | $CMD_LZ4 - > "$INTDIR/sequences.tsv.lz4"
 	log "Finished the numbering of sequences with status $?."
 }
 
 
 calculate_equalized_lcas() {
-	have "$INTDIR/peptides.tsv.lz4" "$INTDIR/peptides.tsv.lz4" || return
+	have "$INTDIR/sequences.tsv.lz4" "$OUTPUT_DIR/peptides.tsv.lz4" || return
 	log "Started the calculation of equalized LCA's (after substituting AA's by ID's)."
-	join -t '	' -o '1.1,2.2' -1 2 -2 1 \
+	$CMD_LZ4CAT $OUTPUT_DIR/peptides.tsv.lz4 | cut -f 2,6 \
+	  | join -t '	' -o '1.1,2.2' -1 2 -2 1 \
 			"$(luz "$INTDIR/sequences.tsv.lz4")" \
-			"$(luz "$INTDIR/aa_sequence_taxon_equalized.tsv.lz4")" \
+			- \
 		| java -Xms"$JAVA_MEM" -Xmx"$JAVA_MEM" -jar "$CURRENT_LOCATION/helper_scripts/LineagesSequencesTaxons2LCAs.jar" "$(luz "$OUTPUT_DIR/lineages.tsv.lz4")" \
 		| $CMD_LZ4 - > "$INTDIR/LCAs_equalized.tsv.lz4"
 	log "Finished the calculation of equalized LCA's (after substituting AA's by ID's) with status $?."
@@ -576,68 +577,39 @@ calculate_equalized_lcas() {
 
 
 calculate_original_lcas() {
-	have "$INTDIR/sequences.tsv.lz4" "$INTDIR/peptides.tsv.lz4" || return
+	have "$INTDIR/sequences.tsv.lz4" "$OUTPUT_DIR/peptides.tsv.lz4" || return
 	log "Started the calculation of original LCA's (after substituting AA's by ID's)."
-	join -t '	' -o '1.1,2.2' -1 2 -2 1 \
+	$CMD_LZ4CAT $OUTPUT_DIR/peptides.tsv.lz4 | cut -f 3,6 \
+	  | join -t '	' -o '1.1,2.2' -1 2 -2 1 \
 			"$(luz "$INTDIR/sequences.tsv.lz4")" \
-			"$(luz "$INTDIR/aa_sequence_taxon_original.tsv.lz4")" \
+			- \
 		| java -Xms"$JAVA_MEM" -Xmx"$JAVA_MEM" -jar "$CURRENT_LOCATION/helper_scripts/LineagesSequencesTaxons2LCAs.jar" "$(luz "$OUTPUT_DIR/lineages.tsv.lz4")" \
 		| $CMD_LZ4 - > "$INTDIR/LCAs_original.tsv.lz4"
 	log "Finished the calculation of original LCA's (after substituting AA's by ID's) with status $?."
 }
 
 
-substitute_equalized_aas() {
-	have "$INTDIR/peptides.tsv.lz4" "$INTDIR/sequences.tsv.lz4" || return
-	log "Started the substitution of equalized AA's by ID's for the peptides."
-	$CMD_LZ4CAT "$INTDIR/peptides.tsv.lz4" \
-		| LC_ALL=C $CMD_SORT -k 2b,2 \
-		| join -t '	' -o '1.1,2.1,1.3,1.4,1.5' -1 2 -2 2 - "$(luz "$INTDIR/sequences.tsv.lz4")" \
-		| $CMD_LZ4 - > "$INTDIR/peptides_by_equalized.tsv.lz4"
-	log "Finished the substitution of equalized AA's by ID's for the peptides with status $?."
-}
-
-
 calculate_equalized_fas() {
-	have "$INTDIR/peptides_by_equalized.tsv.lz4" || return
+	have "$OUTPUT_DIR/peptides.tsv.lz4" || return
 	log "Started the calculation of equalized FA's."
 	mkfifo "peptides_eq"
-	$CMD_LZ4CAT "$INTDIR/peptides_by_equalized.tsv.lz4" | cut -f2,5 > "peptides_eq" &
+	$CMD_LZ4CAT "$OUTPUT_DIR/peptides.tsv.lz4" | cut -f2,5 > "peptides_eq" &
 	$CURRENT_LOCATION/helper_scripts/functional-analysis -i "peptides_eq" -o "$(lz "$INTDIR/FAs_equalized.tsv.lz4")"
 	rm "peptides_eq"
 	log "Finished the calculation of equalized FA's with status $?."
 }
 
 
-substitute_original_aas() {
-	have "$INTDIR/peptides_by_equalized.tsv.lz4" "$INTDIR/sequences.tsv.lz4" || return
-	log "Started the substitution of original AA's by ID's for the peptides."
-	$CMD_LZ4CAT "$INTDIR/peptides_by_equalized.tsv.lz4" \
-		| LC_ALL=C $CMD_SORT -k 3b,3 \
-		| join -t '	' -o '1.1,1.2,2.1,1.4,1.5' -1 3 -2 2 - "$(luz "$INTDIR/sequences.tsv.lz4")" \
-		| $CMD_LZ4 - > "$INTDIR/peptides_by_original.tsv.lz4"
-	log "Finished the substitution of equalized AA's by ID's for the peptides with status $?."
-}
-
 calculate_original_fas() {
-	have "$INTDIR/peptides_by_original.tsv.lz4" || return
+	have "$OUTPUT_DIR/peptides.tsv.lz4" || return
 	log "Started the calculation of original FA's."
 	mkfifo "peptides_orig"
-	$CMD_LZ4CAT "$INTDIR/peptides_by_original.tsv.lz4" | cut -f3,5 > "peptides_orig" &
+	$CMD_LZ4CAT "$OUTPUT_DIR/peptides.tsv.lz4" | cut -f3,5 > "peptides_orig" &
 	$CURRENT_LOCATION/helper_scripts/functional-analysis -i "peptides_orig" -o "$(lz "$INTDIR/FAs_original.tsv.lz4")"
 	rm "peptides_orig"
 	log "Finished the calculation of original FA's."
 }
 
-sort_peptides() {
-	have "$INTDIR/peptides_by_original.tsv.lz4" || return
-	log "Started sorting the peptides table."
-	mkdir -p "$OUTPUT_DIR"
-	$CMD_LZ4CAT "$INTDIR/peptides_by_original.tsv.lz4" \
-		| LC_ALL=C $CMD_SORT -n \
-		| $CMD_LZ4 - > "$OUTPUT_DIR/peptides.tsv.lz4"
-	log "Finished sorting the peptides table."
-}
 
 create_sequence_table() {
 	have "$INTDIR/LCAs_original.tsv.lz4" "$INTDIR/LCAs_equalized.tsv.lz4" "$INTDIR/FAs_original.tsv.lz4" "$INTDIR/FAs_equalized.tsv.lz4" "$INTDIR/sequences.tsv.lz4" || return
@@ -772,9 +744,6 @@ database)
 	pid2=$!
 	wait $pid1
 	wait $pid2
-	substitute_equalized_aas
-	rm "$INTDIR/peptides.tsv.lz4"
-	substitute_original_aas
 	reportProgress "-1" "Calculating functional annotations." 7
 	calculate_equalized_fas &
 	pid1=$!
@@ -782,10 +751,6 @@ database)
 	pid2=$!
 	wait $pid1
 	wait $pid2
-	rm "$INTDIR/peptides_by_equalized.tsv.lz4"
-	reportProgress "-1" "Sorting peptides." 8
-	sort_peptides
-	rm "$INTDIR/peptides_by_original.tsv.lz4"
 	reportProgress "-1" "Creating sequence table." 9
 	create_sequence_table
 	rm "$INTDIR/LCAs_original.tsv.lz4"
@@ -837,9 +802,7 @@ tryptic-index)
 		number_sequences
 		calculate_equalized_lcas
 		calculate_original_lcas
-		substitute_equalized_aas
 		calculate_equalized_fas
-		substitute_original_aas
 		calculate_original_fas
 		create_sequence_table
 	fi
