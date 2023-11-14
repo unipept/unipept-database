@@ -25,15 +25,20 @@ impl Taxonomy {
         let mut max = i32::MIN;
 
         for line in reader.lines() {
-            let line = line
-                .with_context(|| format!("Error reading line from input file {}", infile.display()))?;
+            let line = line.with_context(|| {
+                format!("Error reading line from input file {}", infile.display())
+            })?;
             let elements: Vec<String> = line.splitn(28, SEPARATOR).map(String::from).collect();
 
             let key = parse_int(&elements[0])?;
             // Note on the collect::<> here: "?" can't be used inside of map() as it is a closure
             // Collecting into a Result<Vec<_>> will stop instantly when it receives one Error
             // https://doc.rust-lang.org/rust-by-example/error/iter_result.html#fail-the-entire-operation-with-collect
-            let lineage = elements.iter().skip(1).map(parse_int).collect::<Result<Vec<i32>>>()?;
+            let lineage = elements
+                .iter()
+                .skip(1)
+                .map(parse_int)
+                .collect::<Result<Vec<i32>>>()?;
             taxonomy_map.insert(key, lineage);
 
             // Keep track of highest key
@@ -48,9 +53,7 @@ impl Taxonomy {
             taxonomy[key as usize] = value;
         }
 
-        Ok(Taxonomy {
-            taxonomy,
-        })
+        Ok(Taxonomy { taxonomy })
     }
 
     pub fn calculate_lcas(&self) -> Result<()> {
@@ -66,8 +69,12 @@ impl Taxonomy {
 
             let line = line.context("error reading line from stdin")?;
 
-            let (sequence, taxon_id) = line.split_once(SEPARATOR).context("error splitting line")?;
-            let taxon_id: i32 = taxon_id.trim_end().parse().context("error parsing taxon id to int")?;
+            let (sequence, taxon_id) =
+                line.split_once(SEPARATOR).context("error splitting line")?;
+            let taxon_id: i32 = taxon_id
+                .trim_end()
+                .parse()
+                .context("error parsing taxon id to int")?;
 
             if current_sequence.is_empty() || current_sequence != sequence {
                 if !current_sequence.is_empty() {
@@ -81,21 +88,33 @@ impl Taxonomy {
             taxa.push(taxon_id);
         }
 
-        Ok(self.handle_lca(&current_sequence, self.calculate_lca(&taxa)))
+        self.handle_lca(&current_sequence, self.calculate_lca(&taxa));
+        Ok(())
     }
 
     fn calculate_lca(&self, taxa: &[i32]) -> i32 {
         let mut lca = 1;
 
-        let lineages: Vec<&Vec<i32>> = taxa.iter().map(|x| &self.taxonomy[*x as usize]).filter(|x| !x.is_empty()).collect();
+        let lineages: Vec<&Vec<i32>> = taxa
+            .iter()
+            .map(|x| &self.taxonomy[*x as usize])
+            .filter(|x| !x.is_empty())
+            .collect();
 
         for rank in 0..RANKS {
             let final_rank = rank;
             let mut value = -1;
 
-            let iterator = lineages.iter()
+            let iterator = lineages
+                .iter()
                 .map(|&x| x[final_rank as usize])
-                .filter(|&x| if final_rank == GENUS || final_rank == SPECIES { x > 0 } else { x >= 0 });
+                .filter(|&x| {
+                    if final_rank == GENUS || final_rank == SPECIES {
+                        x > 0
+                    } else {
+                        x >= 0
+                    }
+                });
 
             let mut all_match = true;
 
@@ -105,8 +124,8 @@ impl Taxonomy {
                 if value == -1 {
                     value = item;
                 } else if item != value {
-                        all_match = false;
-                        break;
+                    all_match = false;
+                    break;
                 }
             }
 
@@ -137,5 +156,5 @@ fn parse_int(s: &String) -> Result<i32> {
         return Ok(0);
     }
 
-    Ok(s.parse::<i32>().with_context(|| format!("Error parsing {} as an integer", s))?)
+    s.parse::<i32>().with_context(|| format!("Error parsing {} as an integer", s))
 }
