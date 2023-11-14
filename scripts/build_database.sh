@@ -536,14 +536,19 @@ create_most_tables() {
 
   # The Z-trick: replace all K's by Z's so that sorting by original peptide sequence
   # will also sort by equalized peptide sequence
+  # TODO this doesn't fix everything yet so we need 2 sorts, but it's still an improvement
   $CMD_LZ4CAT $INTDIR/peptides-out.tsv.lz4 \
     | awk -F'\t' 'BEGIN {OFS="\t"} {gsub(/K/, "Z", $2); gsub(/K/, "Z", $3); print}' \
     | LC_ALL=C $CMD_SORT -k3 \
-    | $CMD_LZ4 > $OUTPUT_DIR/peptides.tsv.lz4
+    | $CMD_LZ4 > $INTDIR/peptides-original.tsv.lz4
+
+    $CMD_LZ4CAT $INTDIR/peptides-out.tsv.lz4 \
+      | awk -F'\t' 'BEGIN {OFS="\t"} {gsub(/K/, "Z", $2); gsub(/K/, "Z", $3); print}' \
+      | LC_ALL=C $CMD_SORT -k2 \
+      | $CMD_LZ4 > $INTDIR/peptides-equalized.tsv.lz4
 
   rm $INTDIR/peptides-out.tsv.lz4
-
-	log "Finished calculation of most tables with status $?"
+  log "Finished calculation of most tables with status $?"
 }
 
 create_tables_and_filter() {
@@ -552,21 +557,28 @@ create_tables_and_filter() {
 
 
 number_sequences() {
-  have "$OUTPUT_DIR/peptides.tsv.lz4" || return
+  have "$INTDIR/peptides-original.tsv.lz4" "$INTDIR/peptides-equalized.tsv.lz4" || return
 	log "Started the numbering of sequences."
-	# Cut the second and third column (equalized and original sequence) out of the peptides file,
-	# split the data across multiple lines, take the unique lines, and number these
-	# cat -n adds some whitespace at the beginning for fancy printing, so strip that off again as well
-	$CMD_LZ4CAT $OUTPUT_DIR/peptides.tsv.lz4 | cut -f 2,3 | awk '{print $1 "\n" $2}' | uniq | cat -n \
+
+	mkfifo "p_eq"
+	mkfifo "p_or"
+
+	$CMD_LZ4CAT $INTDIR/peptides-original.tsv.lz4 | cut -f 3 > "p_or" &
+	$CMD_LZ4CAT $INTDIR/peptides-equalized.tsv.lz4 | cut -f 2 > "p_eq" &
+
+	sort -u -m "p_or" "p_eq" | cat -n \
 		| sed 's/^ *//' | $CMD_LZ4 - > "$INTDIR/sequences.tsv.lz4"
+
+	rm "p_eq" "p_or"
+
 	log "Finished the numbering of sequences with status $?."
 }
 
 
 calculate_equalized_lcas() {
-	have "$INTDIR/sequences.tsv.lz4" "$OUTPUT_DIR/peptides.tsv.lz4" || return
+	have "$INTDIR/sequences.tsv.lz4" "$INTDIR/peptides-equalized.tsv.lz4" || return
 	log "Started the calculation of equalized LCA's (after substituting AA's by ID's)."
-	$CMD_LZ4CAT $OUTPUT_DIR/peptides.tsv.lz4 | cut -f 2,6 \
+	$CMD_LZ4CAT $INTDIR/peptides-equalized.tsv.lz4 | cut -f 2,6 \
 	  | join -t '	' -o '1.1,2.2' -1 2 -2 1 \
 			"$(luz "$INTDIR/sequences.tsv.lz4")" \
 			- \
@@ -577,9 +589,9 @@ calculate_equalized_lcas() {
 
 
 calculate_original_lcas() {
-	have "$INTDIR/sequences.tsv.lz4" "$OUTPUT_DIR/peptides.tsv.lz4" || return
+	have "$INTDIR/sequences.tsv.lz4" "$INTDIR/peptides-original.tsv.lz4" || return
 	log "Started the calculation of original LCA's (after substituting AA's by ID's)."
-	$CMD_LZ4CAT $OUTPUT_DIR/peptides.tsv.lz4 | cut -f 3,6 \
+	$CMD_LZ4CAT $INTDIR/peptides-original.tsv.lz4 | cut -f 3,6 \
 	  | join -t '	' -o '1.1,2.2' -1 2 -2 1 \
 			"$(luz "$INTDIR/sequences.tsv.lz4")" \
 			- \
@@ -590,10 +602,10 @@ calculate_original_lcas() {
 
 
 calculate_equalized_fas() {
-	have "$OUTPUT_DIR/peptides.tsv.lz4" || return
+	have "$INTDIR/peptides-equalized.tsv.lz4" || return
 	log "Started the calculation of equalized FA's."
 	mkfifo "peptides_eq"
-	$CMD_LZ4CAT "$OUTPUT_DIR/peptides.tsv.lz4" | cut -f2,5 > "peptides_eq" &
+	$CMD_LZ4CAT "$INTDIR/peptides-equalized.tsv.lz4" | cut -f2,5 > "peptides_eq" &
 	$CURRENT_LOCATION/helper_scripts/functional-analysis -i "peptides_eq" -o "$(lz "$INTDIR/FAs_equalized.tsv.lz4")"
 	rm "peptides_eq"
 	log "Finished the calculation of equalized FA's with status $?."
@@ -601,10 +613,10 @@ calculate_equalized_fas() {
 
 
 calculate_original_fas() {
-	have "$OUTPUT_DIR/peptides.tsv.lz4" || return
+	have "$INTDIR/peptides-original.tsv.lz4" || return
 	log "Started the calculation of original FA's."
 	mkfifo "peptides_orig"
-	$CMD_LZ4CAT "$OUTPUT_DIR/peptides.tsv.lz4" | cut -f3,5 > "peptides_orig" &
+	$CMD_LZ4CAT "$INTDIR/peptides-original.tsv.lz4" | cut -f3,5 > "peptides_orig" &
 	$CURRENT_LOCATION/helper_scripts/functional-analysis -i "peptides_orig" -o "$(lz "$INTDIR/FAs_original.tsv.lz4")"
 	rm "peptides_orig"
 	log "Finished the calculation of original FA's."
@@ -625,7 +637,10 @@ create_sequence_table() {
 		| join --nocheck-order -a1 -e '\N' -t '	' -o "1.1 1.2 1.3 2.2" - "elcas" \
 		| join --nocheck-order -a1 -e '\N' -t '	' -o '1.1 1.2 1.3 1.4 2.2' - "ofas" \
 		| join --nocheck-order -a1 -e '\N' -t '	' -o '1.1 1.2 1.3 1.4 1.5 2.2' - "efas" \
-		| sed 's/^0*//' | $CMD_LZ4 - > "$OUTPUT_DIR/sequences.tsv.lz4"
+		| sed 's/^0*//' \
+		# Undo the Z-trick: replace Z in the first column with K again
+		| awk -F'\t' 'BEGIN {OFS="\t"} {gsub(/K/, "Z", $2); print}'
+		| $CMD_LZ4 - > "$OUTPUT_DIR/sequences.tsv.lz4"
 	rm "olcas" "elcas" "ofas" "efas"
 	log "Finished the creation of the sequences table."
 }
@@ -758,6 +773,10 @@ database)
 	rm "$INTDIR/FAs_original.tsv.lz4"
 	rm "$INTDIR/FAs_equalized.tsv.lz4"
 	rm "$INTDIR/sequences.tsv.lz4"
+	rm "$INTDIR/peptides-equalized.tsv.lz4"
+	# Use the original sort as the result
+	# TODO check if this has impact on db loading time, if yes sort by id first & see if it makes up for it
+	mv "$INTDIR/peptides-original.tsv.lz4" "$OUTPUT_DIR/peptides.tsv.lz4"
 	reportProgress "-1" "Fetching EC numbers." 10
 	fetch_ec_numbers
 	reportProgress "-1" "Fetching GO terms." 11
