@@ -1,5 +1,5 @@
-use strum_macros::{Display, EnumCount, EnumIter, EnumString};
 use anyhow::{Context, Result};
+use strum_macros::{Display, EnumCount, EnumIter, EnumString};
 
 #[derive(Debug)]
 pub struct Entry {
