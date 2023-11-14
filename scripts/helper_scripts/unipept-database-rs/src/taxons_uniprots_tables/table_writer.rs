@@ -132,7 +132,7 @@ impl TableWriter {
             &mut self.peptides,
             "{}\t{}\t{}\t{}\t{}",
             self.peptide_count,
-            String::from_utf8(sequence)?,
+            String::from_utf8_lossy(&sequence),
             String::from_utf8_lossy(original_sequence),
             id,
             annotations
