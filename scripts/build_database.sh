@@ -752,20 +752,19 @@ database)
 	create_tables_and_filter
 	echo "Created tables!"
 	number_sequences
-	reportProgress "-1" "Calculating lowest common ancestors." 6
+	reportProgress "-1" "Calculating lowest common ancestors and functional annotations." 6
 	calculate_equalized_lcas &
 	pid1=$!
 	calculate_original_lcas &
 	pid2=$!
-	wait $pid1
-	wait $pid2
-	reportProgress "-1" "Calculating functional annotations." 7
 	calculate_equalized_fas &
-	pid1=$!
+	pid3=$!
 	calculate_original_fas &
-	pid2=$!
+	pid4=$!
 	wait $pid1
 	wait $pid2
+	wait $pid3
+	wait $pid4
 	reportProgress "-1" "Creating sequence table." 9
 	create_sequence_table
 	rm "$INTDIR/LCAs_original.tsv.lz4"
