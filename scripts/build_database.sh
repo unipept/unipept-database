@@ -451,7 +451,7 @@ download_and_convert_all_sources() {
 
         SIZE="$(curl -I "$DB_SOURCE" -s | grep -i content-length | tr -cd '[0-9]')"
 
-        $CMD_ZCAT "/uniprot_sprot.xml.gz" | $CURRENT_LOCATION/helper_scripts/xml-parser -t "$DB_TYPE" | node "$CURRENT_LOCATION/helper_scripts/WriteToChunk.js" "$DB_INDEX_OUTPUT" "$VERBOSE"
+        $CMD_ZCAT "/home/stijndcl/Documents/ugent/thesis/files/uniprot_sprot.xml.gz" | $CURRENT_LOCATION/helper_scripts/xml-parser -t "$DB_TYPE" | node "$CURRENT_LOCATION/helper_scripts/WriteToChunk.js" "$DB_INDEX_OUTPUT" "$VERBOSE"
 
         # Now, compress the different chunks
         CHUNKS=$(find "$DB_INDEX_OUTPUT" -name "*.chunk")
@@ -528,12 +528,7 @@ create_most_tables() {
 
   log "Started sorting peptides table"
 
-  # The Z-trick: replace all K's by Z's so that sorting by original peptide sequence
-  # will also sort by equalized peptide sequence
-  # TODO this doesn't fix everything yet so we need 2 sorts, but it's still an improvement
-  # TODO find a way to eliminate the second sort, or do both at the same time
   $CMD_LZ4CAT $INTDIR/peptides-out.tsv.lz4 \
-    | awk -F'\t' 'BEGIN {OFS="\t"} {gsub(/K/, "Z", $2); gsub(/K/, "Z", $3); print}' \
     | LC_ALL=C $CMD_SORT -k3 \
     | $CMD_LZ4 > $INTDIR/peptides-original.tsv.lz4
 
@@ -757,14 +752,14 @@ database)
 	pid1=$!
 	calculate_original_lcas &
 	pid2=$!
-	calculate_equalized_fas &
-	pid3=$!
-	calculate_original_fas &
-	pid4=$!
 	wait $pid1
 	wait $pid2
-	wait $pid3
-	wait $pid4
+	calculate_equalized_fas &
+	pid1=$!
+	calculate_original_fas &
+	pid2=$!
+	wait $pid1
+	wait $pid2
 	reportProgress "-1" "Creating sequence table." 9
 	create_sequence_table
 	rm "$INTDIR/LCAs_original.tsv.lz4"
