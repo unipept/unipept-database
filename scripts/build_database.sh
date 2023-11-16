@@ -538,11 +538,6 @@ create_most_tables() {
     | LC_ALL=C $CMD_SORT -k2 \
     | $CMD_LZ4 > $INTDIR/peptides-equalized.tsv.lz4
 
-#  $CMD_LZ4CAT $INTDIR/peptides-out.tsv.lz4 \
-#    | awk -F'\t' 'BEGIN {OFS="\t"} {gsub(/K/, "Z", $2); gsub(/K/, "Z", $3); print}' \
-#    | LC_ALL=C $CMD_SORT -k2 \
-#    | $CMD_LZ4 > $INTDIR/peptides-equalized.tsv.lz4
-
   rm $INTDIR/peptides-out.tsv.lz4
   log "Finished calculation of most tables with status $?"
 }
@@ -752,14 +747,14 @@ database)
 	pid1=$!
 	calculate_original_lcas &
 	pid2=$!
-	wait $pid1
-	wait $pid2
 	calculate_equalized_fas &
-	pid1=$!
+	pid3=$!
 	calculate_original_fas &
-	pid2=$!
+	pid4=$!
 	wait $pid1
 	wait $pid2
+	wait $pid3
+	wait $pid4
 	reportProgress "-1" "Creating sequence table." 9
 	create_sequence_table
 	rm "$INTDIR/LCAs_original.tsv.lz4"
