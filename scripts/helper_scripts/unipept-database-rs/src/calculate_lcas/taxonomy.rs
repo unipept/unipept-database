@@ -95,14 +95,8 @@ impl Taxonomy {
 
         let lineages: Vec<&Vec<i32>> = taxa
             .iter()
-            .filter_map(|x| {
-                let result = &self.taxonomy[*x as usize];
-                if !result.is_empty() {
-                    Some(result)
-                } else {
-                    None
-                }
-            })
+            .map(|x| &self.taxonomy[*x as usize])
+            .filter(|x| !x.is_empty())
             .collect();
 
         for rank in 0..RANKS {
