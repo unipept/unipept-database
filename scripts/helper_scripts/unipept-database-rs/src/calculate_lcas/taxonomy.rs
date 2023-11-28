@@ -10,7 +10,7 @@ use crate::utils::files::{open_read, open_sin};
 const GENUS: u8 = 18;
 const RANKS: u8 = 27;
 const SPECIES: u8 = 22;
-const NULL: &str = "\\N";
+const NULL_STRING: &str = "\\N";
 const SEPARATOR: &str = "\t";
 
 pub struct Taxonomy {
@@ -28,17 +28,15 @@ impl Taxonomy {
             let line = line.with_context(|| {
                 format!("Error reading line from input file {}", infile.display())
             })?;
-            let elements: Vec<String> = line.splitn(28, SEPARATOR).map(String::from).collect();
+            let mut elements = line.splitn(28, SEPARATOR).map(parse_int);
+            let key = elements
+                .next()
+                .context("Unable to access key at first index of line")??;
 
-            let key = parse_int(&elements[0])?;
             // Note on the collect::<> here: "?" can't be used inside of map() as it is a closure
             // Collecting into a Result<Vec<_>> will stop instantly when it receives one Error
             // https://doc.rust-lang.org/rust-by-example/error/iter_result.html#fail-the-entire-operation-with-collect
-            let lineage = elements
-                .iter()
-                .skip(1)
-                .map(parse_int)
-                .collect::<Result<Vec<i32>>>()?;
+            let lineage = elements.collect::<Result<Vec<i32>>>()?;
             taxonomy_map.insert(key, lineage);
 
             // Keep track of highest key
@@ -97,8 +95,14 @@ impl Taxonomy {
 
         let lineages: Vec<&Vec<i32>> = taxa
             .iter()
-            .map(|x| &self.taxonomy[*x as usize])
-            .filter(|x| !x.is_empty())
+            .filter_map(|x| {
+                let result = &self.taxonomy[*x as usize];
+                if !result.is_empty() {
+                    Some(result)
+                } else {
+                    None
+                }
+            })
             .collect();
 
         for rank in 0..RANKS {
@@ -116,30 +120,20 @@ impl Taxonomy {
                     }
                 });
 
-            let mut all_match = true;
-
+            // Check if all elements in the iterator are the same
             // This was near-impossible to do with the iterators above,
             // so we're using a simplified loop here
             for item in iterator {
                 if value == -1 {
                     value = item;
                 } else if item != value {
-                    all_match = false;
-                    break;
+                    return lca;
                 }
             }
 
             // If we found a new value that matched for all of them, use this as the new best
-            if value != -1 {
-                // If not everything matched, this is not a common ancestor anymore,
-                // so we can stop
-                if !all_match {
-                    break;
-                }
-
-                if value != 0 {
-                    lca = value;
-                }
+            if value > 0 {
+                lca = value;
             }
         }
 
@@ -151,8 +145,8 @@ impl Taxonomy {
     }
 }
 
-fn parse_int(s: &String) -> Result<i32> {
-    if s == NULL {
+fn parse_int(s: &str) -> Result<i32> {
+    if s == NULL_STRING {
         return Ok(0);
     }
 
