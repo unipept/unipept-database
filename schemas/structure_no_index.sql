@@ -46,7 +46,7 @@ CREATE TABLE IF NOT EXISTS "unipept"."taxons"
     "name"        VARCHAR(120) NOT NULL,
     "rank"        RANK_TYPE    NULL     DEFAULT NULL,
     "parent_id"   INT          NULL     DEFAULT NULL,
-    "valid_taxon" SMALLINT     NOT NULL DEFAULT 1 NOT NULL DEFAULT 1
+    "valid_taxon" SMALLINT     NOT NULL DEFAULT 1
 );
 
 
