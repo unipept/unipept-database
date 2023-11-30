@@ -148,7 +148,7 @@ impl TaxonList {
                 continue;
             };
 
-            let valid = if taxon.valid { '\u{0001}' } else { '\u{0000}' };
+            let valid = if taxon.valid { '1' } else { '0' };
 
             writeln!(
                 &mut writer,
