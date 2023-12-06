@@ -44,24 +44,12 @@ jobs:
 
           # Compress the database before uploading it to a Github release
           zip output.zip output.db
-      - name: Get latest made commit sha
-        id: commit_sha
-        shell: bash
-        run: |
-          echo "::set-output name=sha::$(git rev-parse HEAD)"
       - name: Create new tag
-        uses: octokit/request-action@v2.x
-        id: create_new_tag
+        uses: rickstaa/action-create-tag@v1
+        id: "tag_create"
         with:
-          route: POST /repos/:owner/:repo/git/tags
-          owner: unipept
-          repo: make-database
           tag: database-${{ steps.date.outputs.date }}
           message: "Static information database built on ${{ steps.date.outputs.date }}"
-          object: ${{ steps.commit_sha.outputs.sha }}
-          type: commit
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Create Release
         id: create_release
         uses: actions/create-release@v1
