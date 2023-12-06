@@ -44,18 +44,7 @@ jobs:
 
           # Compress the database before uploading it to a Github release
           zip output.zip output.db
-      - name: Update database versioning
-        shell: bash
-        run: |
-          rm workflows/static_database/version.txt
-          echo "${{ steps.date.outputs.date }}" > workflows/static_database/version.txt
-      - name: Update resources
-        uses: test-room-7/action-update-file@v1
-        with:
-          file-path: workflows/static_database/version.txt
-          commit-msg: Bump db version to ${{ steps.date.outputs.date }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Get newly made commit sha
+      - name: Get latest made commit sha
         id: commit_sha
         shell: bash
         run: |
