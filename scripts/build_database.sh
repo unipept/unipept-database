@@ -86,7 +86,7 @@ END
 # This function removes all temporary files that have been created by this script.
 clean() {
 	# Clean contents of temporary directory
-	rm -rf "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT"
+#	rm -rf "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT"
 	export TMPDIR="$OLD_TMPDIR"
 }
 
@@ -529,12 +529,6 @@ create_most_tables() {
   log "Started sorting peptides table"
 
   $CMD_LZ4CAT $INTDIR/peptides-out.tsv.lz4 \
-    | LC_ALL=C $CMD_SORT -k3 \
-    | $CMD_LZ4 > $INTDIR/peptides-original.tsv.lz4
-
-  # The second time, use the first file that is already sorted, as it prevents having to do the awk again
-  # and it is already _roughly_ sorted so less operations have to happen
-  $CMD_LZ4CAT $INTDIR/peptides-original.tsv.lz4 \
     | LC_ALL=C $CMD_SORT -k2 \
     | $CMD_LZ4 > $INTDIR/peptides-equalized.tsv.lz4
 
@@ -548,16 +542,17 @@ create_tables_and_filter() {
 
 
 number_sequences() {
-  have "$INTDIR/peptides-original.tsv.lz4" "$INTDIR/peptides-equalized.tsv.lz4" || return
+  have "$INTDIR/peptides-equalized.tsv.lz4" || return
 	log "Started the numbering of sequences."
 
 	mkfifo "p_eq"
 	mkfifo "p_or"
 
-	$CMD_LZ4CAT $INTDIR/peptides-original.tsv.lz4 | cut -f 3 > "p_or" &
+  # TODO cut this out of one file so we don't need one of the sorts above anymore?
+	$CMD_LZ4CAT $INTDIR/peptides-equalized.tsv.lz4 | cut -f 3 > "p_or" &
 	$CMD_LZ4CAT $INTDIR/peptides-equalized.tsv.lz4 | cut -f 2 > "p_eq" &
 
-	sort -u -m "p_or" "p_eq" | cat -n \
+	sort -u "p_or" "p_eq" | cat -n \
 		| sed 's/^ *//' | $CMD_LZ4 - > "$INTDIR/sequences.tsv.lz4"
 
 	rm "p_eq" "p_or"
@@ -565,14 +560,31 @@ number_sequences() {
 	log "Finished the numbering of sequences with status $?."
 }
 
+substitute_aas() {
+  have "$INTDIR/peptides-equalized.tsv.lz4" "$INTDIR/sequences.tsv.lz4"
+
+  log "Started the substitution of equalized AA's by ID's for the peptides."
+  $CMD_LZ4CAT $INTDIR/peptides-equalized.tsv.lz4 \
+    | join -t '	' -o '1.1,2.1,1.3,1.4,1.5,1.6' -1 2 -2 2 - "$(luz "$INTDIR/sequences.tsv.lz4")" \
+    | $CMD_LZ4 - > "$INTDIR/peptides_by_equalized.tsv.lz4"
+
+  rm "$INTDIR/peptides-equalized.tsv.lz4"
+  log "Finished the substitution of equalized AA's by ID's for the peptides with status $?."
+
+  # TODO instead of compressing and instantly decompressing, maybe we can use tee here to re-use it?
+  log "Started the substitution of original AA's by ID's for the peptides."
+  $CMD_LZ4CAT "$INTDIR/peptides_by_equalized.tsv.lz4" \
+    | LC_ALL=C $CMD_SORT -k 3b,3 \
+    | join -t '	' -o '1.1,1.2,2.1,1.4,1.5,1.6' -1 3 -2 2 - "$(luz "$INTDIR/sequences.tsv.lz4")" \
+    | $CMD_LZ4 - > "$INTDIR/peptides_by_original.tsv.lz4"
+
+  log "Finished the substitution of original AA's by ID's for the peptides with status $?."
+}
 
 calculate_equalized_lcas() {
-	have "$INTDIR/sequences.tsv.lz4" "$INTDIR/peptides-equalized.tsv.lz4" || return
-	log "Started the calculation of equalized LCA's (after substituting AA's by ID's)."
-	$CMD_LZ4CAT $INTDIR/peptides-equalized.tsv.lz4 | cut -f 2,6 \
-	  | join -t '	' -o '1.1,2.2' -1 2 -2 1 \
-			"$(luz "$INTDIR/sequences.tsv.lz4")" \
-			- \
+	have "$INTDIR/peptides_by_equalized.tsv.lz4" || return
+	log "Started the calculation of equalized LCA's."
+	$CMD_LZ4CAT $INTDIR/peptides_by_equalized.tsv.lz4 | cut -f 2,6 \
 		| java -Xms"$JAVA_MEM" -Xmx"$JAVA_MEM" -jar "$CURRENT_LOCATION/helper_scripts/LineagesSequencesTaxons2LCAs.jar" "$(luz "$OUTPUT_DIR/lineages.tsv.lz4")" \
 		| $CMD_LZ4 - > "$INTDIR/LCAs_equalized.tsv.lz4"
 	log "Finished the calculation of equalized LCA's (after substituting AA's by ID's) with status $?."
@@ -580,12 +592,9 @@ calculate_equalized_lcas() {
 
 
 calculate_original_lcas() {
-	have "$INTDIR/sequences.tsv.lz4" "$INTDIR/peptides-original.tsv.lz4" || return
-	log "Started the calculation of original LCA's (after substituting AA's by ID's)."
-	$CMD_LZ4CAT $INTDIR/peptides-original.tsv.lz4 | cut -f 3,6 \
-	  | join -t '	' -o '1.1,2.2' -1 2 -2 1 \
-			"$(luz "$INTDIR/sequences.tsv.lz4")" \
-			- \
+	have "$INTDIR/peptides_by_original.tsv.lz4" || return
+	log "Started the calculation of original LCA's"
+	$CMD_LZ4CAT $INTDIR/peptides_by_original.tsv.lz4 | cut -f 3,6 \
 		| java -Xms"$JAVA_MEM" -Xmx"$JAVA_MEM" -jar "$CURRENT_LOCATION/helper_scripts/LineagesSequencesTaxons2LCAs.jar" "$(luz "$OUTPUT_DIR/lineages.tsv.lz4")" \
 		| $CMD_LZ4 - > "$INTDIR/LCAs_original.tsv.lz4"
 	log "Finished the calculation of original LCA's (after substituting AA's by ID's) with status $?."
@@ -593,10 +602,10 @@ calculate_original_lcas() {
 
 
 calculate_equalized_fas() {
-	have "$INTDIR/peptides-equalized.tsv.lz4" || return
+	have "$INTDIR/peptides_by_equalized.tsv.lz4" || return
 	log "Started the calculation of equalized FA's."
 	mkfifo "peptides_eq"
-	$CMD_LZ4CAT "$INTDIR/peptides-equalized.tsv.lz4" | cut -f2,5 > "peptides_eq" &
+	$CMD_LZ4CAT "$INTDIR/peptides_by_equalized.tsv.lz4" | cut -f2,5 > "peptides_eq" &
 	$CURRENT_LOCATION/helper_scripts/functional-analysis -i "peptides_eq" -o "$(lz "$INTDIR/FAs_equalized.tsv.lz4")"
 	rm "peptides_eq"
 	log "Finished the calculation of equalized FA's with status $?."
@@ -604,10 +613,10 @@ calculate_equalized_fas() {
 
 
 calculate_original_fas() {
-	have "$INTDIR/peptides-original.tsv.lz4" || return
+	have "$INTDIR/peptides_by_original.tsv.lz4" || return
 	log "Started the calculation of original FA's."
 	mkfifo "peptides_orig"
-	$CMD_LZ4CAT "$INTDIR/peptides-original.tsv.lz4" | cut -f3,5 > "peptides_orig" &
+	$CMD_LZ4CAT "$INTDIR/peptides_by_original.tsv.lz4" | cut -f3,5 > "peptides_orig" &
 	$CURRENT_LOCATION/helper_scripts/functional-analysis -i "peptides_orig" -o "$(lz "$INTDIR/FAs_original.tsv.lz4")"
 	rm "peptides_orig"
 	log "Finished the calculation of original FA's."
@@ -742,6 +751,7 @@ database)
 	create_tables_and_filter
 	echo "Created tables!"
 	number_sequences
+  substitute_aas
 	reportProgress "-1" "Calculating lowest common ancestors and functional annotations." 6
 	calculate_equalized_lcas &
 	pid1=$!
@@ -762,10 +772,10 @@ database)
 	rm "$INTDIR/FAs_original.tsv.lz4"
 	rm "$INTDIR/FAs_equalized.tsv.lz4"
 	rm "$INTDIR/sequences.tsv.lz4"
-	rm "$INTDIR/peptides-equalized.tsv.lz4"
+	rm "$INTDIR/peptides_by_equalized.tsv.lz4"
 	# Use the original sort as the result
 	# TODO check if this has impact on db loading time, if yes sort by id first & see if it makes up for it
-	mv "$INTDIR/peptides-original.tsv.lz4" "$OUTPUT_DIR/peptides.tsv.lz4"
+	mv "$INTDIR/peptides_by_original.tsv.lz4" "$OUTPUT_DIR/peptides.tsv.lz4"
 	reportProgress "-1" "Fetching EC numbers." 10
 	fetch_ec_numbers
 	reportProgress "-1" "Fetching GO terms." 11
@@ -808,11 +818,13 @@ tryptic-index)
 		download_and_convert_all_sources
 		create_tables_and_filter
 		number_sequences
+		substitute_aas
 		calculate_equalized_lcas
 		calculate_original_lcas
 		calculate_equalized_fas
 		calculate_original_fas
 		create_sequence_table
+		# TODO remove temp files
 	fi
 	create_tryptic_index
 	;;
