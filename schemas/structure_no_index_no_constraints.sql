@@ -42,7 +42,7 @@ $$;
 -- -----------------------------------------------------
 CREATE TABLE IF NOT EXISTS "unipept"."taxons"
 (
-    "id"          INT          NOT NULL PRIMARY KEY,
+    "id"          INT          NOT NULL,
     "name"        VARCHAR(120) NOT NULL,
     "rank"        RANK_TYPE    NULL     DEFAULT NULL,
     "parent_id"   INT          NULL     DEFAULT NULL,
@@ -55,7 +55,7 @@ CREATE TABLE IF NOT EXISTS "unipept"."taxons"
 -- -----------------------------------------------------
 CREATE TABLE IF NOT EXISTS "unipept"."uniprot_entries"
 (
-    "id"                       INT          NOT NULL PRIMARY KEY,
+    "id"                       INT          NOT NULL,
     "uniprot_accession_number" CHAR(10)     NOT NULL,
     "version"                  INT          NOT NULL,
     "taxon_id"                 INT          NOT NULL,
@@ -70,7 +70,7 @@ CREATE TABLE IF NOT EXISTS "unipept"."uniprot_entries"
 -- -----------------------------------------------------
 CREATE TABLE IF NOT EXISTS "unipept"."ec_numbers"
 (
-    "id"   INT          NOT NULL PRIMARY KEY,
+    "id"   INT          NOT NULL,
     "code" VARCHAR(15)  NOT NULL,
     "name" VARCHAR(155) NOT NULL
 );
@@ -81,7 +81,7 @@ CREATE TABLE IF NOT EXISTS "unipept"."ec_numbers"
 -- -----------------------------------------------------
 CREATE TABLE IF NOT EXISTS "unipept"."go_terms"
 (
-    "id"        INT          NOT NULL PRIMARY KEY,
+    "id"        INT          NOT NULL,
     "code"      VARCHAR(15)  NOT NULL,
     "namespace" GO_NAMESPACE NOT NULL,
     "name"      VARCHAR(200) NOT NULL
@@ -93,7 +93,7 @@ CREATE TABLE IF NOT EXISTS "unipept"."go_terms"
 -- -----------------------------------------------------
 CREATE TABLE IF NOT EXISTS "unipept"."interpro_entries"
 (
-    "id"       INT          NOT NULL PRIMARY KEY,
+    "id"       INT          NOT NULL,
     "code"     VARCHAR(9)   NOT NULL,
     "category" VARCHAR(32)  NOT NULL,
     "name"     VARCHAR(160) NOT NULL
@@ -105,7 +105,7 @@ CREATE TABLE IF NOT EXISTS "unipept"."interpro_entries"
 -- -----------------------------------------------------
 CREATE TABLE IF NOT EXISTS "unipept"."lineages"
 (
-    "taxon_id"         INT NOT NULL PRIMARY KEY,
+    "taxon_id"         INT NOT NULL,
     "superkingdom"     INT NULL DEFAULT NULL,
     "kingdom"          INT NULL DEFAULT NULL,
     "subkingdom"       INT NULL DEFAULT NULL,
@@ -140,7 +140,7 @@ CREATE TABLE IF NOT EXISTS "unipept"."lineages"
 -- Table "unipept"."sequences"
 CREATE TABLE IF NOT EXISTS "unipept"."sequences"
 (
-    "id"       BIGINT      NOT NULL PRIMARY KEY,
+    "id"       BIGINT      NOT NULL,
     "sequence" VARCHAR(50) NOT NULL,
     "lca"      INT         NULL,
     "lca_il"   INT         NULL,
@@ -154,7 +154,7 @@ CREATE TABLE IF NOT EXISTS "unipept"."sequences"
 -- -----------------------------------------------------
 CREATE TABLE IF NOT EXISTS "unipept"."peptides"
 (
-    "id"                   BIGINT NOT NULL PRIMARY KEY,
+    "id"                   BIGINT NOT NULL,
     "sequence_id"          BIGINT NOT NULL,
     "original_sequence_id" BIGINT NOT NULL,
     "uniprot_entry_id"     BIGINT NOT NULL
@@ -166,7 +166,7 @@ CREATE TABLE IF NOT EXISTS "unipept"."peptides"
 -- -----------------------------------------------------
 CREATE TABLE IF NOT EXISTS "unipept"."datasets"
 (
-    "id"              INT          NOT NULL PRIMARY KEY,
+    "id"              INT          NOT NULL,
     "environment"     VARCHAR(160) NULL,
     "reference"       VARCHAR(500) NULL,
     "url"             VARCHAR(200) NULL,
@@ -179,16 +179,11 @@ CREATE TABLE IF NOT EXISTS "unipept"."datasets"
 -- -----------------------------------------------------
 CREATE TABLE IF NOT EXISTS "unipept"."dataset_items"
 (
-    "id"         INT          NOT NULL PRIMARY KEY,
+    "id"         INT          NOT NULL,
     "dataset_id" BIGINT       NULL,
     "name"       VARCHAR(160) NULL,
     "data"       TEXT         NOT NULL,
-    "order"      INT          NULL,
-    CONSTRAINT "fk_dataset_items_datasets"
-        FOREIGN KEY ("dataset_id")
-            REFERENCES "unipept"."datasets" ("id")
-            ON DELETE NO ACTION
-            ON UPDATE NO ACTION
+    "order"      INT          NULL
 );
 
 
@@ -197,7 +192,7 @@ CREATE TABLE IF NOT EXISTS "unipept"."dataset_items"
 -- -----------------------------------------------------
 CREATE TABLE IF NOT EXISTS "unipept"."go_cross_references"
 (
-    "id"               BIGINT      NOT NULL PRIMARY KEY,
+    "id"               BIGINT      NOT NULL,
     "uniprot_entry_id" BIGINT      NOT NULL,
     "go_term_code"     VARCHAR(15) NOT NULL
 );
@@ -208,7 +203,7 @@ CREATE TABLE IF NOT EXISTS "unipept"."go_cross_references"
 -- -----------------------------------------------------
 CREATE TABLE IF NOT EXISTS "unipept"."ec_cross_references"
 (
-    "id"               BIGINT      NOT NULL PRIMARY KEY,
+    "id"               BIGINT      NOT NULL,
     "uniprot_entry_id" BIGINT      NOT NULL,
     "ec_number_code"   VARCHAR(15) NOT NULL
 );
@@ -219,7 +214,7 @@ CREATE TABLE IF NOT EXISTS "unipept"."ec_cross_references"
 -- -----------------------------------------------------
 CREATE TABLE IF NOT EXISTS "unipept"."interpro_cross_references"
 (
-    "id"                    BIGINT     NOT NULL PRIMARY KEY,
+    "id"                    BIGINT     NOT NULL,
     "uniprot_entry_id"      BIGINT     NOT NULL,
     "interpro_entry_code"   VARCHAR(9) NOT NULL
 );
