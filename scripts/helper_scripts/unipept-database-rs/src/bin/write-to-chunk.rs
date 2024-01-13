@@ -48,7 +48,7 @@ fn main() -> Result<()> {
             index += 1;
         }
 
-        writeln!(&mut file_streams[index], "{line}").context("Error writing to output file")?;
+        writeln!(&mut file_streams[index - 1], "{line}").context("Error writing to output file")?;
     }
 
     Ok(())
@@ -74,7 +74,7 @@ fn write_header(output_dir: &PathBuf, header: String) -> Result<()> {
     let file_handler = File::create(file_path).with_context(|| format!("Unable to create header output file"))?;
     let mut writer = BufWriter::new(file_handler);
 
-    writeln!(&mut writer, "{}", header).context("Error writing header")?;
+    write!(&mut writer, "{}", header).context("Error writing header")?;
 
     Ok(())
 }
