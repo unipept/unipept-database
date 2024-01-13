@@ -1,4 +1,4 @@
-use std::fs::{File, read_dir};
+use std::fs::{read_dir, File};
 use std::io::{BufRead, BufWriter, Write};
 use std::path::{Path, PathBuf};
 
@@ -24,7 +24,10 @@ fn main() -> Result<()> {
             continue;
         }
 
-        let taxa_id: u64 = line.trim().parse().with_context(|| format!("Error parsing {line} as an integer"))?;
+        let taxa_id: u64 = line
+            .trim()
+            .parse()
+            .with_context(|| format!("Error parsing {line} as an integer"))?;
         all_taxa.push(taxa_id);
     }
 
@@ -38,8 +41,10 @@ fn main() -> Result<()> {
         }
 
         let base_name = match path.file_name() {
-            None => {continue;}
-            Some(n) => n.to_str().context("Error creating string from file path")?
+            None => {
+                continue;
+            }
+            Some(n) => n.to_str().context("Error creating string from file path")?,
         };
 
         if !chunk_file_regex.is_match(base_name) {
@@ -48,25 +53,34 @@ fn main() -> Result<()> {
 
         // Parse the taxa range out of the filename
         let replaced_name = base_name.replace("unipept.", "").replace(".chunk.gz", "");
-        let range = replaced_name.split_once("-");
+        let range = replaced_name.split_once('-');
         let range = range.with_context(|| format!("Unable to split {replaced_name} on '-'"))?;
-        let start: u64 = range.0.parse().with_context(|| format!("Error parsing {} as an integer", range.0))?;
-        let end: u64 = range.1.parse().with_context(|| format!("Error parsing {} as an integer", range.1))?;
+        let start: u64 = range
+            .0
+            .parse()
+            .with_context(|| format!("Error parsing {} as an integer", range.0))?;
+        let end: u64 = range
+            .1
+            .parse()
+            .with_context(|| format!("Error parsing {} as an integer", range.1))?;
 
-        let matching_taxa: Vec<&u64> = all_taxa.iter().filter(|&t| start <= *t && *t <= end).collect();
+        let matching_taxa: Vec<&u64> = all_taxa
+            .iter()
+            .filter(|&t| start <= *t && *t <= end)
+            .collect();
 
         // Write matches to a temporary output file
         if !matching_taxa.is_empty() {
-            let mapped_taxa: Vec<String> = matching_taxa.iter().map(|&t| format!("\t{t}$")).collect();
+            let mapped_taxa: Vec<String> =
+                matching_taxa.iter().map(|&t| format!("\t{t}$")).collect();
             let joined_taxa = mapped_taxa.join("\n");
 
             let temp_file_path = Path::new(&args.temp_dir).join(format!("{base_name}.pattern"));
-            let temp_file = File::create(&temp_file_path).context("Error creating temporary pattern file")?;
+            let temp_file =
+                File::create(&temp_file_path).context("Error creating temporary pattern file")?;
             let mut writer = BufWriter::new(temp_file);
-            write!(
-                &mut writer,
-                "{joined_taxa}",
-            ).context("Error writing to temporary pattern file")?;
+            write!(&mut writer, "{joined_taxa}",)
+                .context("Error writing to temporary pattern file")?;
 
             // The two unwraps here can't be handled using the ? operator
             println!("{}", temp_file_path.into_os_string().into_string().unwrap());
@@ -83,5 +97,5 @@ struct Cli {
     chunk_dir: PathBuf,
 
     #[clap(long)]
-    temp_dir: PathBuf
+    temp_dir: PathBuf,
 }

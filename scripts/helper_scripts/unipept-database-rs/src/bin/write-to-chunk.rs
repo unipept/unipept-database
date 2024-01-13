@@ -17,7 +17,8 @@ fn main() -> Result<()> {
         let next = TAXA_BOUNDS[idx + 1];
         let file_name = format!("unipept.{bound}-{next}.chunk");
         let file_path = Path::new(&args.output_dir).join(file_name);
-        let file_handler = File::create(file_path).with_context(|| format!("Unable to create output file {bound}-{next}"))?;
+        let file_handler = File::create(file_path)
+            .with_context(|| format!("Unable to create output file {bound}-{next}"))?;
         let writer = BufWriter::new(file_handler);
         file_streams.push(writer);
     }
@@ -26,7 +27,9 @@ fn main() -> Result<()> {
 
     // First read the header
     let mut header: String = String::new();
-    reader.read_line(&mut header).context("Error reading header from stdin")?;
+    reader
+        .read_line(&mut header)
+        .context("Error reading header from stdin")?;
     write_header(&args.output_dir, header)?;
 
     // Then the rest of the data
@@ -38,7 +41,10 @@ fn main() -> Result<()> {
         }
 
         let spl: Vec<&str> = line.split('\t').collect();
-        let taxon_id = spl[8].trim().parse::<usize>().with_context(|| format!("Error parsing {} as an integer", spl[8]))?;
+        let taxon_id = spl[8]
+            .trim()
+            .parse::<usize>()
+            .with_context(|| format!("Error parsing {} as an integer", spl[8]))?;
 
         // Find the index of this taxon id in the array
         // Note that this can be sped up using binary search (see Python's bisect.bisect_left),
@@ -63,15 +69,15 @@ struct Cli {
 }
 
 const TAXA_BOUNDS: [usize; 45] = [
-    0, 550, 1352, 3047, 5580, 8663, 11676, 32473, 40214, 52774, 66656, 86630, 116960, 162147, 210225, 267979, 334819,
-    408172, 470868, 570509, 673318, 881260, 1046115, 1136135, 1227077, 1300307, 1410620, 1519492, 1650438, 1756149,
-    1820614, 1871070, 1898104, 1922217, 1978231, 2024617, 2026757, 2035430, 2070414, 2202732, 2382165, 2527964, 2601669,
-    2706029, 10000000
+    0, 550, 1352, 3047, 5580, 8663, 11676, 32473, 40214, 52774, 66656, 86630, 116960, 162147,
+    210225, 267979, 334819, 408172, 470868, 570509, 673318, 881260, 1046115, 1136135, 1227077,
+    1300307, 1410620, 1519492, 1650438, 1756149, 1820614, 1871070, 1898104, 1922217, 1978231,
+    2024617, 2026757, 2035430, 2070414, 2202732, 2382165, 2527964, 2601669, 2706029, 10000000,
 ];
 
 fn write_header(output_dir: &PathBuf, header: String) -> Result<()> {
     let file_path = Path::new(output_dir).join("db.header");
-    let file_handler = File::create(file_path).with_context(|| format!("Unable to create header output file"))?;
+    let file_handler = File::create(file_path).context("Unable to create header output file")?;
     let mut writer = BufWriter::new(file_handler);
 
     write!(&mut writer, "{}", header).context("Error writing header")?;
