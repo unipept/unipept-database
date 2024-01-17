@@ -138,10 +138,10 @@ impl TaxonList {
         Ok(taxon.valid)
     }
 
-    pub fn write_taxons(&self, pb: &PathBuf) -> Result<()> {
+    pub fn write_taxons(&mut self, pb: &PathBuf) -> Result<()> {
         let mut writer = open_write(pb).context("Unable to open taxon output file")?;
 
-        for (id, taxon) in self.entries.iter().enumerate() {
+        for (id, taxon) in self.entries.iter_mut().enumerate() {
             let taxon = if let Some(t) = taxon {
                 t
             } else {
@@ -149,6 +149,11 @@ impl TaxonList {
             };
 
             let valid = if taxon.valid { '1' } else { '0' };
+
+            // Cap the name to the limit of the VARCHAR in the database
+            // note that we can't do this earlier on because the name may be used
+            // in validate()
+            taxon.name.truncate(120);
 
             writeln!(
                 &mut writer,

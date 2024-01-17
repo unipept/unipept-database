@@ -28,7 +28,7 @@ impl Entry {
         type_: String,
         accession_number: String,
         sequence: String,
-        name: String,
+        mut name: String,
         version: String,
         taxon_id: String,
         ec_references: Vec<String>,
@@ -38,6 +38,9 @@ impl Entry {
         let parsed_id = taxon_id
             .parse()
             .with_context(|| format!("Failed to parse {} to i32", taxon_id))?;
+
+        // Cap the name to the limit of the VARCHAR in the database
+        name.truncate(150);
 
         Ok(Entry {
             min_length,
