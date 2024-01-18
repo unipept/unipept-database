@@ -74,14 +74,15 @@ impl UniProtEntry {
                 accession_number = pre.to_string();
             }
 
-            // Peptide sequence
+            // Peptide sequence is always at the end and formatted differently
+            // so we handle it as a special case below
             if line.starts_with("SQ") {
                 sequence_index = idx + 1;
                 break;
             }
         }
 
-        // Construct sequence
+        // Construct sequence (which is split over multiple lines)
         for line in data.iter_mut().skip(sequence_index) {
             line.drain(..5);
 
