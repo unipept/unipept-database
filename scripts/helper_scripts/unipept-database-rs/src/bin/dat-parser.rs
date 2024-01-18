@@ -1,4 +1,4 @@
-use std::io::{BufRead, BufReader, Lines, Stdin};
+use std::io::{BufRead, Lines};
 
 use anyhow::{Context, Result};
 
@@ -15,21 +15,21 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-struct SequentialParser {
-    lines: Lines<BufReader<Stdin>>,
-    data: Vec<String>
+struct SequentialParser<B: BufRead> {
+    lines: Lines<B>,
+    data: Vec<String>,
 }
 
-impl SequentialParser {
-    pub fn new(reader: BufReader<Stdin>) -> Self {
+impl<B: BufRead> SequentialParser<B> {
+    pub fn new(reader: B) -> Self {
         Self {
             lines: reader.lines(),
-            data: Vec::new()
+            data: Vec::new(),
         }
     }
 }
 
-impl Iterator for SequentialParser {
+impl<B: BufRead> Iterator for SequentialParser<B> {
     type Item = UniProtEntry;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -44,7 +44,7 @@ impl Iterator for SequentialParser {
             let line = line?.unwrap();
 
             if line == "//" {
-                let entry = UniProtEntry::from(&mut self.data);
+                let entry = UniProtEntry::from_lines(&mut self.data);
                 self.data.clear();
                 return Some(entry.unwrap());
             }
@@ -54,17 +54,25 @@ impl Iterator for SequentialParser {
     }
 }
 
+// Constants to aid in parsing
+const VERSION_STRING_DATE_PREFIX_LEN: usize = "DT   08-NOV-2023, ".len();
+const VERSION_STRING_ENTRY_VERSION_LEN: usize = "entry version".len();
+const VERSION_STRING_FULL_PREFIX_LEN: usize = "DT   08-NOV-2023, entry version ".len();
+
 // Data types
 struct UniProtEntry {
     accession_number: String,
-    sequence: String
+    sequence: String,
+    version: String,
 }
 
 impl UniProtEntry {
-    pub fn from(data: &mut Vec<String>) -> Result<Self> {
+    pub fn from_lines(data: &mut Vec<String>) -> Result<Self> {
         let mut accession_number = String::new();
         let mut sequence = String::new();
         let mut sequence_index = 0;
+        let mut version = String::new();
+        let mut version_index = 0;
 
         for (idx, line) in data.iter_mut().enumerate() {
             // Accession number
@@ -74,13 +82,29 @@ impl UniProtEntry {
                 accession_number = pre.to_string();
             }
 
+            // One of the date fields contains the entry version
+            // and is always in the format "DT   DD-MMM-YYYY, entry version VERSION."
+            else if line.starts_with("DT") && version_index == 0 {
+                if line.len() <= VERSION_STRING_DATE_PREFIX_LEN + VERSION_STRING_ENTRY_VERSION_LEN {
+                    continue;
+                }
+
+                if &line[VERSION_STRING_DATE_PREFIX_LEN..VERSION_STRING_DATE_PREFIX_LEN + VERSION_STRING_ENTRY_VERSION_LEN] == "entry version" {
+                    version_index = idx;
+                }
+            }
+
             // Peptide sequence is always at the end and formatted differently
             // so we handle it as a special case below
-            if line.starts_with("SQ") {
+            else if line.starts_with("SQ") {
                 sequence_index = idx + 1;
                 break;
             }
         }
+
+        // Get entry version (has prefix of constant length and ends with a dot)
+        let version_end = data[version_index].len() - 1;
+        version.push_str(&(data[version_index][VERSION_STRING_FULL_PREFIX_LEN..version_end]));
 
         // Construct sequence (which is split over multiple lines)
         for line in data.iter_mut().skip(sequence_index) {
@@ -91,11 +115,12 @@ impl UniProtEntry {
 
         return Ok(Self {
             accession_number,
-            sequence
-        })
+            sequence,
+            version,
+        });
     }
 
     pub fn write(&self) {
-        println!("{}\t{}", self.accession_number, self.sequence)
+        println!("{}\t{}\t{}", self.accession_number, self.sequence, self.version)
     }
 }
