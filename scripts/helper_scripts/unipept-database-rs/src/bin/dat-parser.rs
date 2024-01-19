@@ -183,18 +183,21 @@ fn parse_name(data: &mut Vec<String>, mut idx: usize, ec_references: &mut Vec<St
     if data[idx].starts_with("DE   RecName") {
         let line = &mut data[idx];
         read_until_metadata(line, ORGANISM_RECOMMENDED_NAME_PREFIX_LEN, target);
+    }
 
-        // Sometimes this field includes the EC numbers as well
-        for i in (idx + 1)..=end_index {
-            if data[i].starts_with("DE            EC=") {
-                let line = &mut data[i];
-                let mut ec_target = String::new();
-                read_until_metadata(line, ORGANISM_RECOMMENDED_NAME_EC_PREFIX_LEN, &mut ec_target);
-                ec_references.push(ec_target);
-                break;
-            }
+    // Sometimes this field includes the EC numbers as well
+    for i in (idx + 1)..=end_index {
+        if data[i].starts_with("DE            EC=") {
+            let line = &mut data[i];
+            let mut ec_target = String::new();
+            read_until_metadata(line, ORGANISM_RECOMMENDED_NAME_EC_PREFIX_LEN, &mut ec_target);
+            ec_references.push(ec_target);
+            break;
         }
+    }
 
+    // After parsing all the EC numbers, if we already have a name just return
+    if !target.is_empty() {
         return end_index + 1;
     }
 
