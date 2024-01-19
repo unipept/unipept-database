@@ -113,6 +113,7 @@ impl UniProtEntry {
         current_index = parse_version(data, &mut version);
         current_index = parse_name(data, current_index, &mut ec_references, &mut name);
         current_index = parse_taxon_id(data, current_index, &mut taxon_id).context("Error parsing taxon id")?;
+        current_index = parse_db_references(data, current_index, &mut go_references, &mut ip_references);
         parse_sequence(data, current_index, &mut sequence);
 
         return Ok(Self {
@@ -131,8 +132,8 @@ impl UniProtEntry {
         println!(
             "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
             self.accession_number,
-            self.name,
             self.sequence,
+            self.name,
             self.version,
             self.ec_references.join(";"),
             self.go_references.join(";"),
@@ -230,6 +231,46 @@ fn parse_taxon_id(data: &Vec<String>, mut idx: usize, target: &mut String) -> Re
     }
 
     Ok(idx)
+}
+
+fn parse_db_references(data: &mut Vec<String>, mut idx: usize, go_references: &mut Vec<String>, ip_references: &mut Vec<String>) -> usize {
+    let original_idx = idx;
+    let length = data.len();
+
+    // Find where references start
+    while !data[idx].starts_with("DR") {
+        idx += 1;
+
+        // No references present in this entry
+        if idx == length {
+            return original_idx
+        }
+    }
+
+    // Parse all references
+    while data[idx].starts_with("DR") {
+        let line = &mut data[idx];
+        line.drain(..COMMON_PREFIX_LEN);
+
+        parse_db_reference(line, go_references, ip_references);
+
+        idx += 1;
+    }
+
+    idx
+}
+
+fn parse_db_reference(line: &mut String, go_references: &mut Vec<String>, ip_references: &mut Vec<String>) {
+    if line.starts_with("GO;") {
+        let substr = &line[4..14];
+        go_references.push(substr.to_string());
+    } else if line.starts_with("InterPro;") {
+        let substr = &line[10..19];
+        ip_references.push(substr.to_string());
+    } else if line.starts_with("EC") {
+        // TODO remove this after testing on trembl
+        panic!("Found an EC reference in the DB references");
+    }
 }
 
 fn parse_sequence(data: &mut Vec<String>, mut idx: usize, target: &mut String) {
