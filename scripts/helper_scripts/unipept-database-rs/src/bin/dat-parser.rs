@@ -1,18 +1,41 @@
 use std::io::{BufRead, Lines};
 
 use anyhow::{Context, Result};
+use clap::Parser;
 
 use unipept_database::utils::files::open_sin;
 
 fn main() -> Result<()> {
+    let args = Cli::parse();
     let reader = open_sin();
     // let (s_raw, r_raw) = bounded::<Vec<String>>(4);
     let parser = SequentialParser::new(reader);
     for entry in parser {
-        entry.write();
+        entry.write(&args.db_type);
     }
 
     Ok(())
+}
+
+#[derive(Parser, Debug)]
+struct Cli {
+    #[clap(value_enum, short = 't', long, default_value_t = UniprotType::Swissprot)]
+    db_type: UniprotType
+}
+
+#[derive(clap::ValueEnum, Clone, Debug)]
+enum UniprotType {
+    Swissprot,
+    Trembl,
+}
+
+impl UniprotType {
+    pub fn to_str(&self) -> &str {
+        match self {
+            UniprotType::Swissprot => "swissprot",
+            UniprotType::Trembl => "trembl",
+        }
+    }
 }
 
 struct SequentialParser<B: BufRead> {
@@ -55,8 +78,7 @@ impl<B: BufRead> Iterator for SequentialParser<B> {
 }
 
 // Constants to aid in parsing
-const VERSION_STRING_DATE_PREFIX_LEN: usize = "DT   08-NOV-2023, ".len();
-const VERSION_STRING_ENTRY_VERSION_LEN: usize = "entry version".len();
+const COMMON_PREFIX_LEN: usize = "ID   ".len();
 const VERSION_STRING_FULL_PREFIX_LEN: usize = "DT   08-NOV-2023, entry version ".len();
 
 // Data types
@@ -68,50 +90,14 @@ struct UniProtEntry {
 
 impl UniProtEntry {
     pub fn from_lines(data: &mut Vec<String>) -> Result<Self> {
-        let mut accession_number = String::new();
-        let mut sequence = String::new();
-        let mut sequence_index = 0;
+        let mut current_index: usize;
+        let accession_number: String;
         let mut version = String::new();
-        let mut version_index = 0;
+        let mut sequence = String::new();
 
-        for (idx, line) in data.iter_mut().enumerate() {
-            // Accession number
-            if line.starts_with("AC") {
-                line.drain(..5);
-                let (pre, _) = line.split_once(";").with_context(|| format!("Unable to split \"{line}\" on ';'"))?;
-                accession_number = pre.to_string();
-            }
-
-            // One of the date fields contains the entry version
-            // and is always in the format "DT   DD-MMM-YYYY, entry version VERSION."
-            else if line.starts_with("DT") && version_index == 0 {
-                if line.len() <= VERSION_STRING_DATE_PREFIX_LEN + VERSION_STRING_ENTRY_VERSION_LEN {
-                    continue;
-                }
-
-                if &line[VERSION_STRING_DATE_PREFIX_LEN..VERSION_STRING_DATE_PREFIX_LEN + VERSION_STRING_ENTRY_VERSION_LEN] == "entry version" {
-                    version_index = idx;
-                }
-            }
-
-            // Peptide sequence is always at the end and formatted differently
-            // so we handle it as a special case below
-            else if line.starts_with("SQ") {
-                sequence_index = idx + 1;
-                break;
-            }
-        }
-
-        // Get entry version (has prefix of constant length and ends with a dot)
-        let version_end = data[version_index].len() - 1;
-        version.push_str(&(data[version_index][VERSION_STRING_FULL_PREFIX_LEN..version_end]));
-
-        // Construct sequence (which is split over multiple lines)
-        for line in data.iter_mut().skip(sequence_index) {
-            line.drain(..5);
-
-            sequence.push_str(&line.replace(" ", ""));
-        }
+        accession_number = parse_ac_number(data).context("Error getting accession number")?;
+        current_index = parse_version(data, &mut version);
+        parse_sequence(data, current_index, &mut sequence);
 
         return Ok(Self {
             accession_number,
@@ -120,7 +106,48 @@ impl UniProtEntry {
         });
     }
 
-    pub fn write(&self) {
-        println!("{}\t{}\t{}", self.accession_number, self.sequence, self.version)
+    pub fn write(&self, db_type: &UniprotType) {
+        println!("{}\t{}\t{}\t{}", self.accession_number, self.sequence, self.version, db_type.to_str())
+    }
+}
+
+// Functions to parse an Entry out of a Vec<String>
+fn parse_ac_number(data: &mut Vec<String>) -> Result<String> {
+    // The AC number is always the second element
+    let line = &mut data[1];
+    line.drain(..COMMON_PREFIX_LEN);
+    let (pre, _) = line.split_once(";").with_context(|| format!("Unable to split \"{line}\" on ';'"))?;
+    Ok(pre.to_string())
+}
+
+fn parse_version(data: &mut Vec<String>, target: &mut String) -> usize {
+    let mut last_field: usize = 2;
+
+    // The date fields are always the third-n elements
+    // The version is always the last one
+    while data[last_field + 1].starts_with("DT") {
+        last_field += 1;
+    }
+
+    // Get entry version (has prefix of constant length and ends with a dot)
+    let version_end = data[last_field].len() - 1;
+    target.push_str(&(data[last_field][VERSION_STRING_FULL_PREFIX_LEN..version_end]));
+    last_field + 1
+}
+
+fn parse_sequence(data: &mut Vec<String>, mut idx: usize, target: &mut String) {
+    // Find the beginning of the sequence
+    // optionally skip over some fields we don't care for
+    while !data[idx].starts_with("SQ") {
+        idx += 1;
+    }
+
+    // First line of the sequence contains some metadata we don't care for
+    idx += 1;
+
+    // Combine all remaining lines
+    for line in data.iter_mut().skip(idx) {
+        line.drain(..COMMON_PREFIX_LEN);
+        target.push_str(&line.replace(" ", ""));
     }
 }
