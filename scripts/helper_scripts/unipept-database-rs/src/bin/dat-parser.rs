@@ -79,6 +79,9 @@ impl<B: BufRead> Iterator for SequentialParser<B> {
 
 // Constants to aid in parsing
 const COMMON_PREFIX_LEN: usize = "ID   ".len();
+
+const ORGANISM_RECOMMENDED_NAME_PREFIX_LEN: usize = "DE   RecName: Full=".len();
+const ORGANISM_RECOMMENDED_NAME_EC_PREFIX_LEN: usize = "DE            EC=".len();
 const ORGANISM_TAXON_ID_PREFIX_LEN: usize = "OX   NCBI_TaxID=".len();
 const VERSION_STRING_FULL_PREFIX_LEN: usize = "DT   08-NOV-2023, entry version ".len();
 
@@ -106,9 +109,9 @@ impl UniProtEntry {
         let mut taxon_id = String::new();
         let mut sequence = String::new();
 
-        accession_number = parse_ac_number(data).context("Error getting accession number")?;
+        accession_number = parse_ac_number(data).context("Error parsing accession number")?;
         current_index = parse_version(data, &mut version);
-        current_index = parse_name(data, current_index, &mut name);
+        current_index = parse_name(data, current_index, &mut ec_references, &mut name);
         current_index = parse_taxon_id(data, current_index, &mut taxon_id).context("Error parsing taxon id")?;
         parse_sequence(data, current_index, &mut sequence);
 
@@ -164,7 +167,7 @@ fn parse_version(data: &Vec<String>, target: &mut String) -> usize {
     last_field + 1
 }
 
-fn parse_name(data: &mut Vec<String>, mut idx: usize, target: &mut String) -> usize {
+fn parse_name(data: &mut Vec<String>, mut idx: usize, ec_references: &mut Vec<String>, target: &mut String) -> usize {
     // Find where the info starts and ends
     while !data[idx].starts_with("DE") {
         idx += 1;
@@ -176,7 +179,39 @@ fn parse_name(data: &mut Vec<String>, mut idx: usize, target: &mut String) -> us
         end_index += 1;
     }
 
+    // If there is a recommended name, use that
+    if data[idx].starts_with("DE   RecName") {
+        let line = &mut data[idx];
+        read_until_metadata(line, ORGANISM_RECOMMENDED_NAME_PREFIX_LEN, target);
+
+        // Sometimes this field includes the EC numbers as well
+        for i in (idx + 1)..=end_index {
+            if data[i].starts_with("DE            EC=") {
+                let line = &mut data[i];
+                let mut ec_target = String::new();
+                read_until_metadata(line, ORGANISM_RECOMMENDED_NAME_EC_PREFIX_LEN, &mut ec_target);
+                ec_references.push(ec_target);
+                break;
+            }
+        }
+
+        return end_index + 1;
+    }
+
     end_index + 1
+}
+
+fn read_until_metadata(line: &mut String, prefix_len: usize, target: &mut String) {
+    line.drain(..prefix_len);
+
+    // The line either contains some metadata, or just ends with a semicolon
+    // In the latter case, move the position to the end of the string,
+    // so we can pretend it is at a bracket and cut the semicolon out
+    let bracket_index = match line.find("{") {
+        None => line.len(),
+        Some(i) => i
+    };
+    target.push_str(&(line[..bracket_index - 1]));
 }
 
 fn parse_taxon_id(data: &Vec<String>, mut idx: usize, target: &mut String) -> Result<usize> {
