@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::io::{BufRead, Lines};
 
 use anyhow::{Context, Result};
@@ -9,6 +10,7 @@ fn main() -> Result<()> {
     let args = Cli::parse();
     let reader = open_sin();
     // let (s_raw, r_raw) = bounded::<Vec<String>>(4);
+    write_header();
     let parser = SequentialParser::new(reader);
     for entry in parser {
         entry.write(&args.db_type);
@@ -77,11 +79,28 @@ impl<B: BufRead> Iterator for SequentialParser<B> {
     }
 }
 
+fn write_header() {
+    let fields: [&str; 9] = [
+        "Entry",
+        "Sequence",
+        "Protein names",
+        "Version (entry)",
+        "EC number",
+        "Gene ontology IDs",
+        "Cross-reference (InterPro)",
+        "Status",
+        "Organism ID",
+    ];
+
+    let result_string = fields.join("\t");
+    println!("{}", result_string);
+}
+
 // Constants to aid in parsing
 const COMMON_PREFIX_LEN: usize = "ID   ".len();
 
-const ORGANISM_RECOMMENDED_NAME_PREFIX_LEN: usize = "DE   RecName: Full=".len();
-const ORGANISM_RECOMMENDED_NAME_EC_PREFIX_LEN: usize = "DE            EC=".len();
+const ORGANISM_RECOMMENDED_NAME_PREFIX_LEN: usize = "RecName: Full=".len();
+const ORGANISM_RECOMMENDED_NAME_EC_PREFIX_LEN: usize = "EC=".len();
 const ORGANISM_TAXON_ID_PREFIX_LEN: usize = "OX   NCBI_TaxID=".len();
 const VERSION_STRING_FULL_PREFIX_LEN: usize = "DT   08-NOV-2023, entry version ".len();
 
@@ -112,7 +131,7 @@ impl UniProtEntry {
         accession_number = parse_ac_number(data).context("Error parsing accession number")?;
         current_index = parse_version(data, &mut version);
         current_index = parse_name(data, current_index, &mut ec_references, &mut name);
-        current_index = parse_taxon_id(data, current_index, &mut taxon_id).context("Error parsing taxon id")?;
+        current_index = parse_taxon_id(data, current_index, &mut taxon_id);
         current_index = parse_db_references(data, current_index, &mut go_references, &mut ip_references);
         parse_sequence(data, current_index, &mut sequence);
 
@@ -156,6 +175,11 @@ fn parse_ac_number(data: &mut Vec<String>) -> Result<String> {
 fn parse_version(data: &Vec<String>, target: &mut String) -> usize {
     let mut last_field: usize = 2;
 
+    // Skip past previous fields to get to the dates
+    while !data[last_field].starts_with("DT") {
+        last_field += 1;
+    }
+
     // The date fields are always the third-n elements
     // The version is always the last one
     while data[last_field + 1].starts_with("DT") {
@@ -168,69 +192,83 @@ fn parse_version(data: &Vec<String>, target: &mut String) -> usize {
     last_field + 1
 }
 
-fn parse_name(data: &mut Vec<String>, mut idx: usize, ec_references: &mut Vec<String>, target: &mut String) -> usize {
+fn parse_name(data: &mut Vec<String>, mut idx: usize, ec_references: &mut Vec<String>,target: &mut String) -> usize {
     // Find where the info starts and ends
     while !data[idx].starts_with("DE") {
         idx += 1;
     }
 
     let mut end_index = idx;
+    let mut last_recommended_idx = 0;
+    let mut ec_reference_set = HashSet::new();
 
-    while data[end_index + 1].starts_with("DE") {
+    while data[end_index].starts_with("DE") {
+        let line = &mut data[end_index];
+        line.drain(..COMMON_PREFIX_LEN);
+        drain_leading_spaces(line);
+
+        // Keep track of the last recommended name
+        if line.starts_with("RecName: Full=") {
+            last_recommended_idx = end_index;
+        }
+        // Find EC numbers
+        else if line.starts_with("EC=") {
+            let mut ec_target = String::new();
+            read_until_metadata(line, ORGANISM_RECOMMENDED_NAME_EC_PREFIX_LEN, &mut ec_target);
+
+            if !ec_reference_set.contains(&ec_target) {
+                ec_reference_set.insert(ec_target.clone());
+                ec_references.push(ec_target);
+            }
+        }
+
         end_index += 1;
     }
 
-    // If there is a recommended name, use that
-    if data[idx].starts_with("DE   RecName") {
-        let line = &mut data[idx];
+    // If we found a recommended name, use that
+    if last_recommended_idx != 0 {
+        let line = &mut data[last_recommended_idx];
         read_until_metadata(line, ORGANISM_RECOMMENDED_NAME_PREFIX_LEN, target);
+        return end_index;
     }
 
-    // Sometimes this field includes the EC numbers as well
-    for i in (idx + 1)..=end_index {
-        if data[i].starts_with("DE            EC=") {
-            let line = &mut data[i];
-            let mut ec_target = String::new();
-            read_until_metadata(line, ORGANISM_RECOMMENDED_NAME_EC_PREFIX_LEN, &mut ec_target);
-            ec_references.push(ec_target);
-        }
-    }
+    // // If there is a recommended name, use that
+    // if data[idx].starts_with("DE   RecName") {
+    //     let line = &mut data[idx];
+    //     read_until_metadata(line, ORGANISM_RECOMMENDED_NAME_PREFIX_LEN, target);
+    // }
+    //
+    // // Sometimes this field includes the EC numbers as well
+    // for i in (idx + 1)..=end_index {
+    //     if data[i].starts_with("DE            EC=") {
+    //         let line = &mut data[i];
+    //         let mut ec_target = String::new();
+    //         read_until_metadata(line, ORGANISM_RECOMMENDED_NAME_EC_PREFIX_LEN, &mut ec_target);
+    //         ec_references.push(ec_target);
+    //     }
+    // }
+    //
+    // // After parsing all the EC numbers, if we already have a name just return
+    // if !target.is_empty() {
+    //     return end_index + 1;
+    // }
 
-    // After parsing all the EC numbers, if we already have a name just return
-    if !target.is_empty() {
-        return end_index + 1;
-    }
-
-    end_index + 1
+    end_index
 }
 
-fn read_until_metadata(line: &mut String, prefix_len: usize, target: &mut String) {
-    line.drain(..prefix_len);
-
-    // The line either contains some metadata, or just ends with a semicolon
-    // In the latter case, move the position to the end of the string,
-    // so we can pretend it is at a bracket and cut the semicolon out
-    let bracket_index = match line.find("{") {
-        None => line.len(),
-        Some(i) => i
-    };
-    target.push_str(&(line[..bracket_index - 1]));
-}
-
-fn parse_taxon_id(data: &Vec<String>, mut idx: usize, target: &mut String) -> Result<usize> {
+fn parse_taxon_id(data: &mut Vec<String>, mut idx: usize, target: &mut String) -> usize {
     while !data[idx].starts_with("OX   NCBI_TaxID=") {
         idx += 1;
     }
 
-    let line = &data[idx];
-    let semicolon = line.find(';').with_context(|| format!("Expected semicolon in taxon id line {line}"))?;
-    target.push_str(&(line[ORGANISM_TAXON_ID_PREFIX_LEN..semicolon]));
+    let line = &mut data[idx];
+    read_until_metadata(line, ORGANISM_TAXON_ID_PREFIX_LEN, target);
 
     while data[idx].starts_with("OX") {
         idx += 1;
     }
 
-    Ok(idx)
+    idx
 }
 
 fn parse_db_references(data: &mut Vec<String>, mut idx: usize, go_references: &mut Vec<String>, ip_references: &mut Vec<String>) -> usize {
@@ -287,5 +325,41 @@ fn parse_sequence(data: &mut Vec<String>, mut idx: usize, target: &mut String) {
     for line in data.iter_mut().skip(idx) {
         line.drain(..COMMON_PREFIX_LEN);
         target.push_str(&line.replace(" ", ""));
+    }
+}
+
+fn read_until_metadata(line: &mut String, prefix_len: usize, target: &mut String) {
+    line.drain(..prefix_len);
+
+    // The line either contains some metadata, or just ends with a semicolon
+    // In the latter case, move the position to the end of the string,
+    // so we can pretend it is at a bracket and cut the semicolon out
+    // If it contains metadata, this wrapped in curly braces after a space
+    // (sometimes there are curly braces inside of the name itself, so just a curly is not enough)
+    let mut bracket_index = 0;
+    let mut previous_char = '\0';
+
+    for (i, c) in line.chars().enumerate() {
+        if c == '{' && previous_char == ' ' {
+            bracket_index = i;
+            break;
+        }
+
+        previous_char = c;
+    }
+
+    if bracket_index == 0 {
+        bracket_index = line.len();
+    }
+
+    target.push_str(&(line[..bracket_index - 1]));
+}
+
+fn drain_leading_spaces(line: &mut String) {
+    for (idx, c) in line.chars().enumerate() {
+        if c != ' ' {
+            line.drain(..idx);
+            break;
+        }
     }
 }
