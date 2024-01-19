@@ -192,7 +192,6 @@ fn parse_name(data: &mut Vec<String>, mut idx: usize, ec_references: &mut Vec<St
             let mut ec_target = String::new();
             read_until_metadata(line, ORGANISM_RECOMMENDED_NAME_EC_PREFIX_LEN, &mut ec_target);
             ec_references.push(ec_target);
-            break;
         }
     }
 
