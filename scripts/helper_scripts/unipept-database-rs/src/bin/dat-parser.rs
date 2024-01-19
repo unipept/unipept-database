@@ -20,7 +20,7 @@ fn main() -> Result<()> {
 #[derive(Parser, Debug)]
 struct Cli {
     #[clap(value_enum, short = 't', long, default_value_t = UniprotType::Swissprot)]
-    db_type: UniprotType
+    db_type: UniprotType,
 }
 
 #[derive(clap::ValueEnum, Clone, Debug)]
@@ -79,13 +79,19 @@ impl<B: BufRead> Iterator for SequentialParser<B> {
 
 // Constants to aid in parsing
 const COMMON_PREFIX_LEN: usize = "ID   ".len();
+const ORGANISM_TAXON_ID_PREFIX_LEN: usize = "OX   NCBI_TaxID=".len();
 const VERSION_STRING_FULL_PREFIX_LEN: usize = "DT   08-NOV-2023, entry version ".len();
 
 // Data types
 struct UniProtEntry {
     accession_number: String,
+    name: String,
     sequence: String,
     version: String,
+    ec_references: Vec<String>,
+    go_references: Vec<String>,
+    ip_references: Vec<String>,
+    taxon_id: String,
 }
 
 impl UniProtEntry {
@@ -93,21 +99,44 @@ impl UniProtEntry {
         let mut current_index: usize;
         let accession_number: String;
         let mut version = String::new();
+        let mut name = String::new();
+        let mut ec_references = Vec::<String>::new();
+        let mut go_references = Vec::<String>::new();
+        let mut ip_references = Vec::<String>::new();
+        let mut taxon_id = String::new();
         let mut sequence = String::new();
 
         accession_number = parse_ac_number(data).context("Error getting accession number")?;
         current_index = parse_version(data, &mut version);
+        current_index = parse_name(data, current_index, &mut name);
+        current_index = parse_taxon_id(data, current_index, &mut taxon_id).context("Error parsing taxon id")?;
         parse_sequence(data, current_index, &mut sequence);
 
         return Ok(Self {
             accession_number,
+            name,
             sequence,
             version,
+            ec_references,
+            go_references,
+            ip_references,
+            taxon_id,
         });
     }
 
     pub fn write(&self, db_type: &UniprotType) {
-        println!("{}\t{}\t{}\t{}", self.accession_number, self.sequence, self.version, db_type.to_str())
+        println!(
+            "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+            self.accession_number,
+            self.name,
+            self.sequence,
+            self.version,
+            self.ec_references.join(";"),
+            self.go_references.join(";"),
+            self.ip_references.join(";"),
+            db_type.to_str(),
+            self.taxon_id
+        )
     }
 }
 
@@ -120,7 +149,7 @@ fn parse_ac_number(data: &mut Vec<String>) -> Result<String> {
     Ok(pre.to_string())
 }
 
-fn parse_version(data: &mut Vec<String>, target: &mut String) -> usize {
+fn parse_version(data: &Vec<String>, target: &mut String) -> usize {
     let mut last_field: usize = 2;
 
     // The date fields are always the third-n elements
@@ -133,6 +162,37 @@ fn parse_version(data: &mut Vec<String>, target: &mut String) -> usize {
     let version_end = data[last_field].len() - 1;
     target.push_str(&(data[last_field][VERSION_STRING_FULL_PREFIX_LEN..version_end]));
     last_field + 1
+}
+
+fn parse_name(data: &mut Vec<String>, mut idx: usize, target: &mut String) -> usize {
+    // Find where the info starts and ends
+    while !data[idx].starts_with("DE") {
+        idx += 1;
+    }
+
+    let mut end_index = idx;
+
+    while data[end_index + 1].starts_with("DE") {
+        end_index += 1;
+    }
+
+    end_index + 1
+}
+
+fn parse_taxon_id(data: &Vec<String>, mut idx: usize, target: &mut String) -> Result<usize> {
+    while !data[idx].starts_with("OX   NCBI_TaxID=") {
+        idx += 1;
+    }
+
+    let line = &data[idx];
+    let semicolon = line.find(';').with_context(|| format!("Expected semicolon in taxon id line {line}"))?;
+    target.push_str(&(line[ORGANISM_TAXON_ID_PREFIX_LEN..semicolon]));
+
+    while data[idx].starts_with("OX") {
+        idx += 1;
+    }
+
+    Ok(idx)
 }
 
 fn parse_sequence(data: &mut Vec<String>, mut idx: usize, target: &mut String) {
