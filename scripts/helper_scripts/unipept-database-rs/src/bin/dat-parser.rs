@@ -148,6 +148,10 @@ impl UniProtEntry {
     }
 
     pub fn write(&self, db_type: &UniprotType) {
+        if self.name.is_empty() {
+            eprintln!("Could not find a name for entry AC-{}", self.accession_number);
+        }
+
         println!(
             "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
             self.accession_number,
@@ -200,6 +204,7 @@ fn parse_name(data: &mut Vec<String>, mut idx: usize, ec_references: &mut Vec<St
 
     let mut end_index = idx;
     let mut last_recommended_idx = 0;
+    let mut last_submitted_idx = 0;
     let mut ec_reference_set = HashSet::new();
 
     while data[end_index].starts_with("DE") {
@@ -221,6 +226,16 @@ fn parse_name(data: &mut Vec<String>, mut idx: usize, ec_references: &mut Vec<St
                 ec_references.push(ec_target);
             }
         }
+        // Keep track of the last submitted name
+        else if line.starts_with("SubName: Full=") {
+            last_submitted_idx = end_index;
+        }
+
+        // TODO domains
+        // TODO domain recommended name
+        // TODO domain submitted name
+        // TODO protein recommended name
+        // TODO protein submitted name
 
         end_index += 1;
     }
@@ -232,26 +247,12 @@ fn parse_name(data: &mut Vec<String>, mut idx: usize, ec_references: &mut Vec<St
         return end_index;
     }
 
-    // // If there is a recommended name, use that
-    // if data[idx].starts_with("DE   RecName") {
-    //     let line = &mut data[idx];
-    //     read_until_metadata(line, ORGANISM_RECOMMENDED_NAME_PREFIX_LEN, target);
-    // }
-    //
-    // // Sometimes this field includes the EC numbers as well
-    // for i in (idx + 1)..=end_index {
-    //     if data[i].starts_with("DE            EC=") {
-    //         let line = &mut data[i];
-    //         let mut ec_target = String::new();
-    //         read_until_metadata(line, ORGANISM_RECOMMENDED_NAME_EC_PREFIX_LEN, &mut ec_target);
-    //         ec_references.push(ec_target);
-    //     }
-    // }
-    //
-    // // After parsing all the EC numbers, if we already have a name just return
-    // if !target.is_empty() {
-    //     return end_index + 1;
-    // }
+    // Last resort: use the submitted name
+    if last_submitted_idx != 0 {
+        let line = &mut data[last_submitted_idx];
+        read_until_metadata(line, ORGANISM_RECOMMENDED_NAME_PREFIX_LEN, target);
+        return end_index;
+    }
 
     end_index
 }
