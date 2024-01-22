@@ -257,18 +257,59 @@ fn parse_name(data: &mut Vec<String>, mut idx: usize, ec_references: &mut Vec<St
         idx += 1;
     }
 
-    let mut end_index = idx;
-    let mut last_recommended_idx = 0;
     let mut ec_reference_set = HashSet::new();
+    let mut end_index = idx;
+
+    // Track all names in order of preference:
+    // - Last recommended name of protein components
+    // - Last recommended name of protein domains
+    // - Recommended name of protein itself
+    // - Last submitted name of protein components
+    // - Last submitted name of protein domains
+    // - Submitted name of protein itself
+    let mut name_indices: [usize; 6] = [usize::MAX; 6];
+    const LAST_COMPONENT_RECOMMENDED_IDX: usize = 0;
+    const LAST_COMPONENT_SUBMITTED_IDX: usize = 3;
+    const LAST_DOMAIN_RECOMMENDED_IDX: usize = 1;
+    const LAST_DOMAIN_SUBMITTED_IDX: usize = 4;
+    const LAST_PROTEIN_RECOMMENDED_IDX: usize = 2;
+    const LAST_PROTEIN_SUBMITTED_IDX: usize = 5;
+
+    // Keep track of which block we are currently in
+    // Order is always protein -> components -> domain
+    let mut inside_domain = false;
+    let mut inside_component = false;
 
     while data[end_index].starts_with("DE") {
         let line = &mut data[end_index];
         line.drain(..COMMON_PREFIX_LEN);
+
+        // Marks the start of a Component
+        if line == "Contains:" {
+            inside_component = true;
+            end_index += 1;
+            continue;
+        }
+
+        // Marks the start of a Domain
+        if line == "Includes:" {
+            inside_domain = true;
+            end_index += 1;
+            continue;
+        }
+
+        // Remove all other spaces (consecutive lines have leading spaces we don't care for)
         drain_leading_spaces(line);
 
         // Keep track of the last recommended name
         if line.starts_with("RecName: Full=") {
-            last_recommended_idx = end_index;
+            if inside_domain {
+                name_indices[LAST_DOMAIN_RECOMMENDED_IDX] = end_index;
+            } else if inside_component {
+                name_indices[LAST_COMPONENT_RECOMMENDED_IDX] = end_index;
+            } else {
+                name_indices[LAST_PROTEIN_RECOMMENDED_IDX] = end_index;
+            }
         }
         // Find EC numbers
         else if line.starts_with("EC=") {
@@ -280,37 +321,29 @@ fn parse_name(data: &mut Vec<String>, mut idx: usize, ec_references: &mut Vec<St
                 ec_references.push(ec_target);
             }
         }
+        // Keep track of the last submitted name
+        else if line.starts_with("SubName: Full=") {
+            if inside_domain {
+                name_indices[LAST_DOMAIN_SUBMITTED_IDX] = end_index;
+            } else if inside_component {
+                name_indices[LAST_COMPONENT_SUBMITTED_IDX] = end_index;
+            } else {
+                name_indices[LAST_PROTEIN_SUBMITTED_IDX] = end_index;
+            }
+        }
 
         end_index += 1;
     }
 
-    // If we found a recommended name, use that
-    if last_recommended_idx != 0 {
-        let line = &mut data[last_recommended_idx];
-        read_until_metadata(line, ORGANISM_RECOMMENDED_NAME_PREFIX_LEN, target);
-        return end_index;
+    // Choose a name from the ones we encountered
+    // Use the first name that we managed to find, in order
+    for idx in name_indices {
+        if idx != usize::MAX {
+            let line = &mut data[idx];
+            read_until_metadata(line, ORGANISM_RECOMMENDED_NAME_PREFIX_LEN, target);
+            return end_index;
+        }
     }
-
-    // // If there is a recommended name, use that
-    // if data[idx].starts_with("DE   RecName") {
-    //     let line = &mut data[idx];
-    //     read_until_metadata(line, ORGANISM_RECOMMENDED_NAME_PREFIX_LEN, target);
-    // }
-    //
-    // // Sometimes this field includes the EC numbers as well
-    // for i in (idx + 1)..=end_index {
-    //     if data[i].starts_with("DE            EC=") {
-    //         let line = &mut data[i];
-    //         let mut ec_target = String::new();
-    //         read_until_metadata(line, ORGANISM_RECOMMENDED_NAME_EC_PREFIX_LEN, &mut ec_target);
-    //         ec_references.push(ec_target);
-    //     }
-    // }
-    //
-    // // After parsing all the EC numbers, if we already have a name just return
-    // if !target.is_empty() {
-    //     return end_index + 1;
-    // }
 
     end_index
 }
