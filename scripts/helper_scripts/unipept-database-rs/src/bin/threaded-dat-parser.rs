@@ -1,3 +1,4 @@
+use std::cmp::min;
 use std::collections::HashSet;
 use std::io::BufRead;
 use std::thread;
@@ -7,6 +8,7 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use crossbeam_channel::{bounded, Receiver, Sender};
 
+use unipept_database::taxons_uniprots_tables::utils::now;
 use unipept_database::utils::files::open_sin;
 
 const THREADS: usize = 4;
@@ -14,7 +16,7 @@ const THREADS: usize = 4;
 fn main() -> Result<()> {
     let args = Cli::parse();
     let reader = open_sin();
-    let (s_raw, r_raw) = bounded::<Vec<String>>(THREADS * 2);
+    let (s_raw, r_raw) = bounded::<Vec<u8>>(THREADS * 2);
     let (s_parsed, r_parsed) = bounded::<UniProtEntry>(THREADS * 2);
 
     write_header();
@@ -38,9 +40,23 @@ fn main() -> Result<()> {
     drop(s_raw);
     drop(s_parsed);
 
+    let mut previous_ts: u128 = 0;
+    let mut total_time_waited: u128 = 0;
+    let mut total_entries: u128 = 0;
+
     for entry in r_parsed {
+        if previous_ts != 0 {
+            total_time_waited += now() - previous_ts;
+        }
+
+        total_entries += 1;
+
         entry.write(&args.db_type);
+
+        previous_ts = now();
     }
+
+    eprintln!("Total time waited for parsed entries: {total_time_waited} (average {})", total_time_waited as f64 / total_entries as f64);
 
     parser.join();
     for consumer in &mut consumers {
@@ -71,12 +87,12 @@ impl UniprotType {
     }
 }
 
-struct ThreadedParser<B: BufRead + Send + 'static,> {
+struct ThreadedParser<B: BufRead + Send + 'static, > {
     reader: Option<B>,
     handle: Option<JoinHandle<()>>,
 }
 
-impl<B: BufRead + Send + 'static,> ThreadedParser<B> {
+impl<B: BufRead + Send + 'static, > ThreadedParser<B> {
     pub fn new(reader: B) -> Self {
         Self {
             reader: Some(reader),
@@ -84,21 +100,68 @@ impl<B: BufRead + Send + 'static,> ThreadedParser<B> {
         }
     }
 
-    pub fn start(&mut self, sender: Sender<Vec<String>>) {
-        let reader = self.reader.take().unwrap();
+    pub fn start(&mut self, sender: Sender<Vec<u8>>) {
+        let mut reader = self.reader.take().unwrap();
 
         self.handle = Some(thread::spawn(move || {
-            let mut data = Vec::<String>::new();
+            let mut buffer: [u8; 64 * 1024] = [0; 64 * 1024];
 
-            for line in reader.lines() {
-                let line = line.unwrap();
-                if line == "//" {
-                    sender.send(data).unwrap();
-                    data = Vec::new();
-                } else {
-                    data.push(line);
+            // Backup buffer is of variable size because we don't know how big an entry can get
+            let mut backup_buffer = Vec::<u8>::new();
+
+            let mut start_time = now();
+            let mut total_delay: u128 = 0;
+            let mut total_entries: u128 = 0;
+
+            loop {
+                let bytes_read = reader.read(&mut buffer).unwrap();
+
+                // Reached EOF
+                if bytes_read == 0 {
+                    break;
                 }
+
+                let mut start_index = 0;
+
+                for i in 0..bytes_read {
+                    // We found a slash: check if it is preceded by another slash and a newline
+                    if buffer[i] == b'/' {
+                        let backup_buffer_size = backup_buffer.len();
+
+                        // A slash is never in the beginning of the file, so we can safely look into the backup buffer
+                        // and assume it is not empty: if i == 0, then something must be in the backup buffer
+                        let previous_char = if i > 0 { buffer[i - 1] } else { backup_buffer[backup_buffer_size - 1] };
+                        let second_previous_char = if i > 1 { buffer[i - 2] } else if i == 0 { backup_buffer[backup_buffer_size - 1] } else { backup_buffer[backup_buffer_size - 2] } ;
+
+                        // Found a separator for a chunk!
+                        // Send it to the receivers
+                        if previous_char == b'/' && second_previous_char == b'\n' {
+                            let mut data = Vec::<u8>::with_capacity(backup_buffer_size + (i + 1 - start_index));
+
+                            // Start out with backup buffer contents if they exist
+                            if backup_buffer_size != 0 {
+                                data.extend_from_slice(&backup_buffer[..backup_buffer_size]);
+                                backup_buffer.clear();
+                            }
+
+                            data.extend_from_slice(&buffer[start_index..=i]);
+                            sender.send(data).unwrap();
+
+                            // The next chunk will start at offset i+2 because we skip the next newline as well
+                            start_index = min(i + 2, bytes_read - 1);
+
+                            total_delay += now() - start_time;
+                            total_entries += 1;
+                            start_time = now();
+                        }
+                    }
+                }
+
+                // Copy the rest over into a buffer for later
+                backup_buffer.extend_from_slice(&buffer[start_index..bytes_read]);
             }
+
+            eprintln!("Total time spent parsing: {total_delay} (average {})", total_delay as f64 / total_entries as f64)
         }));
     }
 
@@ -111,7 +174,7 @@ impl<B: BufRead + Send + 'static,> ThreadedParser<B> {
 }
 
 struct Consumer {
-    handle: Option<JoinHandle<()>>
+    handle: Option<JoinHandle<()>>,
 }
 
 impl Consumer {
@@ -121,12 +184,29 @@ impl Consumer {
         }
     }
 
-    pub fn start(&mut self, receiver: Receiver<Vec<String>>, sender: Sender<UniProtEntry>) {
+    pub fn start(&mut self, receiver: Receiver<Vec<u8>>, sender: Sender<UniProtEntry>) {
         self.handle = Some(thread::spawn(move || {
-            for mut data in receiver {
-                let entry = UniProtEntry::from_lines(&mut data).unwrap();
+            let mut previous_ts: u128 = 0;
+            let mut total_time_waited: u128 = 0;
+            let mut total_entries: u128 = 0;
+
+            for data in receiver {
+                // Cut out the \n// at the end
+                let data_slice = &data[..data.len()-3];
+                let mut lines: Vec<String> = String::from_utf8_lossy(data_slice).split("\n").map(|x| x.to_string()).collect();
+
+                if previous_ts != 0 {
+                    total_time_waited += now() - previous_ts;
+                }
+
+                total_entries += 1;
+
+                let entry = UniProtEntry::from_lines(&mut lines).unwrap();
                 sender.send(entry).unwrap();
+                previous_ts = now();
             }
+
+            eprintln!("Lost {total_time_waited} waiting for raw data (average {})", total_time_waited as f64 / total_entries as f64);
         }));
     }
 
@@ -207,18 +287,18 @@ impl UniProtEntry {
     }
 
     pub fn write(&self, db_type: &UniprotType) {
-        println!(
-            "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
-            self.accession_number,
-            self.sequence,
-            self.name,
-            self.version,
-            self.ec_references.join(";"),
-            self.go_references.join(";"),
-            self.ip_references.join(";"),
-            db_type.to_str(),
-            self.taxon_id
-        )
+        // println!(
+        //     "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+        //     self.accession_number,
+        //     self.sequence,
+        //     self.name,
+        //     self.version,
+        //     self.ec_references.join(";"),
+        //     self.go_references.join(";"),
+        //     self.ip_references.join(";"),
+        //     db_type.to_str(),
+        //     self.taxon_id
+        // )
     }
 }
 
