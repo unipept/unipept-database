@@ -8,7 +8,6 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use crossbeam_channel::{bounded, Receiver, Sender};
 
-use unipept_database::taxons_uniprots_tables::utils::now;
 use unipept_database::utils::files::open_sin;
 
 const THREADS: usize = 4;
@@ -127,6 +126,20 @@ impl<B: BufRead + Send + 'static, > ThreadedParser<B> {
                             }
 
                             data.extend_from_slice(&buffer[start_index..=i]);
+
+                            // In edge cases we can copy a bit too much over, cut those parts out
+                            // (because of the min() call a few lines down)
+                            // Skip bytes until we reach ID
+                            // In practice this won't be more than 2-ish bytes
+                            let mut to_remove: usize = 0;
+                            while !(data[to_remove] == b'I' && data[to_remove + 1] == b'D') {
+                                to_remove += 1;
+                            }
+
+                            if to_remove != 0 {
+                                data.drain(..to_remove);
+                            }
+
                             sender.send(data).unwrap();
 
                             // The next chunk will start at offset i+2 because we skip the next newline as well
@@ -165,7 +178,7 @@ impl Consumer {
             for data in receiver {
                 // Cut out the \n// at the end
                 let data_slice = &data[..data.len()-3];
-                let mut lines: Vec<String> = String::from_utf8_lossy(data_slice).trim().split("\n").map(|x| x.to_string()).collect();
+                let mut lines: Vec<String> = String::from_utf8_lossy(data_slice).split("\n").map(|x| x.to_string()).collect();
 
                 let entry = UniProtEntry::from_lines(&mut lines).unwrap();
                 sender.send(entry).unwrap();
@@ -236,10 +249,6 @@ impl UniProtEntry {
         current_index = parse_taxon_id(data, current_index, &mut taxon_id);
         current_index = parse_db_references(data, current_index, &mut go_references, &mut ip_references);
         parse_sequence(data, current_index, &mut sequence);
-
-        if accession_number.starts_with("PP201_ARATH") {
-            eprintln!("{:?}", data);
-        }
 
         return Ok(Self {
             accession_number,
