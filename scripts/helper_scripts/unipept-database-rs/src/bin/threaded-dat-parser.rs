@@ -10,20 +10,18 @@ use crossbeam_channel::{bounded, Receiver, Sender};
 
 use unipept_database::utils::files::open_sin;
 
-const THREADS: usize = 4;
-
 fn main() -> Result<()> {
     let args = Cli::parse();
     let reader = open_sin();
-    let (s_raw, r_raw) = bounded::<Vec<u8>>(THREADS * 2);
-    let (s_parsed, r_parsed) = bounded::<UniProtEntry>(THREADS * 2);
+    let (s_raw, r_raw) = bounded::<Vec<u8>>(args.threads * 2);
+    let (s_parsed, r_parsed) = bounded::<UniProtEntry>(args.threads * 2);
 
     write_header();
 
     let mut parser = ThreadedParser::new(reader);
-    let mut consumers = Vec::<Consumer>::with_capacity(THREADS);
+    let mut consumers = Vec::<Consumer>::with_capacity(args.threads);
 
-    for _ in 0..THREADS {
+    for _ in 0..args.threads {
         consumers.push(Consumer::new());
     }
 
@@ -55,6 +53,8 @@ fn main() -> Result<()> {
 struct Cli {
     #[clap(value_enum, short = 't', long, default_value_t = UniprotType::Swissprot)]
     db_type: UniprotType,
+    #[clap(long, default_value_t = 2)]
+    threads: usize,
 }
 
 #[derive(clap::ValueEnum, Clone, Debug)]
