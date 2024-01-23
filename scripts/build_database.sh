@@ -548,11 +548,10 @@ number_sequences() {
 	mkfifo "p_eq"
 	mkfifo "p_or"
 
-  # TODO cut this out of one file so we don't need one of the sorts above anymore?
-	$CMD_LZ4CAT $INTDIR/peptides-equalized.tsv.lz4 | cut -f 3 > "p_or" &
-	$CMD_LZ4CAT $INTDIR/peptides-equalized.tsv.lz4 | cut -f 2 > "p_eq" &
+	$CMD_LZ4CAT $INTDIR/peptides-equalized.tsv.lz4 | cut -f 3 | sort | uniq > "p_or" &
+	$CMD_LZ4CAT $INTDIR/peptides-equalized.tsv.lz4 | cut -f 2 | uniq > "p_eq" &
 
-	sort -u "p_or" "p_eq" | cat -n \
+	sort -u -m "p_or" "p_eq" | cat -n \
 		| sed 's/^ *//' | $CMD_LZ4 - > "$INTDIR/sequences.tsv.lz4"
 
 	rm "p_eq" "p_or"
