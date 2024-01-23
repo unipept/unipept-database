@@ -40,23 +40,9 @@ fn main() -> Result<()> {
     drop(s_raw);
     drop(s_parsed);
 
-    let mut previous_ts: u128 = 0;
-    let mut total_time_waited: u128 = 0;
-    let mut total_entries: u128 = 0;
-
     for entry in r_parsed {
-        if previous_ts != 0 {
-            total_time_waited += now() - previous_ts;
-        }
-
-        total_entries += 1;
-
         entry.write(&args.db_type);
-
-        previous_ts = now();
     }
-
-    eprintln!("Total time waited for parsed entries: {total_time_waited} (average {})", total_time_waited as f64 / total_entries as f64);
 
     parser.join();
     for consumer in &mut consumers {
@@ -109,10 +95,6 @@ impl<B: BufRead + Send + 'static, > ThreadedParser<B> {
             // Backup buffer is of variable size because we don't know how big an entry can get
             let mut backup_buffer = Vec::<u8>::new();
 
-            let mut start_time = now();
-            let mut total_delay: u128 = 0;
-            let mut total_entries: u128 = 0;
-
             loop {
                 let bytes_read = reader.read(&mut buffer).unwrap();
 
@@ -131,7 +113,7 @@ impl<B: BufRead + Send + 'static, > ThreadedParser<B> {
                         // A slash is never in the beginning of the file, so we can safely look into the backup buffer
                         // and assume it is not empty: if i == 0, then something must be in the backup buffer
                         let previous_char = if i > 0 { buffer[i - 1] } else { backup_buffer[backup_buffer_size - 1] };
-                        let second_previous_char = if i > 1 { buffer[i - 2] } else if i == 0 { backup_buffer[backup_buffer_size - 1] } else { backup_buffer[backup_buffer_size - 2] } ;
+                        let second_previous_char = if i > 1 { buffer[i - 2] } else if i == 1 { backup_buffer[backup_buffer_size - 1] } else { backup_buffer[backup_buffer_size - 2] } ;
 
                         // Found a separator for a chunk!
                         // Send it to the receivers
@@ -149,10 +131,6 @@ impl<B: BufRead + Send + 'static, > ThreadedParser<B> {
 
                             // The next chunk will start at offset i+2 because we skip the next newline as well
                             start_index = min(i + 2, bytes_read - 1);
-
-                            total_delay += now() - start_time;
-                            total_entries += 1;
-                            start_time = now();
                         }
                     }
                 }
@@ -160,8 +138,6 @@ impl<B: BufRead + Send + 'static, > ThreadedParser<B> {
                 // Copy the rest over into a buffer for later
                 backup_buffer.extend_from_slice(&buffer[start_index..bytes_read]);
             }
-
-            eprintln!("Total time spent parsing: {total_delay} (average {})", total_delay as f64 / total_entries as f64)
         }));
     }
 
@@ -186,27 +162,14 @@ impl Consumer {
 
     pub fn start(&mut self, receiver: Receiver<Vec<u8>>, sender: Sender<UniProtEntry>) {
         self.handle = Some(thread::spawn(move || {
-            let mut previous_ts: u128 = 0;
-            let mut total_time_waited: u128 = 0;
-            let mut total_entries: u128 = 0;
-
             for data in receiver {
                 // Cut out the \n// at the end
                 let data_slice = &data[..data.len()-3];
-                let mut lines: Vec<String> = String::from_utf8_lossy(data_slice).split("\n").map(|x| x.to_string()).collect();
-
-                if previous_ts != 0 {
-                    total_time_waited += now() - previous_ts;
-                }
-
-                total_entries += 1;
+                let mut lines: Vec<String> = String::from_utf8_lossy(data_slice).trim().split("\n").map(|x| x.to_string()).collect();
 
                 let entry = UniProtEntry::from_lines(&mut lines).unwrap();
                 sender.send(entry).unwrap();
-                previous_ts = now();
             }
-
-            eprintln!("Lost {total_time_waited} waiting for raw data (average {})", total_time_waited as f64 / total_entries as f64);
         }));
     }
 
@@ -274,6 +237,10 @@ impl UniProtEntry {
         current_index = parse_db_references(data, current_index, &mut go_references, &mut ip_references);
         parse_sequence(data, current_index, &mut sequence);
 
+        if accession_number.starts_with("PP201_ARATH") {
+            eprintln!("{:?}", data);
+        }
+
         return Ok(Self {
             accession_number,
             name,
@@ -287,18 +254,18 @@ impl UniProtEntry {
     }
 
     pub fn write(&self, db_type: &UniprotType) {
-        // println!(
-        //     "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
-        //     self.accession_number,
-        //     self.sequence,
-        //     self.name,
-        //     self.version,
-        //     self.ec_references.join(";"),
-        //     self.go_references.join(";"),
-        //     self.ip_references.join(";"),
-        //     db_type.to_str(),
-        //     self.taxon_id
-        // )
+        println!(
+            "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+            self.accession_number,
+            self.sequence,
+            self.name,
+            self.version,
+            self.ec_references.join(";"),
+            self.go_references.join(";"),
+            self.ip_references.join(";"),
+            db_type.to_str(),
+            self.taxon_id
+        )
     }
 }
 
