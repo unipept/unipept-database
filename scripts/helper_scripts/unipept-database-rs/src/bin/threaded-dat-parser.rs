@@ -1,4 +1,3 @@
-use std::cmp::min;
 use std::collections::HashSet;
 use std::io::BufRead;
 use std::thread;
@@ -126,30 +125,18 @@ impl<B: BufRead + Send + 'static, > ThreadedParser<B> {
                             }
 
                             data.extend_from_slice(&buffer[start_index..=i]);
-
-                            // In edge cases we can copy a bit too much over, cut those parts out
-                            // (because of the min() call a few lines down)
-                            // Skip bytes until we reach ID
-                            // In practice this won't be more than 2-ish bytes
-                            let mut to_remove: usize = 0;
-                            while !(data[to_remove] == b'I' && data[to_remove + 1] == b'D') {
-                                to_remove += 1;
-                            }
-
-                            if to_remove != 0 {
-                                data.drain(..to_remove);
-                            }
-
                             sender.send(data).unwrap();
 
                             // The next chunk will start at offset i+2 because we skip the next newline as well
-                            start_index = min(i + 2, bytes_read - 1);
+                            start_index = i + 2;
                         }
                     }
                 }
 
                 // Copy the rest over into a buffer for later
-                backup_buffer.extend_from_slice(&buffer[start_index..bytes_read]);
+                if start_index < bytes_read {
+                    backup_buffer.extend_from_slice(&buffer[start_index..bytes_read]);
+                }
             }
         }));
     }
