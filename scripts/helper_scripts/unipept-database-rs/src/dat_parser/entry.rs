@@ -321,3 +321,148 @@ fn drain_leading_spaces(line: &mut String) {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn get_example_entry() -> Vec<String> {
+        vec![
+            "ID   001R_FRG3G              Reviewed;         256 AA.",
+            "AC   Q6GZX4;",
+            "DT   28-JUN-2011, integrated into UniProtKB/Swiss-Prot.",
+            "DT   19-JUL-2004, sequence version 1.",
+            "DT   08-NOV-2023, entry version 44.",
+            "DE   RecName: Full=Putative transcription factor 001R;",
+            "GN   ORFNames=FV3-001R;",
+            "OS   Frog virus 3 (isolate Goorha) (FV-3).",
+            "OC   Viruses; Varidnaviria; Bamfordvirae; Nucleocytoviricota; Megaviricetes;",
+            "OC   Pimascovirales; Iridoviridae; Alphairidovirinae; Ranavirus; Frog virus 3.",
+            "OX   NCBI_TaxID=654924;",
+            "OH   NCBI_TaxID=30343; Dryophytes versicolor (chameleon treefrog).",
+            "OH   NCBI_TaxID=8404; Lithobates pipiens (Northern leopard frog) (Rana pipiens).",
+            "OH   NCBI_TaxID=45438; Lithobates sylvaticus (Wood frog) (Rana sylvatica).",
+            "OH   NCBI_TaxID=8316; Notophthalmus viridescens (Eastern newt) (Triturus viridescens).",
+            "RN   [1]",
+            "RP   NUCLEOTIDE SEQUENCE [LARGE SCALE GENOMIC DNA].",
+            "RX   PubMed=15165820; DOI=10.1016/j.virol.2004.02.019;",
+            "RA   Tan W.G., Barkman T.J., Gregory Chinchar V., Essani K.;",
+            "RT   \"Comparative genomic analyses of frog virus 3, type species of the genus",
+            "RT   Ranavirus (family Iridoviridae).\";",
+            "RL   Virology 323:70-84(2004).",
+            "CC   -!- FUNCTION: Transcription activation. {ECO:0000305}.",
+            "CC   ---------------------------------------------------------------------------",
+            "CC   Copyrighted by the UniProt Consortium, see https://www.uniprot.org/terms",
+            "CC   Distributed under the Creative Commons Attribution (CC BY 4.0) License",
+            "CC   ---------------------------------------------------------------------------",
+            "DR   EMBL; AY548484; AAT09660.1; -; Genomic_DNA.",
+            "DR   RefSeq; YP_031579.1; NC_005946.1.",
+            "DR   SwissPalm; Q6GZX4; -.",
+            "DR   GeneID; 2947773; -.",
+            "DR   KEGG; vg:2947773; -.",
+            "DR   Proteomes; UP000008770; Segment.",
+            "DR   GO; GO:0046782; P:regulation of viral transcription; IEA:InterPro.",
+            "DR   GO; GO:0016743; F:carboxyl- or carbamoyltransferase activity; IEA:UniProtKB-UniRule.",
+            "DR   InterPro; IPR007031; Poxvirus_VLTF3.",
+            "DR   InterPro; IPR000308; 14-3-3.",
+            "DR   Pfam; PF04947; Pox_VLTF3; 1.",
+            "PE   4: Predicted;",
+            "KW   Activator; Reference proteome; Transcription; Transcription regulation.",
+            "FT   CHAIN           1..256",
+            "FT                   /note=\"Putative transcription factor 001R\"",
+            "FT                   /id=\"PRO_0000410512\"",
+            "SQ   SEQUENCE   256 AA;  29735 MW;  B4840739BF7D4121 CRC64;",
+            "     MAFSAEDVLK EYDRRRRMEA LLLSLYYPND RKLLDYKEWS PPRVQVECPK APVEWNNPPS",
+            "     EKGLIVGHFS GIKYKGEKAQ ASEVDVNKMC CWVSKFKDAM RRYQGIQTCK IPGKVLSDLD",
+        ].iter().map(|x| x.to_string()).collect()
+    }
+
+    #[test]
+    fn test_parse_db_references() {
+        let want_go = vec![String::from("GO:0046782"), String::from("GO:0016743")];
+        let want_ip = vec![String::from("IPR007031"), String::from("IPR000308")];
+        let mut lines = get_example_entry();
+        let mut target_go = Vec::new();
+        let mut target_ip = Vec::new();
+        parse_db_references(&mut lines, 0, &mut target_go, &mut target_ip);
+
+        assert_eq!(target_go, want_go);
+        assert_eq!(target_ip, want_ip);
+    }
+
+    #[test]
+    fn test_parse_db_reference_go() {
+        let want = vec![String::from("GO:0046782")];
+        let mut line = String::from("GO; GO:0046782; P:regulation of viral transcription; IEA:InterPro.");
+        let mut target = Vec::new();
+        let mut _dummy = Vec::new();
+        parse_db_reference(&mut line, &mut target, &mut _dummy);
+
+        assert_eq!(target, want);
+        assert!(_dummy.is_empty());
+    }
+
+    #[test]
+    fn test_parse_db_reference_ip() {
+        let want = vec![String::from("IPR007031")];
+        let mut line = String::from("InterPro; IPR007031; Poxvirus_VLTF3.");
+        let mut target = Vec::new();
+        let mut _dummy = Vec::new();
+        parse_db_reference(&mut line, &mut _dummy, &mut target);
+
+        assert_eq!(target, want);
+        assert!(_dummy.is_empty());
+    }
+
+    #[test]
+    fn test_parse_sequence() {
+        let want = "MAFSAEDVLKEYDRRRRMEALLLSLYYPNDRKLLDYKEWSPPRVQVECPKAPVEWNNPPSEKGLIVGHFSGIKYKGEKAQASEVDVNKMCCWVSKFKDAMRRYQGIQTCKIPGKVLSDLD";
+        let mut lines = get_example_entry();
+        let mut target = String::new();
+        parse_sequence(&mut lines, 0, &mut target);
+        assert_eq!(target, want);
+    }
+
+    #[test]
+    fn test_read_until_metadata() {
+        let want = "Alanine racemase";
+        let mut line = String::from(format!("RecName: Full={want} {{ECO:0000255|HAMAP-Rule:MF_01201}};"));
+        let mut target = String::new();
+        read_until_metadata(&mut line, ORGANISM_RECOMMENDED_NAME_PREFIX_LEN, &mut target);
+        assert_eq!(target, want);
+    }
+
+    #[test]
+    fn test_read_until_metadata_with_bracket() {
+        let want = "Alanine racemase{text between brackets}";
+        let mut line = String::from(format!("RecName: Full={want} {{ECO:0000255|HAMAP-Rule:MF_01201}};"));
+        let mut target = String::new();
+        read_until_metadata(&mut line, ORGANISM_RECOMMENDED_NAME_PREFIX_LEN, &mut target);
+        assert_eq!(target, want);
+    }
+
+    #[test]
+    fn test_read_until_metadata_none() {
+        let want = "Recommended Name";
+        let mut line = String::from(format!("RecName: Full={want};"));
+        let mut target = String::new();
+        read_until_metadata(&mut line, ORGANISM_RECOMMENDED_NAME_PREFIX_LEN, &mut target);
+        assert_eq!(target, want);
+    }
+
+    #[test]
+    fn test_drain_spaces() {
+        let want = "ABC";
+        let mut line = String::from(format!("    {want}"));
+        drain_leading_spaces(&mut line);
+        assert_eq!(line, want);
+    }
+
+    #[test]
+    fn test_drain_spaces_none() {
+        let want = "This has no leading spaces";
+        let mut line = String::from(want);
+        drain_leading_spaces(&mut line);
+        assert_eq!(line, want);
+    }
+}
