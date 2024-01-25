@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::Parser;
 use unipept_database::dat_parser::uniprot_dat_parser;
 use unipept_database::dat_parser::utils::write_header;
@@ -14,7 +14,7 @@ fn main() -> Result<()> {
     let parser = uniprot_dat_parser(reader, args.threads);
 
     for entry in parser {
-        entry.write(&args.db_type);
+        entry.context("Error parsing DAT entry")?.write(&args.db_type);
     }
 
     Ok(())

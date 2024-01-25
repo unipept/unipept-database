@@ -3,6 +3,7 @@ use std::thread;
 use std::thread::JoinHandle;
 use crossbeam_channel::Sender;
 
+/// Struct that divides input data from `reader` up into separate chunks and sends them to worker threads
 pub struct Producer<B: BufRead + Send + 'static, > {
     reader: Option<B>,
     handle: Option<JoinHandle<()>>,
@@ -19,6 +20,8 @@ impl <B: BufRead + Send + 'static, > Producer<B> {
     pub fn start(&mut self, sender: Sender<Vec<u8>>) {
         let mut reader = self.reader.take().unwrap();
 
+        // Read batches of input data into a buffer, divide those into chunks
+        // and send completed chunks to a worker thread
         self.handle = Some(thread::spawn(move || {
             let mut buffer: [u8; 64 * 1024] = [0; 64 * 1024];
 
@@ -65,7 +68,8 @@ impl <B: BufRead + Send + 'static, > Producer<B> {
                     }
                 }
 
-                // Copy the rest over into a buffer for later
+                // We've reached the end of the buffer, which will rarely coincide with the end of a chunk
+                // If there is still some data left, copy the rest over into a different buffer for later
                 if start_index < bytes_read {
                     backup_buffer.extend_from_slice(&buffer[start_index..bytes_read]);
                 }

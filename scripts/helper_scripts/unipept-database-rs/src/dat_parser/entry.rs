@@ -12,7 +12,7 @@ const VERSION_STRING_FULL_PREFIX_LEN: usize = "DT   08-NOV-2023, entry version "
 
 
 /// The minimal data we want from an entry out of the UniProtKB datasets
-pub struct UniProtEntry {
+pub struct UniProtDATEntry {
     accession_number: String,
     name: String,
     sequence: String,
@@ -23,9 +23,11 @@ pub struct UniProtEntry {
     taxon_id: String,
 }
 
-impl UniProtEntry {
+impl UniProtDATEntry {
+    /// Parse an entry out of the lines of a DAT file
     pub fn from_lines(data: &mut Vec<String>) -> anyhow::Result<Self> {
         let mut current_index: usize;
+
         let accession_number: String;
         let mut version = String::new();
         let mut name = String::new();
@@ -37,7 +39,7 @@ impl UniProtEntry {
 
         accession_number = parse_ac_number(data).context("Error parsing accession number")?;
         current_index = parse_version(data, &mut version);
-        current_index = parse_name(data, current_index, &mut ec_references, &mut name);
+        current_index = parse_name_and_ec(data, current_index, &mut ec_references, &mut name);
         current_index = parse_taxon_id(data, current_index, &mut taxon_id);
         current_index = parse_db_references(data, current_index, &mut go_references, &mut ip_references);
         parse_sequence(data, current_index, &mut sequence);
@@ -54,6 +56,7 @@ impl UniProtEntry {
         });
     }
 
+    /// Write an entry to stdout
     pub fn write(&self, db_type: &UniprotType) {
         if self.name.is_empty() {
             eprintln!("Could not find a name for entry AC-{}", self.accession_number);
@@ -75,6 +78,8 @@ impl UniProtEntry {
 }
 
 // Functions to parse an Entry out of a Vec<String>
+
+/// Find the first AC number
 fn parse_ac_number(data: &mut Vec<String>) -> anyhow::Result<String> {
     // The AC number is always the second element
     let line = &mut data[1];
@@ -83,6 +88,7 @@ fn parse_ac_number(data: &mut Vec<String>) -> anyhow::Result<String> {
     Ok(pre.to_string())
 }
 
+/// Find the version of this entry
 fn parse_version(data: &Vec<String>, target: &mut String) -> usize {
     let mut last_field: usize = 2;
 
@@ -103,7 +109,15 @@ fn parse_version(data: &Vec<String>, target: &mut String) -> usize {
     last_field + 1
 }
 
-fn parse_name(data: &mut Vec<String>, mut idx: usize, ec_references: &mut Vec<String>, target: &mut String) -> usize {
+/// Parse the name and EC numbers of an entry out of all available DE fields
+/// In order of preference:
+/// - Last recommended name of protein components
+/// - Last recommended name of protein domains
+/// - Recommended name of protein itself
+/// - Last submitted name of protein components
+/// - Last submitted name of protein domains
+/// - Submitted name of protein itself
+fn parse_name_and_ec(data: &mut Vec<String>, mut idx: usize, ec_references: &mut Vec<String>, target: &mut String) -> usize {
     // Find where the info starts and ends
     while !data[idx].starts_with("DE") {
         idx += 1;
@@ -112,13 +126,7 @@ fn parse_name(data: &mut Vec<String>, mut idx: usize, ec_references: &mut Vec<St
     let mut ec_reference_set = HashSet::new();
     let mut end_index = idx;
 
-    // Track all names in order of preference:
-    // - Last recommended name of protein components
-    // - Last recommended name of protein domains
-    // - Recommended name of protein itself
-    // - Last submitted name of protein components
-    // - Last submitted name of protein domains
-    // - Submitted name of protein itself
+    // Track all names in order of preference
     let mut name_indices: [usize; 6] = [usize::MAX; 6];
     const LAST_COMPONENT_RECOMMENDED_IDX: usize = 0;
     const LAST_COMPONENT_SUBMITTED_IDX: usize = 3;
@@ -128,7 +136,7 @@ fn parse_name(data: &mut Vec<String>, mut idx: usize, ec_references: &mut Vec<St
     const LAST_PROTEIN_SUBMITTED_IDX: usize = 5;
 
     // Keep track of which block we are currently in
-    // Order is always protein -> components -> domain
+    // Order in DAT file is always protein -> components -> domain
     let mut inside_domain = false;
     let mut inside_component = false;
 
@@ -200,6 +208,7 @@ fn parse_name(data: &mut Vec<String>, mut idx: usize, ec_references: &mut Vec<St
     end_index
 }
 
+/// Find the first NCBI_TaxID of this entry
 fn parse_taxon_id(data: &mut Vec<String>, mut idx: usize, target: &mut String) -> usize {
     while !data[idx].starts_with("OX   NCBI_TaxID=") {
         idx += 1;
@@ -215,6 +224,7 @@ fn parse_taxon_id(data: &mut Vec<String>, mut idx: usize, target: &mut String) -
     idx
 }
 
+/// Parse GO and InterPro DB references
 fn parse_db_references(data: &mut Vec<String>, mut idx: usize, go_references: &mut Vec<String>, ip_references: &mut Vec<String>) -> usize {
     let original_idx = idx;
     let length = data.len();
@@ -242,6 +252,7 @@ fn parse_db_references(data: &mut Vec<String>, mut idx: usize, go_references: &m
     idx
 }
 
+/// Parse a single GO or InterPro DB reference
 fn parse_db_reference(line: &mut String, go_references: &mut Vec<String>, ip_references: &mut Vec<String>) {
     if line.starts_with("GO;") {
         let substr = &line[4..14];
@@ -249,12 +260,10 @@ fn parse_db_reference(line: &mut String, go_references: &mut Vec<String>, ip_ref
     } else if line.starts_with("InterPro;") {
         let substr = &line[10..19];
         ip_references.push(substr.to_string());
-    } else if line.starts_with("EC") {
-        // TODO remove this after testing on trembl
-        panic!("Found an EC reference in the DB references");
     }
 }
 
+/// Parse the peptide sequence for this entry
 fn parse_sequence(data: &mut Vec<String>, mut idx: usize, target: &mut String) {
     // Find the beginning of the sequence
     // optionally skip over some fields we don't care for
@@ -272,6 +281,8 @@ fn parse_sequence(data: &mut Vec<String>, mut idx: usize, target: &mut String) {
     }
 }
 
+/// Read a line until additional metadata starts
+/// Some lines end with {blocks between curly brackets} that we don't care for.
 fn read_until_metadata(line: &mut String, prefix_len: usize, target: &mut String) {
     line.drain(..prefix_len);
 
@@ -299,7 +310,10 @@ fn read_until_metadata(line: &mut String, prefix_len: usize, target: &mut String
     target.push_str(&(line[..bracket_index - 1]));
 }
 
+/// Remove all leading spaces from a line
+/// Internally this just moves a pointer forward so this is very efficient
 fn drain_leading_spaces(line: &mut String) {
+    // Find the first index that is not a space, and remove everything before
     for (idx, c) in line.chars().enumerate() {
         if c != ' ' {
             line.drain(..idx);
