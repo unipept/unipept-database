@@ -1,202 +1,6 @@
 use std::collections::HashSet;
-use std::io::BufRead;
-use std::thread;
-use std::thread::JoinHandle;
-
-use anyhow::{Context, Result};
-use clap::Parser;
-use crossbeam_channel::{bounded, Receiver, Sender};
-
-use unipept_database::utils::files::open_sin;
-
-fn main() -> Result<()> {
-    let args = Cli::parse();
-    let reader = open_sin();
-    let (s_raw, r_raw) = bounded::<Vec<u8>>(args.threads * 2);
-    let (s_parsed, r_parsed) = bounded::<UniProtEntry>(args.threads * 2);
-
-    write_header();
-
-    let mut parser = ThreadedParser::new(reader);
-    let mut consumers = Vec::<Consumer>::with_capacity(args.threads);
-
-    for _ in 0..args.threads {
-        consumers.push(Consumer::new());
-    }
-
-    parser.start(s_raw.clone());
-    for consumer in &mut consumers {
-        consumer.start(r_raw.clone(), s_parsed.clone());
-    }
-
-    // Drop the original reference to the senders explicitly
-    // all other copies are dropped when their threads exit
-    // Without this, the program hangs forever because the channels are never closed
-    // https://users.rust-lang.org/t/solved-close-channel-in-crossbeam-threads/27396/2
-    drop(s_raw);
-    drop(s_parsed);
-
-    for entry in r_parsed {
-        entry.write(&args.db_type);
-    }
-
-    parser.join();
-    for consumer in &mut consumers {
-        consumer.join();
-    }
-
-    Ok(())
-}
-
-#[derive(Parser, Debug)]
-struct Cli {
-    #[clap(value_enum, short = 't', long, default_value_t = UniprotType::Swissprot)]
-    db_type: UniprotType,
-    #[clap(long, default_value_t = 2)]
-    threads: usize,
-}
-
-#[derive(clap::ValueEnum, Clone, Debug)]
-enum UniprotType {
-    Swissprot,
-    Trembl,
-}
-
-impl UniprotType {
-    pub fn to_str(&self) -> &str {
-        match self {
-            UniprotType::Swissprot => "swissprot",
-            UniprotType::Trembl => "trembl",
-        }
-    }
-}
-
-struct ThreadedParser<B: BufRead + Send + 'static, > {
-    reader: Option<B>,
-    handle: Option<JoinHandle<()>>,
-}
-
-impl<B: BufRead + Send + 'static, > ThreadedParser<B> {
-    pub fn new(reader: B) -> Self {
-        Self {
-            reader: Some(reader),
-            handle: None,
-        }
-    }
-
-    pub fn start(&mut self, sender: Sender<Vec<u8>>) {
-        let mut reader = self.reader.take().unwrap();
-
-        self.handle = Some(thread::spawn(move || {
-            let mut buffer: [u8; 64 * 1024] = [0; 64 * 1024];
-
-            // Backup buffer is of variable size because we don't know how big an entry can get
-            let mut backup_buffer = Vec::<u8>::new();
-
-            loop {
-                let bytes_read = reader.read(&mut buffer).unwrap();
-
-                // Reached EOF
-                if bytes_read == 0 {
-                    break;
-                }
-
-                let mut start_index = 0;
-
-                for i in 0..bytes_read {
-                    // We found a slash: check if it is preceded by another slash and a newline
-                    if buffer[i] == b'/' {
-                        let backup_buffer_size = backup_buffer.len();
-
-                        // A slash is never in the beginning of the file, so we can safely look into the backup buffer
-                        // and assume it is not empty: if i == 0, then something must be in the backup buffer
-                        let previous_char = if i > 0 { buffer[i - 1] } else { backup_buffer[backup_buffer_size - 1] };
-                        let second_previous_char = if i > 1 { buffer[i - 2] } else if i == 1 { backup_buffer[backup_buffer_size - 1] } else { backup_buffer[backup_buffer_size - 2] } ;
-
-                        // Found a separator for a chunk!
-                        // Send it to the receivers
-                        if previous_char == b'/' && second_previous_char == b'\n' {
-                            let mut data = Vec::<u8>::with_capacity(backup_buffer_size + (i + 1 - start_index));
-
-                            // Start out with backup buffer contents if they exist
-                            if backup_buffer_size != 0 {
-                                data.extend_from_slice(&backup_buffer[..backup_buffer_size]);
-                                backup_buffer.clear();
-                            }
-
-                            data.extend_from_slice(&buffer[start_index..=i]);
-                            sender.send(data).unwrap();
-
-                            // The next chunk will start at offset i+2 because we skip the next newline as well
-                            start_index = i + 2;
-                        }
-                    }
-                }
-
-                // Copy the rest over into a buffer for later
-                if start_index < bytes_read {
-                    backup_buffer.extend_from_slice(&buffer[start_index..bytes_read]);
-                }
-            }
-        }));
-    }
-
-    pub fn join(&mut self) {
-        if let Some(h) = self.handle.take() {
-            h.join().unwrap();
-            self.handle = None;
-        }
-    }
-}
-
-struct Consumer {
-    handle: Option<JoinHandle<()>>,
-}
-
-impl Consumer {
-    pub fn new() -> Self {
-        Self {
-            handle: None
-        }
-    }
-
-    pub fn start(&mut self, receiver: Receiver<Vec<u8>>, sender: Sender<UniProtEntry>) {
-        self.handle = Some(thread::spawn(move || {
-            for data in receiver {
-                // Cut out the \n// at the end
-                let data_slice = &data[..data.len()-3];
-                let mut lines: Vec<String> = String::from_utf8_lossy(data_slice).split("\n").map(|x| x.to_string()).collect();
-
-                let entry = UniProtEntry::from_lines(&mut lines).unwrap();
-                sender.send(entry).unwrap();
-            }
-        }));
-    }
-
-    pub fn join(&mut self) {
-        if let Some(h) = self.handle.take() {
-            h.join().unwrap();
-            self.handle = None;
-        }
-    }
-}
-
-fn write_header() {
-    let fields: [&str; 9] = [
-        "Entry",
-        "Sequence",
-        "Protein names",
-        "Version (entry)",
-        "EC number",
-        "Gene ontology IDs",
-        "Cross-reference (InterPro)",
-        "Status",
-        "Organism ID",
-    ];
-
-    let result_string = fields.join("\t");
-    println!("{}", result_string);
-}
+use anyhow::Context;
+use crate::uniprot::UniprotType;
 
 // Constants to aid in parsing
 const COMMON_PREFIX_LEN: usize = "ID   ".len();
@@ -206,8 +10,9 @@ const ORGANISM_RECOMMENDED_NAME_EC_PREFIX_LEN: usize = "EC=".len();
 const ORGANISM_TAXON_ID_PREFIX_LEN: usize = "OX   NCBI_TaxID=".len();
 const VERSION_STRING_FULL_PREFIX_LEN: usize = "DT   08-NOV-2023, entry version ".len();
 
-// Data types
-struct UniProtEntry {
+
+/// The minimal data we want from an entry out of the UniProtKB datasets
+pub struct UniProtEntry {
     accession_number: String,
     name: String,
     sequence: String,
@@ -219,7 +24,7 @@ struct UniProtEntry {
 }
 
 impl UniProtEntry {
-    pub fn from_lines(data: &mut Vec<String>) -> Result<Self> {
+    pub fn from_lines(data: &mut Vec<String>) -> anyhow::Result<Self> {
         let mut current_index: usize;
         let accession_number: String;
         let mut version = String::new();
@@ -250,6 +55,10 @@ impl UniProtEntry {
     }
 
     pub fn write(&self, db_type: &UniprotType) {
+        if self.name.is_empty() {
+            eprintln!("Could not find a name for entry AC-{}", self.accession_number);
+        }
+
         println!(
             "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
             self.accession_number,
@@ -266,7 +75,7 @@ impl UniProtEntry {
 }
 
 // Functions to parse an Entry out of a Vec<String>
-fn parse_ac_number(data: &mut Vec<String>) -> Result<String> {
+fn parse_ac_number(data: &mut Vec<String>) -> anyhow::Result<String> {
     // The AC number is always the second element
     let line = &mut data[1];
     line.drain(..COMMON_PREFIX_LEN);
