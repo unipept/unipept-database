@@ -176,6 +176,8 @@ fn parse_name_and_ec(data: &mut Vec<String>, mut idx: usize, ec_references: &mut
             let mut ec_target = String::new();
             read_until_metadata(line, ORGANISM_RECOMMENDED_NAME_EC_PREFIX_LEN, &mut ec_target);
 
+            // EC numbers sometimes appear multiple times, so use a set to track which ones
+            // we've seen before
             if !ec_reference_set.contains(&ec_target) {
                 ec_reference_set.insert(ec_target.clone());
                 ec_references.push(ec_target);
