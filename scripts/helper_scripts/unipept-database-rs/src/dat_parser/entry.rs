@@ -326,10 +326,14 @@ fn drain_leading_spaces(line: &mut String) {
 mod tests {
     use super::*;
 
+    fn _raw_str_to_strings(v: Vec<&str>) -> Vec<String> {
+        v.iter().map(|x| x.to_string()).collect()
+    }
+
     fn get_example_entry() -> Vec<String> {
-        vec![
+        let v = vec![
             "ID   001R_FRG3G              Reviewed;         256 AA.",
-            "AC   Q6GZX4;",
+            "AC   P9WPY2; L0TBI1; P0A4Z2; P95014;",
             "DT   28-JUN-2011, integrated into UniProtKB/Swiss-Prot.",
             "DT   19-JUL-2004, sequence version 1.",
             "DT   08-NOV-2023, entry version 44.",
@@ -374,7 +378,38 @@ mod tests {
             "SQ   SEQUENCE   256 AA;  29735 MW;  B4840739BF7D4121 CRC64;",
             "     MAFSAEDVLK EYDRRRRMEA LLLSLYYPND RKLLDYKEWS PPRVQVECPK APVEWNNPPS",
             "     EKGLIVGHFS GIKYKGEKAQ ASEVDVNKMC CWVSKFKDAM RRYQGIQTCK IPGKVLSDLD",
-        ].iter().map(|x| x.to_string()).collect()
+        ];
+
+        _raw_str_to_strings(v)
+    }
+
+    #[test]
+    fn test_parse_ac_number() {
+        let want = "P9WPY2";
+        let mut lines = get_example_entry();
+        let got = parse_ac_number(&mut lines).unwrap();
+
+        assert_eq!(got, want);
+    }
+
+    #[test]
+    fn test_parse_version() {
+        let want = "44";
+        let mut lines = get_example_entry();
+        let mut target = String::new();
+        parse_version(&mut lines, &mut target);
+
+        assert_eq!(target, want);
+    }
+
+    #[test]
+    fn test_parse_taxon_id() {
+        let want = "654924";
+        let mut lines = get_example_entry();
+        let mut target = String::new();
+        parse_taxon_id(&mut lines, 8, &mut target);
+
+        assert_eq!(target, want);
     }
 
     #[test]
