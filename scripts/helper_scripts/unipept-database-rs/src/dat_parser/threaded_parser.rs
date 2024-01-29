@@ -12,23 +12,23 @@ use crate::dat_parser::producer::Producer;
 /// A multi-threaded DAT parser
 /// This parser uses one thread to parse chunks of bytes from the `reader` input stream,
 /// and `threads` worker threads to parse those into `UniProtDATEntry`s
-pub struct ThreadedDATParser<B: BufRead + Send + 'static, > {
+pub struct ThreadedDATParser<B: BufRead + Send + 'static> {
     producer: Producer<B>,
     consumers: Vec<Consumer>,
     threads: usize,
     r_parsed: Option<Receiver<Result<UniProtDATEntry>>>,
-    started: bool
+    started: bool,
 }
 
-impl<B: BufRead + Send + 'static, > ThreadedDATParser<B> {
+impl<B: BufRead + Send + 'static> ThreadedDATParser<B> {
     /// Create a new ThreadedParser with `threads` consumer threads.
     /// Passing 0 as the amount of threads uses the amount of (virtual) CPUs available in your machine
     pub fn new(reader: B, mut threads: usize) -> Self {
         if threads == 0 {
             lazy_static! {
-            static ref THREADS: usize = num_cpus::get();
+                static ref THREADS: usize = num_cpus::get();
             }
-           threads = unsafe { NonZeroUsize::new_unchecked(*THREADS) }.get();
+            threads = unsafe { NonZeroUsize::new_unchecked(*THREADS) }.get();
         }
 
         let producer = Producer::new(reader);
@@ -43,7 +43,7 @@ impl<B: BufRead + Send + 'static, > ThreadedDATParser<B> {
             consumers,
             threads,
             r_parsed: None,
-            started: false
+            started: false,
         }
     }
 
@@ -71,7 +71,7 @@ impl<B: BufRead + Send + 'static, > ThreadedDATParser<B> {
     }
 }
 
-impl<B: BufRead + Send + 'static,> Iterator for ThreadedDATParser<B> {
+impl<B: BufRead + Send + 'static> Iterator for ThreadedDATParser<B> {
     type Item = Result<UniProtDATEntry>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -82,7 +82,7 @@ impl<B: BufRead + Send + 'static,> Iterator for ThreadedDATParser<B> {
         match &self.r_parsed {
             Some(receiver) => {
                 match receiver.recv() {
-                    Ok(entry) => { Some(entry) }
+                    Ok(entry) => Some(entry),
                     // An error is raised when the channel becomes disconnected,
                     // so we don't actually have to handle the error here
                     // it's just a sign that we're done parsing
@@ -91,9 +91,9 @@ impl<B: BufRead + Send + 'static,> Iterator for ThreadedDATParser<B> {
                         None
                     }
                 }
-            },
+            }
             // We never started (unreachable case in practice)
-            None => None
+            None => None,
         }
     }
 }

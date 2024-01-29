@@ -14,7 +14,9 @@ fn main() -> Result<()> {
     let parser = uniprot_dat_parser(reader, args.threads);
 
     for entry in parser {
-        entry.context("Error parsing DAT entry")?.write(&args.db_type);
+        entry
+            .context("Error parsing DAT entry")?
+            .write(&args.db_type);
     }
 
     Ok(())
@@ -25,5 +27,5 @@ struct Cli {
     #[clap(value_enum, short = 't', long, default_value_t = UniprotType::Swissprot)]
     db_type: UniprotType,
     #[clap(long, default_value_t = 0)]
-    threads: usize
+    threads: usize,
 }

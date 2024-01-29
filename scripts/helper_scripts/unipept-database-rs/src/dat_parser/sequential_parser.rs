@@ -27,14 +27,16 @@ impl<B: BufRead> Iterator for SequentialDATParser<B> {
         // as that takes ownership of the Lines variable (which we don't want/can't do)
         loop {
             let line = match self.lines.next() {
-                None => { return None; }
-                Some(l) => l.context("Error reading line")
+                None => {
+                    return None;
+                }
+                Some(l) => l.context("Error reading line"),
             };
 
             // Because of the way ? works in an Option<> this can't be done cleanly
             let line = match line {
                 Ok(l) => l,
-                Err(e) => return Some(Err(e))
+                Err(e) => return Some(Err(e)),
             };
 
             if line == "//" {

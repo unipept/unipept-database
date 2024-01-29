@@ -4,8 +4,8 @@ use std::num::NonZeroUsize;
 use anyhow::{Context, Result};
 use clap::Parser;
 use smartstring::{LazyCompact, SmartString};
-use uniprot::uniprot::{SequentialParser, ThreadedParser};
 use unipept_database::uniprot::UniprotType;
+use uniprot::uniprot::{SequentialParser, ThreadedParser};
 
 use unipept_database::utils::files::open_sin;
 
