@@ -21,7 +21,7 @@ impl Consumer {
                 // Cut out the \n// at the end
                 let data_slice = &data[..data.len() - 3];
                 let mut lines: Vec<String> = String::from_utf8_lossy(data_slice)
-                    .split("\n")
+                    .split('\n')
                     .map(|x| x.to_string())
                     .collect();
 

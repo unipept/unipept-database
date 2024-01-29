@@ -17,6 +17,7 @@ impl<B: BufRead + Send + 'static> Producer<B> {
         }
     }
 
+    #[allow(clippy::comparison_chain)]
     pub fn start(&mut self, sender: Sender<Vec<u8>>) {
         let mut reader = self.reader.take().unwrap();
 
@@ -50,6 +51,7 @@ impl<B: BufRead + Send + 'static> Producer<B> {
                         } else {
                             backup_buffer[backup_buffer_size - 1]
                         };
+
                         let second_previous_char = if i > 1 {
                             buffer[i - 2]
                         } else if i == 1 {

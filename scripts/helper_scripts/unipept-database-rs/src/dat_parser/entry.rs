@@ -27,7 +27,6 @@ impl UniProtDATEntry {
     pub fn from_lines(data: &mut Vec<String>) -> anyhow::Result<Self> {
         let mut current_index: usize;
 
-        let accession_number: String;
         let mut version = String::new();
         let mut name = String::new();
         let mut ec_references = Vec::<String>::new();
@@ -36,7 +35,7 @@ impl UniProtDATEntry {
         let mut taxon_id = String::new();
         let mut sequence = String::new();
 
-        accession_number = parse_ac_number(data).context("Error parsing accession number")?;
+        let accession_number = parse_ac_number(data).context("Error parsing accession number")?;
         current_index = parse_version(data, &mut version);
         current_index = parse_name_and_ec(data, current_index, &mut ec_references, &mut name);
         current_index = parse_taxon_id(data, current_index, &mut taxon_id);
@@ -44,7 +43,7 @@ impl UniProtDATEntry {
             parse_db_references(data, current_index, &mut go_references, &mut ip_references);
         parse_sequence(data, current_index, &mut sequence);
 
-        return Ok(Self {
+        Ok(Self {
             accession_number,
             name,
             sequence,
@@ -53,7 +52,7 @@ impl UniProtDATEntry {
             go_references,
             ip_references,
             taxon_id,
-        });
+        })
     }
 
     /// Write an entry to stdout
@@ -83,18 +82,18 @@ impl UniProtDATEntry {
 // Functions to parse an Entry out of a Vec<String>
 
 /// Find the first AC number
-fn parse_ac_number(data: &mut Vec<String>) -> anyhow::Result<String> {
+fn parse_ac_number(data: &mut [String]) -> anyhow::Result<String> {
     // The AC number is always the second element
     let line = &mut data[1];
     line.drain(..COMMON_PREFIX_LEN);
     let (pre, _) = line
-        .split_once(";")
+        .split_once(';')
         .with_context(|| format!("Unable to split \"{line}\" on ';'"))?;
     Ok(pre.to_string())
 }
 
 /// Find the version of this entry
-fn parse_version(data: &Vec<String>, target: &mut String) -> usize {
+fn parse_version(data: &[String], target: &mut String) -> usize {
     let mut last_field: usize = 2;
 
     // Skip past previous fields to get to the dates
@@ -123,7 +122,7 @@ fn parse_version(data: &Vec<String>, target: &mut String) -> usize {
 /// - Last submitted name of protein domains
 /// - Submitted name of protein itself
 fn parse_name_and_ec(
-    data: &mut Vec<String>,
+    data: &mut [String],
     mut idx: usize,
     ec_references: &mut Vec<String>,
     target: &mut String,
@@ -225,7 +224,7 @@ fn parse_name_and_ec(
 }
 
 /// Find the first NCBI_TaxID of this entry
-fn parse_taxon_id(data: &mut Vec<String>, mut idx: usize, target: &mut String) -> usize {
+fn parse_taxon_id(data: &mut [String], mut idx: usize, target: &mut String) -> usize {
     while !data[idx].starts_with("OX   NCBI_TaxID=") {
         idx += 1;
     }
@@ -275,7 +274,7 @@ fn parse_db_references(
 
 /// Parse a single GO or InterPro DB reference
 fn parse_db_reference(
-    line: &mut String,
+    line: &mut str,
     go_references: &mut Vec<String>,
     ip_references: &mut Vec<String>,
 ) {
@@ -289,7 +288,7 @@ fn parse_db_reference(
 }
 
 /// Parse the peptide sequence for this entry
-fn parse_sequence(data: &mut Vec<String>, mut idx: usize, target: &mut String) {
+fn parse_sequence(data: &mut [String], mut idx: usize, target: &mut String) {
     // Find the beginning of the sequence
     // optionally skip over some fields we don't care for
     while !data[idx].starts_with("SQ") {
@@ -302,7 +301,7 @@ fn parse_sequence(data: &mut Vec<String>, mut idx: usize, target: &mut String) {
     // Combine all remaining lines
     for line in data.iter_mut().skip(idx) {
         line.drain(..COMMON_PREFIX_LEN);
-        target.push_str(&line.replace(" ", ""));
+        target.push_str(&line.replace(' ', ""));
     }
 }
 
