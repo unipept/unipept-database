@@ -1,6 +1,5 @@
-use std::str::FromStr;
-
-use anyhow::{Context, Error, Result};
+use anyhow::{Context, Result};
+use strum_macros::{Display, EnumCount, EnumIter, EnumString};
 
 #[derive(Debug)]
 pub struct Entry {
@@ -87,86 +86,54 @@ pub fn calculate_entry_digest(
     result
 }
 
-#[derive(Debug)]
+// This is taken directly from UMGAP, with Infraclass and Parvorder removed
+// Once these changes are merged in UMGAP, this can be replaced with a dependency
+// TODO
+#[rustfmt::skip]
+#[derive(PartialEq, Eq, Debug, Clone, Copy, Display, EnumString, EnumCount, EnumIter)]
 pub enum Rank {
-    NoRank,
-    SuperKingdom,
-    Kingdom,
-    SubKingdom,
-    SuperPhylum,
-    Phylum,
-    SubPhylum,
-    SuperClass,
-    Class,
-    SubClass,
-    SuperOrder,
-    Order,
-    SubOrder,
-    InfraOrder,
-    SuperFamily,
-    Family,
-    SubFamily,
-    Tribe,
-    SubTribe,
-    Genus,
-    SubGenus,
-    SpeciesGroup,
-    SpeciesSubgroup,
-    Species,
-    SubSpecies,
-    Strain,
-    Varietas,
-    Forma,
+    #[strum(serialize="no rank")]          NoRank,
+    #[strum(serialize="superkingdom")]     Superkingdom,
+    #[strum(serialize="kingdom")]          Kingdom,
+    #[strum(serialize="subkingdom")]       Subkingdom,
+    #[strum(serialize="superphylum")]      Superphylum,
+    #[strum(serialize="phylum")]           Phylum,
+    #[strum(serialize="subphylum")]        Subphylum,
+    #[strum(serialize="superclass")]       Superclass,
+    #[strum(serialize="class")]            Class,
+    #[strum(serialize="subclass")]         Subclass,
+    #[strum(serialize="superorder")]       Superorder,
+    #[strum(serialize="order")]            Order,
+    #[strum(serialize="suborder")]         Suborder,
+    #[strum(serialize="infraorder")]       Infraorder,
+    #[strum(serialize="superfamily")]      Superfamily,
+    #[strum(serialize="family")]           Family,
+    #[strum(serialize="subfamily")]        Subfamily,
+    #[strum(serialize="tribe")]            Tribe,
+    #[strum(serialize="subtribe")]         Subtribe,
+    #[strum(serialize="genus")]            Genus,
+    #[strum(serialize="subgenus")]         Subgenus,
+    #[strum(serialize="species group")]    SpeciesGroup,
+    #[strum(serialize="species subgroup")] SpeciesSubgroup,
+    #[strum(serialize="species")]          Species,
+    #[strum(serialize="subspecies")]       Subspecies,
+    #[strum(serialize="strain")]           Strain,
+    #[strum(serialize="varietas")]         Varietas,
+    #[strum(serialize="forma")]            Forma,
 }
 
-impl FromStr for Rank {
-    type Err = Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.to_uppercase().replace(' ', "_").as_str() {
-            "CLASS" => Ok(Self::Class),
-            "FAMILY" => Ok(Self::Family),
-            "FORMA" => Ok(Self::Forma),
-            "GENUS" => Ok(Self::Genus),
-            "INFRAORDER" => Ok(Self::InfraOrder),
-            "KINGDOM" => Ok(Self::Kingdom),
-            "NO_RANK" => Ok(Self::NoRank),
-            "ORDER" => Ok(Self::Order),
-            "PHYLUM" => Ok(Self::Phylum),
-            "SPECIES" => Ok(Self::Species),
-            "SPECIES_GROUP" => Ok(Self::SpeciesGroup),
-            "SPECIES_SUBGROUP" => Ok(Self::SpeciesSubgroup),
-            "STRAIN" => Ok(Self::Strain),
-            "SUBCLASS" => Ok(Self::SubClass),
-            "SUBFAMILY" => Ok(Self::SubFamily),
-            "SUBGENUS" => Ok(Self::SubGenus),
-            "SUBKINGDOM" => Ok(Self::SubKingdom),
-            "SUBORDER" => Ok(Self::SubOrder),
-            "SUBPHYLUM" => Ok(Self::SubPhylum),
-            "SUBSPECIES" => Ok(Self::SubSpecies),
-            "SUBTRIBE" => Ok(Self::SubTribe),
-            "SUPERCLASS" => Ok(Self::SuperClass),
-            "SUPERFAMILY" => Ok(Self::SuperFamily),
-            "SUPERKINGDOM" => Ok(Self::SuperKingdom),
-            "SUPERORDER" => Ok(Self::SuperOrder),
-            "SUPERPHYLUM" => Ok(Self::SuperPhylum),
-            "TRIBE" => Ok(Self::Tribe),
-            "VARIETAS" => Ok(Self::Varietas),
-            _ => Err(Error::msg(format!(
-                "Value {} does not match any known ranks",
-                s
-            ))),
-        }
+impl Rank {
+    pub fn index(&self) -> usize {
+        *self as usize
     }
 }
 
-#[allow(dead_code)] // The fields in this struct aren't used YET, but will be later on
 #[derive(Debug)]
 pub struct Taxon {
-    name: String,
-    rank: Rank,
-    parent: usize,
-    valid: bool,
+    pub name: String,
+    pub rank: Rank,
+    pub parent: usize,
+    pub valid: bool,
 }
 
 impl Taxon {
