@@ -36,7 +36,7 @@ Required parameters:
     - swissprot: https://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/complete/uniprot_sprot.xml.gz
     - trembl: https://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/complete/uniprot_trembl.xml.gz
 
-  * OUTPUT_DIR: Directory in which the tsv.gz-files that are produced by this script will be stored.
+  * OUTPUT_DIR: Directory in which the tsv.lz4-files that are produced by this script will be stored.
 
 Options:
   * -h
@@ -71,12 +71,9 @@ Dependencies:
   This script requires some non-standard dependencies to be installed before it can be used. This is a list of these
   items (which can normally be installed through your package manager):
 
-  * maven
-  * node-js
   * curl
   * pv
   * pigz
-  * java
   * uuidgen
   * parallel
   * lz4
@@ -246,11 +243,8 @@ checkDirectoryAndCreate "$4"
 
 ### Check that all dependencies required for this script to function are met.
 checkdep curl
-checkdep java
-checkdep mvn "Maven"
 checkdep uuidgen
 checkdep pv
-checkdep node
 checkdep pigz
 checkdep lz4
 
@@ -260,7 +254,6 @@ PEPTIDE_MAX_LENGTH=50 # What is the maximum length (inclusive) for tryptic pepti
 TABDIR="$OUTPUT_DIR" # Where should I store the final TSV files (large, single-write)?
 INTDIR="$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT" # Where should I store intermediate TSV files (large, single-write, multiple-read?
 KMER_LENGTH=9 # What is the length (k) of the K-mer peptides?
-JAVA_MEM="2g" # How much memory should Java use?
 CMD_SORT="sort --buffer-size=$SORT_MEMORY --parallel=4" # Which sort command should I use?
 CMD_GZIP="pigz -" # Which pipe compression command should I use for .gz files?
 CMD_ZCAT="pigz -dc" # Which decompression command should I use for .gz files?
@@ -354,7 +347,7 @@ create_taxon_tables() {
 		-e 's/parvorder/no rank/' "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/nodes.dmp"
 
 	mkdir -p "$OUTPUT_DIR"
-	java -Xms"$JAVA_MEM" -Xmx"$JAVA_MEM" -jar "$CURRENT_LOCATION/helper_scripts/NamesNodes2TaxonsLineages.jar" \
+	$CURRENT_LOCATION/helper_scripts/taxons-lineages \
 		--names "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/names.dmp" --nodes "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/nodes.dmp" \
 		--taxons "$(lz "$OUTPUT_DIR/taxons.tsv.lz4")" \
 		--lineages "$(lz "$OUTPUT_DIR/lineages.tsv.lz4")"
@@ -400,14 +393,7 @@ download_and_convert_all_sources() {
 
       reportProgress -1 "Downloading database index for $DB_TYPE." 3
 
-      # Curl doesn't allow downloading in a specific directory without a filename,
-      # do this as a temporary workaround: cd to the directory, curl, and cd back
-      # TODO use wget instead? will discuss later
-      # TODO resumability
-#      XML_FILE=$(cd "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT" && curl "$DB_SOURCE" --silent -O --remote-name -w "%{filename_effective}")
-#      $CMD_ZCAT "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/$XML_FILE" | "$CURRENT_LOCATION/helper_scripts/xml-parser" -t "$DB_TYPE" --threads 0 --verbose "$VERBOSE" | node "$CURRENT_LOCATION/helper_scripts/WriteToChunk.js" "$DB_INDEX_OUTPUT" "$VERBOSE"
-      $CMD_ZCAT "/uniprot_sprot.xml.gz" | $CURRENT_LOCATION/helper_scripts/xml-parser -t "$DB_TYPE" | node "$CURRENT_LOCATION/helper_scripts/WriteToChunk.js" "$DB_INDEX_OUTPUT" "$VERBOSE"
-#      rm "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/$XML_FILE"
+      curl --continue-at - --create-dirs "$DB_SOURCE" --silent | pv -i 5 -n -s "$SIZE" 2> >(reportProgress - "Downloading database index for $DB_TYPE." 3 >&2) | $CMD_ZCAT | $CURRENT_LOCATION/helper_scripts/xml-parser -t "$DB_TYPE" | $CURRENT_LOCATION/helper_scripts/write-to-chunk --output-dir "$DB_INDEX_OUTPUT"
 
       # Now, compress the different chunks
       CHUNKS=$(find "$DB_INDEX_OUTPUT" -name "*.chunk")
@@ -451,7 +437,7 @@ download_and_convert_all_sources() {
 
         SIZE="$(curl -I "$DB_SOURCE" -s | grep -i content-length | tr -cd '[0-9]')"
 
-        $CMD_ZCAT "/home/stijndcl/Documents/ugent/thesis/files/uniprot_sprot.xml.gz" | $CURRENT_LOCATION/helper_scripts/xml-parser -t "$DB_TYPE" | node "$CURRENT_LOCATION/helper_scripts/WriteToChunk.js" "$DB_INDEX_OUTPUT" "$VERBOSE"
+        curl --continue-at - --create-dirs "$DB_SOURCE" --silent | pv -i 5 -n -s "$SIZE" 2> >(reportProgress - "Downloading database index for $DB_TYPE." 3 >&2) | $CMD_ZCAT | $CURRENT_LOCATION/helper_scripts/xml-parser -t "$DB_TYPE" | $CURRENT_LOCATION/helper_scripts/write-to-chunk --output-dir "$DB_INDEX_OUTPUT"
 
         # Now, compress the different chunks
         CHUNKS=$(find "$DB_INDEX_OUTPUT" -name "*.chunk")
@@ -570,7 +556,6 @@ substitute_aas() {
   rm "$INTDIR/peptides-equalized.tsv.lz4"
   log "Finished the substitution of equalized AA's by ID's for the peptides with status $?."
 
-  # TODO instead of compressing and instantly decompressing, maybe we can use tee here to re-use it?
   log "Started the substitution of original AA's by ID's for the peptides."
   $CMD_LZ4CAT "$INTDIR/peptides_by_equalized.tsv.lz4" \
     | LC_ALL=C $CMD_SORT -k 3b,3 \
@@ -584,7 +569,7 @@ calculate_equalized_lcas() {
 	have "$INTDIR/peptides_by_equalized.tsv.lz4" || return
 	log "Started the calculation of equalized LCA's."
 	$CMD_LZ4CAT $INTDIR/peptides_by_equalized.tsv.lz4 | cut -f 2,6 \
-		| java -Xms"$JAVA_MEM" -Xmx"$JAVA_MEM" -jar "$CURRENT_LOCATION/helper_scripts/LineagesSequencesTaxons2LCAs.jar" "$(luz "$OUTPUT_DIR/lineages.tsv.lz4")" \
+		| $CURRENT_LOCATION/helper_scripts/lcas --infile "$(luz "$OUTPUT_DIR/lineages.tsv.lz4")" \
 		| $CMD_LZ4 - > "$INTDIR/LCAs_equalized.tsv.lz4"
 	log "Finished the calculation of equalized LCA's (after substituting AA's by ID's) with status $?."
 }
@@ -594,7 +579,7 @@ calculate_original_lcas() {
 	have "$INTDIR/peptides_by_original.tsv.lz4" || return
 	log "Started the calculation of original LCA's"
 	$CMD_LZ4CAT $INTDIR/peptides_by_original.tsv.lz4 | cut -f 3,6 \
-		| java -Xms"$JAVA_MEM" -Xmx"$JAVA_MEM" -jar "$CURRENT_LOCATION/helper_scripts/LineagesSequencesTaxons2LCAs.jar" "$(luz "$OUTPUT_DIR/lineages.tsv.lz4")" \
+		| $CURRENT_LOCATION/helper_scripts/lcas --infile "$(luz "$OUTPUT_DIR/lineages.tsv.lz4")" \
 		| $CMD_LZ4 - > "$INTDIR/LCAs_original.tsv.lz4"
 	log "Finished the calculation of original LCA's (after substituting AA's by ID's) with status $?."
 }
@@ -706,10 +691,10 @@ fetch_interpro_entries() {
 #dot: create_kmer_index -> kmer_index
 #dot: kmer_index [color="#f28e2b"]
 create_kmer_index() {
-	have "$OUTPUT_DIR/uniprot_entries.tsv.gz" "$OUTPUT_DIR/taxons.tsv.gz" || return
+	have "$OUTPUT_DIR/uniprot_entries.tsv.lz4" "$OUTPUT_DIR/taxons.tsv.lz4" || return
 	log "Started the construction of the $KMER_LENGTH-mer index."
 	for PREFIX in A C D E F G H I K L M N P Q R S T V W Y; do
-		pv -N $PREFIX "$OUTPUT_DIR/uniprot_entries.tsv.gz" \
+		pv -N $PREFIX "$OUTPUT_DIR/uniprot_entries.tsv.lz4" \
 			| gunzip \
 			| cut -f4,7 \
 			| grep "^[0-9]*	[ACDEFGHIKLMNPQRSTVWY]*$" \
@@ -718,7 +703,7 @@ create_kmer_index() {
 			| LC_ALL=C $CMD_SORT \
 			| sed "s/^/$PREFIX/"
 	done \
-			| umgap joinkmers "$(guz "$OUTPUT_DIR/taxons.tsv.gz")" \
+			| umgap joinkmers "$(guz "$OUTPUT_DIR/taxons.tsv.lz4")" \
 			| cut -d'	' -f1,2 \
 			| umgap buildindex \
 			> "$OUTPUT_DIR/$KMER_LENGTH-mer.index"
@@ -730,9 +715,9 @@ create_kmer_index() {
 #dot: create_tryptic_index -> tryptic_index
 #dot: tryptic_index [color="#f28e2b"]
 create_tryptic_index() {
-	have "$TABDIR/sequences.tsv.gz" || return
+	have "$TABDIR/sequences.tsv.lz4" || return
 	log "Started the construction of the tryptic index."
-	pv "$TABDIR/sequences.tsv.gz" \
+	pv "$TABDIR/sequences.tsv.lz4" \
 		| gunzip \
 		| cut -f2,3 \
 		| grep -v "\\N" \
@@ -773,7 +758,6 @@ database)
 	rm "$INTDIR/sequences.tsv.lz4"
 	rm "$INTDIR/peptides_by_equalized.tsv.lz4"
 	# Use the original sort as the result
-	# TODO check if this has impact on db loading time, if yes sort by id first & see if it makes up for it
 	mv "$INTDIR/peptides_by_original.tsv.lz4" "$OUTPUT_DIR/peptides.tsv.lz4"
 	reportProgress "-1" "Fetching EC numbers." 10
 	fetch_ec_numbers
@@ -786,7 +770,7 @@ database)
 	echo "Database contains: ##$ENTRIES##"
 	;;
 static-database)
-	if ! have "$TABDIR/taxons.tsv.gz"; then
+	if ! have "$TABDIR/taxons.tsv.lz4"; then
 		create_taxon_tables
 	fi
 	fetch_ec_numbers
@@ -797,10 +781,10 @@ kmer-index)
 	checkdep pv
 	checkdep umgap "umgap crate (for umgap buildindex)"
 
-	if ! have "$OUTPUT_DIR/taxons.tsv.gz"; then
+	if ! have "$OUTPUT_DIR/taxons.tsv.lz4"; then
 		create_taxon_tables
 	fi
-	if ! have "$OUTPUT_DIR/uniprot_entries.tsv.gz"; then
+	if ! have "$OUTPUT_DIR/uniprot_entries.tsv.lz4"; then
 		download_and_convert_all_sources
 		create_tables_and_filter
 	fi
@@ -810,10 +794,10 @@ tryptic-index)
 	checkdep pv
 	checkdep umgap "umgap crate (for umgap buildindex)"
 
-	if ! have "$TABDIR/taxons.tsv.gz"; then
+	if ! have "$TABDIR/taxons.tsv.lz4"; then
 		create_taxon_tables
 	fi
-	if ! have "$TABDIR/sequences.tsv.gz"; then
+	if ! have "$TABDIR/sequences.tsv.lz4"; then
 		download_and_convert_all_sources
 		create_tables_and_filter
 		number_sequences

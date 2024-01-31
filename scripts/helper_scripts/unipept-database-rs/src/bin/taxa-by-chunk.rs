@@ -31,7 +31,7 @@ fn main() -> Result<()> {
         all_taxa.push(taxa_id);
     }
 
-    let chunk_file_regex = Regex::new(r"unipept\..*\.gz").context("Error creating regex")?;
+    let chunk_file_regex = Regex::new(r"unipept\..*\.lz4").context("Error creating regex")?;
 
     for entry in read_dir(&args.chunk_dir).context("Error reading chunk directory")? {
         let entry = entry.context("Error reading entry from chunk directory")?;
@@ -52,7 +52,7 @@ fn main() -> Result<()> {
         }
 
         // Parse the taxa range out of the filename
-        let replaced_name = base_name.replace("unipept.", "").replace(".chunk.gz", "");
+        let replaced_name = base_name.replace("unipept.", "").replace(".chunk.lz4", "");
         let range = replaced_name.split_once('-');
         let range = range.with_context(|| format!("Unable to split {replaced_name} on '-'"))?;
         let start: u64 = range

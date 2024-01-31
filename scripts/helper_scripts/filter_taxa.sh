@@ -23,7 +23,7 @@ then
   TAXA=$(filter_taxa "$TAXA")
 
   # This associative array maps a filename upon the taxa that should be queried within this file
-  QUERIES=( $(echo "$TAXA" | tr "," "\n" | node "$CURRENT_LOCATION/TaxaByChunk.js" "$DATABASE_INDEX" "$TMP_DIR") )
+  QUERIES=( $(echo "$TAXA" | tr "," "\n" | $CURRENT_LOCATION/taxa-by-chunk --chunk-dir "$DATABASE_INDEX" --temp-dir "$TMP_DIR") )
 
   if [[ ${#QUERIES[@]} -gt 0 ]]
   then
