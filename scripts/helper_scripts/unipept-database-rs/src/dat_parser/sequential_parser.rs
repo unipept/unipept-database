@@ -1,6 +1,6 @@
 use std::io::{BufRead, Lines};
 
-use anyhow::{Context, Result};
+use anyhow::{Error, Result};
 
 use crate::dat_parser::entry::UniProtDATEntry;
 
