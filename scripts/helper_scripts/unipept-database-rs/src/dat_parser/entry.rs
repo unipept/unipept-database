@@ -114,10 +114,7 @@ fn parse_version(data: &[String], index: &mut usize) -> String {
 /// - Last submitted name of protein components
 /// - Last submitted name of protein domains
 /// - Submitted name of protein itself
-fn parse_name_and_ec(
-    data: &mut [String],
-    index: &mut usize,
-) -> (String, Vec<String>) {
+fn parse_name_and_ec(data: &mut [String], index: &mut usize) -> (String, Vec<String>) {
     // Find where the info starts and ends
     while !data[*index].starts_with("DE") {
         *index += 1;
@@ -175,10 +172,7 @@ fn parse_name_and_ec(
         }
         // Find EC numbers
         else if line.starts_with("EC=") {
-            let ec_target = read_until_metadata(
-                line,
-                ORGANISM_RECOMMENDED_NAME_EC_PREFIX_LEN,
-            );
+            let ec_target = read_until_metadata(line, ORGANISM_RECOMMENDED_NAME_EC_PREFIX_LEN);
 
             // EC numbers sometimes appear multiple times, so use a set to track which ones
             // we've seen before
@@ -232,10 +226,7 @@ fn parse_taxon_id(data: &mut [String], index: &mut usize) -> String {
 }
 
 /// Parse GO and InterPro DB references
-fn parse_db_references(
-    data: &mut Vec<String>,
-    index: &mut usize,
-) -> (Vec<String>, Vec<String>) {
+fn parse_db_references(data: &mut Vec<String>, index: &mut usize) -> (Vec<String>, Vec<String>) {
     let mut go_references = Vec::new();
     let mut ip_references = Vec::new();
     let original_idx = *index;
