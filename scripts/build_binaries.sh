@@ -11,13 +11,9 @@ checkdep() {
     }
 }
 
-checkdep cargo "Rust Toolchain"
+checkdep cargo "Rust toolchain"
 
 # Build binaries and copy them to the /helper_scripts folder
 cd $CURRENT_LOCATION/helper_scripts/unipept-database-rs
 cargo build --release
-
-for BINARY in "functional-analysis" "lcas" "taxa-by-chunk" "taxons-lineages" "taxons-uniprots-tables" "write-to-chunk" "xml-parser"
-do
-  cp "./target/release/$BINARY" ..
-done
+find ./target/release -maxdepth 1 -type f -executable -exec cp {} .. \;

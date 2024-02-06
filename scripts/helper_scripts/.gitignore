@@ -1,4 +1,5 @@
 # Ignore the compiled binaries that get moved here
+dat-parser
 functional-analysis
 lcas
 taxa-by-chunk
