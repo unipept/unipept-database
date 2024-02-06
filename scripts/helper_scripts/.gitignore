@@ -1,0 +1,8 @@
+# Ignore the compiled binaries that get moved here
+functional-analysis
+lcas
+taxa-by-chunk
+taxons-lineages
+taxons-uniprots-tables
+write-to-chunk
+xml-parser
