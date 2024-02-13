@@ -4,6 +4,7 @@ use std::num::NonZeroUsize;
 use anyhow::{Context, Result};
 use clap::Parser;
 use smartstring::{LazyCompact, SmartString};
+use unipept_database::uniprot::UniprotType;
 use uniprot::uniprot::{SequentialParser, ThreadedParser};
 
 use unipept_database::utils::files::open_sin;
@@ -45,21 +46,6 @@ fn main() -> Result<()> {
 }
 
 type SmartStr = SmartString<LazyCompact>;
-
-#[derive(clap::ValueEnum, Clone, Debug)]
-enum UniprotType {
-    Swissprot,
-    Trembl,
-}
-
-impl UniprotType {
-    pub fn to_str(&self) -> &str {
-        match self {
-            UniprotType::Swissprot => "swissprot",
-            UniprotType::Trembl => "trembl",
-        }
-    }
-}
 
 // Parse a Uniprot XML file and convert it into a TSV-file
 #[derive(Parser, Debug)]
