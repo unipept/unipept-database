@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   schedule:
     # * is a special character in YAML so you have to quote this string
-    - cron:  '0 0 1 * *'
+    - cron: '0 0 1 * *'
 
 jobs:
   generate_static_database:
@@ -22,10 +22,7 @@ jobs:
       - name: Install required utilities
         run: |
           sudo apt-get update
-          sudo apt-get -y install git maven curl unzip gawk sqlite3 libsqlite3-dev pv nodejs wget
-      - name: Download Taxdmp file
-        shell: bash
-        run: wget https://ftp.ncbi.nih.gov/pub/taxonomy/taxdmp.zip
+          sudo apt-get -y install git maven curl unzip gawk sqlite3 libsqlite3-dev pv nodejs
       - name: Generate tsv.gz files
         shell: bash
         run: ./scripts/build_database.sh static-database "swissprot,trembl" "https://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/complete/uniprot_sprot.xml.gz,https://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/complete/uniprot_trembl.xml.gz" "output"
@@ -73,13 +70,26 @@ jobs:
           asset_path: ./output.zip
           asset_name: unipept-static-db-${{ steps.date.outputs.date }}.zip
           asset_content_type: application/zip
-      - name: Upload ncbi Taxdmp Release Asset
+
+  download_ncbi_taxdmp:
+    runs-on: ubuntu-latest
+    needs: [ generate_static_database ]
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install Wget
+        run: |
+          sudo apt-get update
+          sudo apt-get -y install wget
+      - name: Download Taxdmp file
+        shell: bash
+        run: wget https://ftp.ncbi.nih.gov/pub/taxonomy/taxdmp.zip
+      - name: Upload NCBI Taxdmp Release Asset
         id: upload-taxdmp-release-asset
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          upload_url: ${{ jobs.generate_static_database.steps.create_release.outputs.upload_url }}
           asset_path: ./taxdmp.zip
           asset_name: ncbi-taxdmp.zip
           asset_content_type: application/zip
