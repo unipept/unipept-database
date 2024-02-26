@@ -64,7 +64,7 @@ jobs:
           draft: false
           prerelease: false
       - name: Upload Static Database Release Asset
-        id: upload-release-asset
+        id: upload-database-release-asset
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -74,7 +74,7 @@ jobs:
           asset_name: unipept-static-db-${{ steps.date.outputs.date }}.zip
           asset_content_type: application/zip
       - name: Upload UniProt Taxdmp Release Asset
-        id: upload-release-asset
+        id: upload-taxdmp-release-asset
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
