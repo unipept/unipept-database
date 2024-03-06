@@ -160,11 +160,14 @@ impl TableWriter {
             let type_ = entry.type_.clone();
             let name = entry.name.clone();
             let sequence = entry.sequence.clone();
+            let ec_numbers = entry.ec_references.clone();
+            let go_numbers = entry.go_references.clone();
+            let ip_numbers = entry.ip_references.clone();
 
             writeln!(
                 &mut self.uniprot_entries,
-                "{}\t{}\t{}\t{}\t{}\t{}\t{}",
-                self.uniprot_count, accession_number, version, taxon_id, type_, name, sequence
+                "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+                self.uniprot_count, accession_number, version, taxon_id, type_, name, sequence, ec_numbers.join(";"), go_numbers.join(";"), ip_numbers.join(";")
             )
             .context("Error writing to TSV")?;
 
