@@ -12,7 +12,7 @@ add_index() {
     local column_name=$2
 
     # Execute the "add index" statement
-    mysql -u "$DB_USER" -p"$DB_PASSWORD" -h "$DB_HOST" -e "ALTER TABLE $DB_NAME.$table_name ADD INDEX idx_$column_name ($column_name);" &
+    mariadb -u "$DB_USER" -p"$DB_PASSWORD" -h "$DB_HOST" -e "ALTER TABLE $DB_NAME.$table_name ADD INDEX idx_$column_name ($column_name);" &
 }
 
 # List of tables and columns for which you want to add indexes
