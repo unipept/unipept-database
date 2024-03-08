@@ -366,7 +366,7 @@ download_and_convert_all_sources() {
   DB_SOURCES_ARRAY=($DB_SOURCES)
 
   # Set IFS to newline to properly split the $CHUNKS variable for folders with newlines
-  IFS=$"\n"
+  IFS=$'\n'
 
   while [[ "$IDX" -ne "${#DB_TYPES_ARRAY}" ]] && [[ -n $(echo "${DB_TYPES_ARRAY[$IDX]}" | sed "s/\s//g") ]]
   do
