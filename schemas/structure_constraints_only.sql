@@ -12,6 +12,8 @@ ALTER TABLE unipept.lineages
     ADD PRIMARY KEY (taxon_id);
 ALTER TABLE unipept.sequences
     ADD PRIMARY KEY (id);
+ALTER TABLE unipept.peptides
+    ADD PRIMARY KEY (id);
 ALTER TABLE unipept.datasets
     ADD PRIMARY KEY (id);
 ALTER TABLE unipept.dataset_items
@@ -24,5 +26,8 @@ ALTER TABLE unipept.dataset_items
             ON UPDATE NO ACTION;
 ALTER TABLE unipept.go_cross_references
     ADD PRIMARY KEY (id);
+ALTER TABLE unipept.ec_cross_references
+    ADD PRIMARY KEY (id);
 ALTER TABLE unipept.interpro_cross_references
     ADD PRIMARY KEY (id);
+
