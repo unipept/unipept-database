@@ -17,7 +17,7 @@ do
     print $file
     tbl=`echo $file | sed "s/.tsv.lz4//"`
     echo "zcatting - LOAD DATA LOCAL INFILE '$file' INTO TABLE $tbl"
-    zcat $file | mariadb  --local-infile=1 -uunipept -punipept $db -e "LOAD DATA LOCAL INFILE '/dev/stdin' INTO TABLE $tbl;SHOW WARNINGS" 2>&1
+    lz4cat $file | mariadb  --local-infile=1 -uunipept -punipept $db -e "LOAD DATA LOCAL INFILE '/dev/stdin' INTO TABLE $tbl;SHOW WARNINGS" 2>&1
 done
 print "done"
 
