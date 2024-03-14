@@ -332,12 +332,16 @@ download_taxdmp() {
   # Check if our self-hosted version is available or not using the GitHub API
   LATEST_RELEASE_URL="https://api.github.com/repos/unipept/unipept-database/releases/latest"
   TAXDMP_RELEASE_ASSET_RE="unipept/unipept-database/releases/download/[^/]+/ncbi-taxdmp.zip"
+  # Temporary disable the pipefail check (cause egrep can exit with code 1 if nothing is found).
+  set +eo pipefail
   SELF_HOSTED_URL=$(curl -s "$LATEST_RELEASE_URL" | egrep -o "$TAXDMP_RELEASE_ASSET_RE")
+  set -eo pipefail
 
-  if [ "$SELF_HOSTED_URL" ]
+  if [ "$BUILD_TYPE" != "static-database" ] && [ "$SELF_HOSTED_URL" ]
   then
     TAXON_URL="https://github.com/$SELF_HOSTED_URL"
   else
+    log "Using fallback taxon URL"
     TAXON_URL="$TAXON_FALLBACK_URL"
   fi
 
