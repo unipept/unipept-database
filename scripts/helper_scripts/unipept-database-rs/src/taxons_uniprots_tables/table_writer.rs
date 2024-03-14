@@ -112,6 +112,7 @@ impl TableWriter {
                 id,
                 sequence,
                 &summary,
+                entry.taxon_id,
             )
             .context("Failed to write peptide")?;
         }
@@ -125,17 +126,19 @@ impl TableWriter {
         id: i64,
         original_sequence: &[u8],
         annotations: &String,
+        taxon_id: i32,
     ) -> Result<()> {
         self.peptide_count += 1;
 
         writeln!(
             &mut self.peptides,
-            "{}\t{}\t{}\t{}\t{}",
+            "{}\t{}\t{}\t{}\t{}\t{}",
             self.peptide_count,
             String::from_utf8_lossy(&sequence),
             String::from_utf8_lossy(original_sequence),
             id,
-            annotations
+            annotations,
+            taxon_id
         )
         .context("Error writing to TSV")?;
 

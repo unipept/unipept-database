@@ -1,8 +1,5 @@
-use std::collections::HashSet;
-
 use anyhow::Context;
-
-use crate::uniprot::UniprotType;
+use std::collections::HashSet;
 
 // Constants to aid in parsing
 const COMMON_PREFIX_LEN: usize = "ID   ".len();
@@ -49,7 +46,7 @@ impl UniProtDATEntry {
     }
 
     /// Write an entry to stdout
-    pub fn write(&self, db_type: &UniprotType) {
+    pub fn write(&self, db_type: &str) {
         if self.name.is_empty() {
             eprintln!(
                 "Could not find a name for entry AC-{}",
@@ -66,7 +63,7 @@ impl UniProtDATEntry {
             self.ec_references.join(";"),
             self.go_references.join(";"),
             self.ip_references.join(";"),
-            db_type.to_str(),
+            db_type,
             self.taxon_id
         )
     }

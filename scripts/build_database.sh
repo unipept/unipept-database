@@ -36,7 +36,7 @@ Required parameters:
     - swissprot: https://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/complete/uniprot_sprot.xml.gz
     - trembl: https://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/complete/uniprot_trembl.xml.gz
 
-  * OUTPUT_DIR: Directory in which the tsv.gz-files that are produced by this script will be stored.
+  * OUTPUT_DIR: Directory in which the tsv.lz4-files that are produced by this script will be stored.
 
 Options:
   * -h
@@ -71,14 +71,12 @@ Dependencies:
   This script requires some non-standard dependencies to be installed before it can be used. This is a list of these
   items (which can normally be installed through your package manager):
 
-  * maven
-  * node-js
   * curl
   * pv
   * pigz
-  * java
   * uuidgen
   * parallel
+  * lz4
 END
 }
 
@@ -245,12 +243,10 @@ checkDirectoryAndCreate "$4"
 
 ### Check that all dependencies required for this script to function are met.
 checkdep curl
-checkdep java
-checkdep mvn "Maven"
 checkdep uuidgen
 checkdep pv
-checkdep node
 checkdep pigz
+checkdep lz4
 
 ### Default configuration for this script
 PEPTIDE_MIN_LENGTH=5 # What is the minimum length (inclusive) for tryptic peptides?"
@@ -258,9 +254,11 @@ PEPTIDE_MAX_LENGTH=50 # What is the maximum length (inclusive) for tryptic pepti
 TABDIR="$OUTPUT_DIR" # Where should I store the final TSV files (large, single-write)?
 INTDIR="$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT" # Where should I store intermediate TSV files (large, single-write, multiple-read?
 KMER_LENGTH=9 # What is the length (k) of the K-mer peptides?
-JAVA_MEM="2g" # How much memory should Java use?
 CMD_SORT="sort --buffer-size=$SORT_MEMORY --parallel=4" # Which sort command should I use?
-CMD_GZIP="gzip -" # Which pipe compression command should I use?
+CMD_GZIP="pigz -" # Which pipe compression command should I use for .gz files?
+CMD_ZCAT="pigz -dc" # Which decompression command should I use for .gz files?
+CMD_LZ4="lz4 -c" # Which pipe compression command should I use for .lz4 files?
+CMD_LZ4CAT="lz4 -dc" # Which decompression command should I use for .lz4 files?
 ENTREZ_BATCH_SIZE=1000 # Which batch size should I use for communication with Entrez?
 
 TAXON_FALLBACK_URL="https://ftp.ncbi.nlm.nih.gov/pub/taxonomy/taxdmp.zip"
@@ -301,7 +299,22 @@ guz() {
 	fifo="$(uuidgen)-$(basename "$1")"
 	mkfifo "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/$fifo"
 	echo "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/$fifo"
-	{ zcat "$1" > "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/$fifo" && rm "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/$fifo" || kill "$self"; } > /dev/null &
+	{ $CMD_ZCAT "$1" > "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/$fifo" && rm "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/$fifo" || kill "$self"; } > /dev/null &
+}
+
+lz() {
+	fifo="$(uuidgen)-$(basename "$1")"
+	mkfifo "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/$fifo"
+	echo "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/$fifo"
+	mkdir -p "$(dirname "$1")"
+	{ $CMD_LZ4 - < "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/$fifo" > "$1" && rm "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/$fifo" || kill "$self"; } > /dev/null &
+}
+
+luz() {
+	fifo="$(uuidgen)-$(basename "$1")"
+	mkfifo "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/$fifo"
+	echo "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/$fifo"
+	{ $CMD_LZ4CAT "$1" > "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/$fifo" && rm "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/$fifo" || kill "$self"; } > /dev/null &
 }
 
 have() {
@@ -350,10 +363,10 @@ create_taxon_tables() {
 		-e 's/parvorder/no rank/' "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/nodes.dmp"
 
 	mkdir -p "$OUTPUT_DIR"
-	java -Xms"$JAVA_MEM" -Xmx"$JAVA_MEM" -jar "$CURRENT_LOCATION/helper_scripts/NamesNodes2TaxonsLineages.jar" \
+	$CURRENT_LOCATION/helper_scripts/taxons-lineages \
 		--names "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/names.dmp" --nodes "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/nodes.dmp" \
-		--taxons "$(gz "$OUTPUT_DIR/taxons.tsv.gz")" \
-		--lineages "$(gz "$OUTPUT_DIR/lineages.tsv.gz")"
+		--taxons "$(lz "$OUTPUT_DIR/taxons.tsv.lz4")" \
+		--lineages "$(lz "$OUTPUT_DIR/lineages.tsv.lz4")"
 
 	rm "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/names.dmp" "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/nodes.dmp"
 	log "Finished creating the taxon tables."
@@ -368,7 +381,8 @@ download_and_convert_all_sources() {
   DB_TYPES_ARRAY=($DB_TYPES)
   DB_SOURCES_ARRAY=($DB_SOURCES)
 
-  IFS="$OLDIFS"
+  # Set IFS to newline to properly split the $CHUNKS variable for folders with newlines
+  IFS=$'\n'
 
   while [[ "$IDX" -ne "${#DB_TYPES_ARRAY}" ]] && [[ -n $(echo "${DB_TYPES_ARRAY[$IDX]}" | sed "s/\s//g") ]]
   do
@@ -396,7 +410,7 @@ download_and_convert_all_sources() {
 
       reportProgress -1 "Downloading database index for $DB_TYPE." 3
 
-      curl --continue-at - --create-dirs "$DB_SOURCE" --silent | zcat | java -jar "$CURRENT_LOCATION/helper_scripts/XmlToTabConverter.jar" 5 50 "$DB_TYPE" "$VERBOSE" | node "$CURRENT_LOCATION/helper_scripts/WriteToChunk.js" "$DB_INDEX_OUTPUT" "$VERBOSE"
+      curl --continue-at - --create-dirs "$DB_SOURCE" --silent | pv -i 5 -n -s "$SIZE" 2> >(reportProgress - "Downloading database index for $DB_TYPE." 3 >&2) | $CMD_ZCAT | $CURRENT_LOCATION/helper_scripts/xml-parser -t "$DB_TYPE" | $CURRENT_LOCATION/helper_scripts/write-to-chunk --output-dir "$DB_INDEX_OUTPUT"
 
       # Now, compress the different chunks
       CHUNKS=$(find "$DB_INDEX_OUTPUT" -name "*.chunk")
@@ -407,7 +421,7 @@ download_and_convert_all_sources() {
       for CHUNK in $CHUNKS
       do
         echo "Compressing $CHUNK_IDX of $TOTAL_CHUNKS for $DB_TYPE"
-        pv -i 5 -n "$CHUNK" 2> >(reportProgress - "Processing chunk $CHUNK_IDX of $TOTAL_CHUNKS for $DB_TYPE index." 4 >&2) | pigz > "$CHUNK.gz"
+        pv -i 5 -n "$CHUNK" 2> >(reportProgress - "Processing chunk $CHUNK_IDX of $TOTAL_CHUNKS for $DB_TYPE index." 4 >&2) | lz4 -c > "$CHUNK.lz4"
         # Remove the chunk that was just compressed
         rm "$CHUNK"
         CHUNK_IDX=$((CHUNK_IDX + 1))
@@ -440,7 +454,7 @@ download_and_convert_all_sources() {
 
         SIZE="$(curl -I "$DB_SOURCE" -s | grep -i content-length | tr -cd '[0-9]')"
 
-        curl --continue-at - --create-dirs "$DB_SOURCE" --silent | pv -i 5 -n -s "$SIZE" 2> >(reportProgress - "Downloading database index for $DB_TYPE." 3 >&2) | zcat | java -jar "$CURRENT_LOCATION/helper_scripts/XmlToTabConverter.jar" 5 50 "$DB_TYPE" "$VERBOSE" | node "$CURRENT_LOCATION/helper_scripts/WriteToChunk.js" "$DB_INDEX_OUTPUT" "$VERBOSE"
+        curl --continue-at - --create-dirs "$DB_SOURCE" --silent | pv -i 5 -n -s "$SIZE" 2> >(reportProgress - "Downloading database index for $DB_TYPE." 3 >&2) | $CMD_ZCAT | $CURRENT_LOCATION/helper_scripts/xml-parser -t "$DB_TYPE" | $CURRENT_LOCATION/helper_scripts/write-to-chunk --output-dir "$DB_INDEX_OUTPUT"
 
         # Now, compress the different chunks
         CHUNKS=$(find "$DB_INDEX_OUTPUT" -name "*.chunk")
@@ -451,7 +465,7 @@ download_and_convert_all_sources() {
         for CHUNK in $CHUNKS
         do
           echo "Compressing $CHUNK_IDX of $TOTAL_CHUNKS for $DB_TYPE"
-          pv -i 5 -n "$CHUNK" 2> >(reportProgress - "Processing chunk $CHUNK_IDX of $TOTAL_CHUNKS for $DB_TYPE index." 4 >&2) | pigz > "$CHUNK.gz"
+          pv -i 5 -n "$CHUNK" 2> >(reportProgress - "Processing chunk $CHUNK_IDX of $TOTAL_CHUNKS for $DB_TYPE index." 4 >&2) | lz4 -c > "$CHUNK.lz4"
           # Remove the chunk that was just compressed
           rm "$CHUNK"
           CHUNK_IDX=$((CHUNK_IDX + 1))
@@ -465,6 +479,8 @@ download_and_convert_all_sources() {
 
     IDX=$((IDX + 1))
   done
+
+  IFS="$OLDIFS"
 }
 
 filter_sources_by_taxa() {
@@ -491,176 +507,142 @@ filter_sources_by_taxa() {
 
     mkdir -p "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/filter"
 
-    $CURRENT_LOCATION/helper_scripts/filter_taxa.sh "$TAXA" "$DB_INDEX_OUTPUT" "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/filter" "$OUTPUT_DIR/lineages.tsv.gz"
+    $CURRENT_LOCATION/helper_scripts/filter_taxa.sh "$TAXA" "$DB_INDEX_OUTPUT" "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/filter" "$OUTPUT_DIR/lineages.tsv.lz4"
 
     IDX=$((IDX + 1))
   done
 }
 
 create_most_tables() {
-	have "$OUTPUT_DIR/taxons.tsv.gz" || return
+	have "$OUTPUT_DIR/taxons.tsv.lz4" || return
 	log "Started calculation of most tables."
 
   reportProgress "-1" "Started building main database tables." 5
 
 	mkdir -p "$OUTPUT_DIR" "$INTDIR"
 
-	if [ $VERBOSE = "true" ]
-	then
-	  $VERBOSE_FLAG="--verbose"
-  fi
-
-	cat - | java -Xms"$JAVA_MEM" -Xmx"$JAVA_MEM" -jar "$CURRENT_LOCATION/helper_scripts/TaxonsUniprots2Tables.jar" \
+	cat - | $CURRENT_LOCATION/helper_scripts/taxons-uniprots-tables \
 		--peptide-min "$PEPTIDE_MIN_LENGTH" \
 		--peptide-max "$PEPTIDE_MAX_LENGTH" \
-		--taxons "$(guz "$OUTPUT_DIR/taxons.tsv.gz")" \
-		--peptides "$(gz "$INTDIR/peptides.tsv.gz")" \
-		--uniprot-entries "$(gz "$OUTPUT_DIR/uniprot_entries.tsv.gz")" \
-		--ec "$(gz "$OUTPUT_DIR/ec_cross_references.tsv.gz")" \
-		--go "$(gz "$OUTPUT_DIR/go_cross_references.tsv.gz")" \
-		--interpro "$(gz "$OUTPUT_DIR/interpro_cross_references.tsv.gz")" \
-		$VERBOSE_FLAG
+		--taxons "$(luz "$OUTPUT_DIR/taxons.tsv.lz4")" \
+		--peptides "$(lz "$INTDIR/peptides-out.tsv.lz4")" \
+		--uniprot-entries "$(lz "$OUTPUT_DIR/uniprot_entries.tsv.lz4")" \
+		--ec "$(lz "$OUTPUT_DIR/ec_cross_references.tsv.lz4")" \
+		--go "$(lz "$OUTPUT_DIR/go_cross_references.tsv.lz4")" \
+		--interpro "$(lz "$OUTPUT_DIR/interpro_cross_references.tsv.lz4")"
 
-	log "Finished calculation of most tables with status $?"
+  log "Started sorting peptides table"
+
+  $CMD_LZ4CAT $INTDIR/peptides-out.tsv.lz4 \
+    | LC_ALL=C $CMD_SORT -k2 \
+    | $CMD_LZ4 > $INTDIR/peptides-equalized.tsv.lz4
+
+  rm $INTDIR/peptides-out.tsv.lz4
+  log "Finished calculation of most tables with status $?"
 }
 
 create_tables_and_filter() {
   filter_sources_by_taxa | create_most_tables
 }
 
-join_equalized_pepts_and_entries() {
-  echo "Test if files for joining peptides are available."
-	have "$INTDIR/peptides.tsv.gz" "$OUTPUT_DIR/uniprot_entries.tsv.gz" || return
-	log "Started the joining of equalized peptides and uniprot entries."
-	mkfifo "peptides_eq" "entries_eq"
-	zcat "$INTDIR/peptides.tsv.gz" | gawk '{ printf("%012d\t%s\n", $4, $2) }' > "peptides_eq" &
-	zcat "$OUTPUT_DIR/uniprot_entries.tsv.gz" | gawk '{ printf("%012d\t%s\n", $1, $4) }' > "entries_eq" &
-	join -t '	' -o '1.2,2.2' -j 1 "peptides_eq" "entries_eq" \
-		| LC_ALL=C $CMD_SORT -k1 \
-		| $CMD_GZIP - > "$INTDIR/aa_sequence_taxon_equalized.tsv.gz"
-	rm "peptides_eq" "entries_eq"
-	log "Finished the joining of equalized peptides and uniprot entries with status $?."
-}
-
-
-join_original_pepts_and_entries() {
-	have "$INTDIR/peptides.tsv.gz" "$OUTPUT_DIR/uniprot_entries.tsv.gz" || return
-	log "Started the joining of original peptides and uniprot entries."
-	mkfifo "peptides_orig" "entries_orig"
-	zcat "$INTDIR/peptides.tsv.gz" | gawk '{ printf("%012d\t%s\n", $4, $3) }' > "peptides_orig" &
-	zcat "$OUTPUT_DIR/uniprot_entries.tsv.gz" | gawk '{ printf("%012d\t%s\n", $1, $4) }' > "entries_orig" &
-	join -t '	' -o '1.2,2.2' -j 1 "peptides_orig" "entries_orig" \
-		| LC_ALL=C $CMD_SORT -k1 \
-		| $CMD_GZIP - > "$INTDIR/aa_sequence_taxon_original.tsv.gz"
-	rm "peptides_orig" "entries_orig"
-	log "Finished the joining of original peptides and uniprot entries with status $?."
-}
-
 
 number_sequences() {
-	have "$INTDIR/aa_sequence_taxon_equalized.tsv.gz" "$INTDIR/aa_sequence_taxon_original.tsv.gz" || return
+  have "$INTDIR/peptides-equalized.tsv.lz4" || return
 	log "Started the numbering of sequences."
-	mkfifo "equalized" "original"
-	zcat "$INTDIR/aa_sequence_taxon_equalized.tsv.gz" | cut -f1 | uniq > "equalized" &
-	zcat "$INTDIR/aa_sequence_taxon_original.tsv.gz" | cut -f1 | uniq > "original" &
-	LC_ALL=C $CMD_SORT -m "equalized" "original" | uniq | cat -n \
-		| sed 's/^ *//' | $CMD_GZIP - > "$INTDIR/sequences.tsv.gz"
-	rm "equalized" "original"
+
+	mkfifo "p_eq"
+	mkfifo "p_or"
+
+	$CMD_LZ4CAT $INTDIR/peptides-equalized.tsv.lz4 | cut -f 3 | sort | uniq > "p_or" &
+	$CMD_LZ4CAT $INTDIR/peptides-equalized.tsv.lz4 | cut -f 2 | uniq > "p_eq" &
+
+	sort -u -m "p_or" "p_eq" | cat -n \
+		| sed 's/^ *//' | $CMD_LZ4 - > "$INTDIR/sequences.tsv.lz4"
+
+	rm "p_eq" "p_or"
+
 	log "Finished the numbering of sequences with status $?."
 }
 
+substitute_aas() {
+  have "$INTDIR/peptides-equalized.tsv.lz4" "$INTDIR/sequences.tsv.lz4"
+
+  log "Started the substitution of equalized AA's by ID's for the peptides."
+  $CMD_LZ4CAT $INTDIR/peptides-equalized.tsv.lz4 \
+    | join -t '	' -o '1.1,2.1,1.3,1.4,1.5,1.6' -1 2 -2 2 - "$(luz "$INTDIR/sequences.tsv.lz4")" \
+    | $CMD_LZ4 - > "$INTDIR/peptides_by_equalized.tsv.lz4"
+
+  rm "$INTDIR/peptides-equalized.tsv.lz4"
+  log "Finished the substitution of equalized AA's by ID's for the peptides with status $?."
+
+  log "Started the substitution of original AA's by ID's for the peptides."
+  $CMD_LZ4CAT "$INTDIR/peptides_by_equalized.tsv.lz4" \
+    | LC_ALL=C $CMD_SORT -k 3b,3 \
+    | join -t '	' -o '1.1,1.2,2.1,1.4,1.5,1.6' -1 3 -2 2 - "$(luz "$INTDIR/sequences.tsv.lz4")" \
+    | $CMD_LZ4 - > "$INTDIR/peptides_by_original.tsv.lz4"
+
+  log "Finished the substitution of original AA's by ID's for the peptides with status $?."
+}
 
 calculate_equalized_lcas() {
-	have "$INTDIR/sequences.tsv.gz" "$INTDIR/aa_sequence_taxon_equalized.tsv.gz" "$OUTPUT_DIR/lineages.tsv.gz" || return
-	log "Started the calculation of equalized LCA's (after substituting AA's by ID's)."
-	join -t '	' -o '1.1,2.2' -1 2 -2 1 \
-			"$(guz "$INTDIR/sequences.tsv.gz")" \
-			"$(guz "$INTDIR/aa_sequence_taxon_equalized.tsv.gz")" \
-		| java -Xms"$JAVA_MEM" -Xmx"$JAVA_MEM" -jar "$CURRENT_LOCATION/helper_scripts/LineagesSequencesTaxons2LCAs.jar" "$(guz "$OUTPUT_DIR/lineages.tsv.gz")" \
-		| $CMD_GZIP - > "$INTDIR/LCAs_equalized.tsv.gz"
+	have "$INTDIR/peptides_by_equalized.tsv.lz4" || return
+	log "Started the calculation of equalized LCA's."
+	$CMD_LZ4CAT $INTDIR/peptides_by_equalized.tsv.lz4 | cut -f 2,6 \
+		| $CURRENT_LOCATION/helper_scripts/lcas --infile "$(luz "$OUTPUT_DIR/lineages.tsv.lz4")" \
+		| $CMD_LZ4 - > "$INTDIR/LCAs_equalized.tsv.lz4"
 	log "Finished the calculation of equalized LCA's (after substituting AA's by ID's) with status $?."
 }
 
 
 calculate_original_lcas() {
-	have "$INTDIR/sequences.tsv.gz" "$INTDIR/aa_sequence_taxon_original.tsv.gz" "$OUTPUT_DIR/lineages.tsv.gz" || return
-	log "Started the calculation of original LCA's (after substituting AA's by ID's)."
-	join -t '	' -o '1.1,2.2' -1 2 -2 1 \
-			"$(guz "$INTDIR/sequences.tsv.gz")" \
-			"$(guz "$INTDIR/aa_sequence_taxon_original.tsv.gz")" \
-		| java -Xms"$JAVA_MEM" -Xmx"$JAVA_MEM" -jar "$CURRENT_LOCATION/helper_scripts/LineagesSequencesTaxons2LCAs.jar" "$(guz "$OUTPUT_DIR/lineages.tsv.gz")" \
-		| $CMD_GZIP - > "$INTDIR/LCAs_original.tsv.gz"
+	have "$INTDIR/peptides_by_original.tsv.lz4" || return
+	log "Started the calculation of original LCA's"
+	$CMD_LZ4CAT $INTDIR/peptides_by_original.tsv.lz4 | cut -f 3,6 \
+		| $CURRENT_LOCATION/helper_scripts/lcas --infile "$(luz "$OUTPUT_DIR/lineages.tsv.lz4")" \
+		| $CMD_LZ4 - > "$INTDIR/LCAs_original.tsv.lz4"
 	log "Finished the calculation of original LCA's (after substituting AA's by ID's) with status $?."
 }
 
 
-substitute_equalized_aas() {
-	have "$INTDIR/peptides.tsv.gz" "$INTDIR/sequences.tsv.gz" || return
-	log "Started the substitution of equalized AA's by ID's for the peptides."
-	zcat "$INTDIR/peptides.tsv.gz" \
-		| LC_ALL=C $CMD_SORT -k 2b,2 \
-		| join -t '	' -o '1.1,2.1,1.3,1.4,1.5' -1 2 -2 2 - "$(guz "$INTDIR/sequences.tsv.gz")" \
-		| $CMD_GZIP - > "$INTDIR/peptides_by_equalized.tsv.gz"
-	log "Finished the substitution of equalized AA's by ID's for the peptides with status $?."
-}
-
-
 calculate_equalized_fas() {
-	have "$INTDIR/peptides_by_equalized.tsv.gz" || return
+	have "$INTDIR/peptides_by_equalized.tsv.lz4" || return
 	log "Started the calculation of equalized FA's."
 	mkfifo "peptides_eq"
-	zcat "$INTDIR/peptides_by_equalized.tsv.gz" | cut -f2,5 > "peptides_eq" &
-	node  "$CURRENT_LOCATION/helper_scripts/FunctionalAnalysisPeptides.js" "peptides_eq" "$(gz "$INTDIR/FAs_equalized.tsv.gz")"
+	$CMD_LZ4CAT "$INTDIR/peptides_by_equalized.tsv.lz4" | cut -f2,5 > "peptides_eq" &
+	$CURRENT_LOCATION/helper_scripts/functional-analysis -i "peptides_eq" -o "$(lz "$INTDIR/FAs_equalized.tsv.lz4")"
 	rm "peptides_eq"
 	log "Finished the calculation of equalized FA's with status $?."
 }
 
 
-substitute_original_aas() {
-	have "$INTDIR/peptides_by_equalized.tsv.gz" "$INTDIR/sequences.tsv.gz" || return
-	log "Started the substitution of original AA's by ID's for the peptides."
-	zcat "$INTDIR/peptides_by_equalized.tsv.gz" \
-		| LC_ALL=C $CMD_SORT -k 3b,3 \
-		| join -t '	' -o '1.1,1.2,2.1,1.4,1.5' -1 3 -2 2 - "$(guz "$INTDIR/sequences.tsv.gz")" \
-		| $CMD_GZIP - > "$INTDIR/peptides_by_original.tsv.gz"
-	log "Finished the substitution of equalized AA's by ID's for the peptides with status $?."
-}
-
 calculate_original_fas() {
-	have "$INTDIR/peptides_by_original.tsv.gz" || return
+	have "$INTDIR/peptides_by_original.tsv.lz4" || return
 	log "Started the calculation of original FA's."
 	mkfifo "peptides_orig"
-	zcat "$INTDIR/peptides_by_original.tsv.gz" | cut -f3,5 > "peptides_orig" &
-	node  "$CURRENT_LOCATION/helper_scripts/FunctionalAnalysisPeptides.js" "peptides_orig" "$(gz "$INTDIR/FAs_original.tsv.gz")"
+	$CMD_LZ4CAT "$INTDIR/peptides_by_original.tsv.lz4" | cut -f3,5 > "peptides_orig" &
+	$CURRENT_LOCATION/helper_scripts/functional-analysis -i "peptides_orig" -o "$(lz "$INTDIR/FAs_original.tsv.lz4")"
 	rm "peptides_orig"
 	log "Finished the calculation of original FA's."
 }
 
-sort_peptides() {
-	have "$INTDIR/peptides_by_original.tsv.gz" || return
-	log "Started sorting the peptides table."
-	mkdir -p "$OUTPUT_DIR"
-	zcat "$INTDIR/peptides_by_original.tsv.gz" \
-		| LC_ALL=C $CMD_SORT -n \
-		| $CMD_GZIP - > "$OUTPUT_DIR/peptides.tsv.gz"
-	log "Finished sorting the peptides table."
-}
 
 create_sequence_table() {
-	have "$INTDIR/LCAs_original.tsv.gz" "$INTDIR/LCAs_equalized.tsv.gz" "$INTDIR/FAs_original.tsv.gz" "$INTDIR/FAs_equalized.tsv.gz" "$INTDIR/sequences.tsv.gz" || return
+	have "$INTDIR/LCAs_original.tsv.lz4" "$INTDIR/LCAs_equalized.tsv.lz4" "$INTDIR/FAs_original.tsv.lz4" "$INTDIR/FAs_equalized.tsv.lz4" "$INTDIR/sequences.tsv.lz4" || return
 	log "Started the creation of the sequences table."
 	mkdir -p "$OUTPUT_DIR"
 	mkfifo "olcas" "elcas" "ofas" "efas"
-	zcat "$INTDIR/LCAs_original.tsv.gz"  | gawk '{ printf("%012d\t%s\n", $1, $2) }' > "olcas" &
-	zcat "$INTDIR/LCAs_equalized.tsv.gz" | gawk '{ printf("%012d\t%s\n", $1, $2) }' > "elcas" &
-	zcat "$INTDIR/FAs_original.tsv.gz"   | gawk '{ printf("%012d\t%s\n", $1, $2) }' > "ofas" &
-	zcat "$INTDIR/FAs_equalized.tsv.gz"  | gawk '{ printf("%012d\t%s\n", $1, $2) }' > "efas" &
-	zcat "$INTDIR/sequences.tsv.gz"      | gawk '{ printf("%012d\t%s\n", $1, $2) }' \
+	$CMD_LZ4CAT "$INTDIR/LCAs_original.tsv.lz4"  | gawk '{ printf("%012d\t%s\n", $1, $2) }' > "olcas" &
+	$CMD_LZ4CAT "$INTDIR/LCAs_equalized.tsv.lz4" | gawk '{ printf("%012d\t%s\n", $1, $2) }' > "elcas" &
+	$CMD_LZ4CAT "$INTDIR/FAs_original.tsv.lz4"   | gawk '{ printf("%012d\t%s\n", $1, $2) }' > "ofas" &
+	$CMD_LZ4CAT "$INTDIR/FAs_equalized.tsv.lz4"  | gawk '{ printf("%012d\t%s\n", $1, $2) }' > "efas" &
+	$CMD_LZ4CAT "$INTDIR/sequences.tsv.lz4"      | gawk '{ printf("%012d\t%s\n", $1, $2) }' \
 		| join --nocheck-order -a1 -e '\N' -t '	' -o "1.1 1.2 2.2" - "olcas" \
 		| join --nocheck-order -a1 -e '\N' -t '	' -o "1.1 1.2 1.3 2.2" - "elcas" \
 		| join --nocheck-order -a1 -e '\N' -t '	' -o '1.1 1.2 1.3 1.4 2.2' - "ofas" \
 		| join --nocheck-order -a1 -e '\N' -t '	' -o '1.1 1.2 1.3 1.4 1.5 2.2' - "efas" \
-		| sed 's/^0*//' | $CMD_GZIP - > "$OUTPUT_DIR/sequences.tsv.gz"
+		| sed 's/^0*//' \
+		| awk -F'\t' 'BEGIN {OFS="\t"} {gsub(/Z/, "K", $2); print}' \
+		| $CMD_LZ4 - > "$OUTPUT_DIR/sequences.tsv.lz4"
 	rm "olcas" "elcas" "ofas" "efas"
 	log "Finished the creation of the sequences table."
 }
@@ -679,7 +661,7 @@ fetch_ec_numbers() {
 			/^DE/ { gsub(/.$/, "", $2)
 			        name = name $2 }
 			END   { print id, name }'
-	} | cat -n | sed 's/^ *//' | $CMD_GZIP - > "$OUTPUT_DIR/ec_numbers.tsv.gz"
+	} | cat -n | sed 's/^ *//' | $CMD_LZ4 - > "$OUTPUT_DIR/ec_numbers.tsv.lz4"
 	log "Finished creating EC numbers."
 }
 
@@ -711,14 +693,14 @@ fetch_go_terms() {
 					id++
 				}
 			}
-			type = "" }' | $CMD_GZIP - > "$OUTPUT_DIR/go_terms.tsv.gz"
+			type = "" }' | $CMD_LZ4 - > "$OUTPUT_DIR/go_terms.tsv.lz4"
 	log "Finished creating GO terms."
 }
 
 fetch_interpro_entries() {
 	log "Started creating InterPro Entries."
 	mkdir -p "$OUTPUT_DIR"
-	curl -s "$INTERPRO_URL" | grep '^IPR' | cat -n | sed 's/^ *//' | $CMD_GZIP - > "$OUTPUT_DIR/interpro_entries.tsv.gz"
+	curl -s "$INTERPRO_URL" | grep '^IPR' | cat -n | sed 's/^ *//' | $CMD_LZ4 - > "$OUTPUT_DIR/interpro_entries.tsv.lz4"
 	log "Finished creating InterPro Entries."
 }
 
@@ -728,10 +710,10 @@ fetch_interpro_entries() {
 #dot: create_kmer_index -> kmer_index
 #dot: kmer_index [color="#f28e2b"]
 create_kmer_index() {
-	have "$OUTPUT_DIR/uniprot_entries.tsv.gz" "$OUTPUT_DIR/taxons.tsv.gz" || return
+	have "$OUTPUT_DIR/uniprot_entries.tsv.lz4" "$OUTPUT_DIR/taxons.tsv.lz4" || return
 	log "Started the construction of the $KMER_LENGTH-mer index."
 	for PREFIX in A C D E F G H I K L M N P Q R S T V W Y; do
-		pv -N $PREFIX "$OUTPUT_DIR/uniprot_entries.tsv.gz" \
+		pv -N $PREFIX "$OUTPUT_DIR/uniprot_entries.tsv.lz4" \
 			| gunzip \
 			| cut -f4,7 \
 			| grep "^[0-9]*	[ACDEFGHIKLMNPQRSTVWY]*$" \
@@ -740,7 +722,7 @@ create_kmer_index() {
 			| LC_ALL=C $CMD_SORT \
 			| sed "s/^/$PREFIX/"
 	done \
-			| umgap joinkmers "$(guz "$OUTPUT_DIR/taxons.tsv.gz")" \
+			| umgap joinkmers "$(guz "$OUTPUT_DIR/taxons.tsv.lz4")" \
 			| cut -d'	' -f1,2 \
 			| umgap buildindex \
 			> "$OUTPUT_DIR/$KMER_LENGTH-mer.index"
@@ -752,9 +734,9 @@ create_kmer_index() {
 #dot: create_tryptic_index -> tryptic_index
 #dot: tryptic_index [color="#f28e2b"]
 create_tryptic_index() {
-	have "$TABDIR/sequences.tsv.gz" || return
+	have "$TABDIR/sequences.tsv.lz4" || return
 	log "Started the construction of the tryptic index."
-	pv "$TABDIR/sequences.tsv.gz" \
+	pv "$TABDIR/sequences.tsv.lz4" \
 		| gunzip \
 		| cut -f2,3 \
 		| grep -v "\\N" \
@@ -771,43 +753,31 @@ database)
 	download_and_convert_all_sources
 	create_tables_and_filter
 	echo "Created tables!"
-	join_equalized_pepts_and_entries &
-	pid1=$!
-	join_original_pepts_and_entries &
-	pid2=$!
-	wait $pid1
-	wait $pid2
 	number_sequences
-	reportProgress "-1" "Calculating lowest common ancestors." 6
+  substitute_aas
+	reportProgress "-1" "Calculating lowest common ancestors and functional annotations." 6
 	calculate_equalized_lcas &
 	pid1=$!
 	calculate_original_lcas &
 	pid2=$!
-	wait $pid1
-	wait $pid2
-	rm "$INTDIR/aa_sequence_taxon_equalized.tsv.gz"
-	rm "$INTDIR/aa_sequence_taxon_original.tsv.gz"
-	substitute_equalized_aas
-	rm "$INTDIR/peptides.tsv.gz"
-	substitute_original_aas
-	reportProgress "-1" "Calculating functional annotations." 7
 	calculate_equalized_fas &
-	pid1=$!
+	pid3=$!
 	calculate_original_fas &
-	pid2=$!
+	pid4=$!
 	wait $pid1
 	wait $pid2
-	rm "$INTDIR/peptides_by_equalized.tsv.gz"
-	reportProgress "-1" "Sorting peptides." 8
-	sort_peptides
-	rm "$INTDIR/peptides_by_original.tsv.gz"
+	wait $pid3
+	wait $pid4
 	reportProgress "-1" "Creating sequence table." 9
 	create_sequence_table
-	rm "$INTDIR/LCAs_original.tsv.gz"
-	rm "$INTDIR/LCAs_equalized.tsv.gz"
-	rm "$INTDIR/FAs_original.tsv.gz"
-	rm "$INTDIR/FAs_equalized.tsv.gz"
-	rm "$INTDIR/sequences.tsv.gz"
+	rm "$INTDIR/LCAs_original.tsv.lz4"
+	rm "$INTDIR/LCAs_equalized.tsv.lz4"
+	rm "$INTDIR/FAs_original.tsv.lz4"
+	rm "$INTDIR/FAs_equalized.tsv.lz4"
+	rm "$INTDIR/sequences.tsv.lz4"
+	rm "$INTDIR/peptides_by_equalized.tsv.lz4"
+	# Use the original sort as the result
+	mv "$INTDIR/peptides_by_original.tsv.lz4" "$OUTPUT_DIR/peptides.tsv.lz4"
 	reportProgress "-1" "Fetching EC numbers." 10
 	fetch_ec_numbers
 	reportProgress "-1" "Fetching GO terms." 11
@@ -815,11 +785,11 @@ database)
 	reportProgress "-1" "Fetching InterPro entries." 12
 	fetch_interpro_entries
 	reportProgress "-1" "Computing database indices" 13
-	ENTRIES=$(zcat "$OUTPUT_DIR/uniprot_entries.tsv.gz" | wc -l)
+	ENTRIES=$($CMD_LZ4CAT "$OUTPUT_DIR/uniprot_entries.tsv.lz4" | wc -l)
 	echo "Database contains: ##$ENTRIES##"
 	;;
 static-database)
-	if ! have "$TABDIR/taxons.tsv.gz"; then
+	if ! have "$TABDIR/taxons.tsv.lz4"; then
 		create_taxon_tables
 	fi
 	fetch_ec_numbers
@@ -830,10 +800,10 @@ kmer-index)
 	checkdep pv
 	checkdep umgap "umgap crate (for umgap buildindex)"
 
-	if ! have "$OUTPUT_DIR/taxons.tsv.gz"; then
+	if ! have "$OUTPUT_DIR/taxons.tsv.lz4"; then
 		create_taxon_tables
 	fi
-	if ! have "$OUTPUT_DIR/uniprot_entries.tsv.gz"; then
+	if ! have "$OUTPUT_DIR/uniprot_entries.tsv.lz4"; then
 		download_and_convert_all_sources
 		create_tables_and_filter
 	fi
@@ -843,22 +813,20 @@ tryptic-index)
 	checkdep pv
 	checkdep umgap "umgap crate (for umgap buildindex)"
 
-	if ! have "$TABDIR/taxons.tsv.gz"; then
+	if ! have "$TABDIR/taxons.tsv.lz4"; then
 		create_taxon_tables
 	fi
-	if ! have "$TABDIR/sequences.tsv.gz"; then
+	if ! have "$TABDIR/sequences.tsv.lz4"; then
 		download_and_convert_all_sources
 		create_tables_and_filter
-		join_equalized_pepts_and_entries
-		join_original_pepts_and_entries
 		number_sequences
+		substitute_aas
 		calculate_equalized_lcas
 		calculate_original_lcas
-		substitute_equalized_aas
 		calculate_equalized_fas
-		substitute_original_aas
 		calculate_original_fas
 		create_sequence_table
+		# TODO remove temp files
 	fi
 	create_tryptic_index
 	;;
