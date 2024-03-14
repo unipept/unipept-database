@@ -337,10 +337,11 @@ download_taxdmp() {
   SELF_HOSTED_URL=$(curl -s "$LATEST_RELEASE_URL" | egrep -o "$TAXDMP_RELEASE_ASSET_RE")
   set -eo pipefail
 
-  if [ "$SELF_HOSTED_URL" ]
+  if [ "$BUILD_TYPE" != "static-database" ] && [ "$SELF_HOSTED_URL" ]
   then
     TAXON_URL="https://github.com/$SELF_HOSTED_URL"
   else
+    log "Using fallback taxon URL"
     TAXON_URL="$TAXON_FALLBACK_URL"
   fi
 
