@@ -99,6 +99,10 @@ terminateAndExit() {
 # an error has occurred and will properly exit the script.
 errorAndExit() {
 	echo "Error: the script experienced an error while trying to build the requested database." 1>&2
+	if [[ -n "$1" ]]
+	then
+	  echo "Error details: $1" 1>&2
+  fi
 	echo "" 1>&2
 	clean
 	exit 2
@@ -402,6 +406,17 @@ download_and_convert_all_sources() {
 
     mkdir -p "$DB_INDEX_OUTPUT"
 
+    # The parser that should be used, depends on the filetype of the database that's been provided to this script.
+    if [[ $DB_SOURCE == *xml.gz ]]
+    then
+      PARSER="xml-parser"
+    elif [[ $DB_SOURCE == *dat.gz ]]
+    then
+      PARSER="dat-parser"
+    else
+      errorAndExit "No known parser available for provided UniProtKB file format. Only XML and DAT are available."
+    fi
+
     # No ETags or other header requests are available if a database is requested from the UniProt REST API. That's why
     # we always need to reprocess the database in that case.
     if [[ $DB_SOURCE =~ "rest" ]]
@@ -414,7 +429,7 @@ download_and_convert_all_sources() {
 
       reportProgress -1 "Downloading database index for $DB_TYPE." 3
 
-      curl --continue-at - --create-dirs "$DB_SOURCE" --silent | pv -i 5 -n -s "$SIZE" 2> >(reportProgress - "Downloading database index for $DB_TYPE." 3 >&2) | $CMD_ZCAT | $CURRENT_LOCATION/helper_scripts/xml-parser -t "$DB_TYPE" | $CURRENT_LOCATION/helper_scripts/write-to-chunk --output-dir "$DB_INDEX_OUTPUT"
+      curl --continue-at - --create-dirs "$DB_SOURCE" --silent | pv -i 5 -n -s "$SIZE" 2> >(reportProgress - "Downloading database index for $DB_TYPE." 3 >&2) | $CMD_ZCAT | "$CURRENT_LOCATION/helper_scripts/$PARSER" -t "$DB_TYPE" | $CURRENT_LOCATION/helper_scripts/write-to-chunk --output-dir "$DB_INDEX_OUTPUT"
 
       # Now, compress the different chunks
       CHUNKS=$(find "$DB_INDEX_OUTPUT" -name "*.chunk")
@@ -458,7 +473,7 @@ download_and_convert_all_sources() {
 
         SIZE="$(curl -I "$DB_SOURCE" -s | grep -i content-length | tr -cd '[0-9]')"
 
-        curl --continue-at - --create-dirs "$DB_SOURCE" --silent | pv -i 5 -n -s "$SIZE" 2> >(reportProgress - "Downloading database index for $DB_TYPE." 3 >&2) | $CMD_ZCAT | $CURRENT_LOCATION/helper_scripts/xml-parser -t "$DB_TYPE" | $CURRENT_LOCATION/helper_scripts/write-to-chunk --output-dir "$DB_INDEX_OUTPUT"
+        curl --continue-at - --create-dirs "$DB_SOURCE" --silent | pv -i 5 -n -s "$SIZE" 2> >(reportProgress - "Downloading database index for $DB_TYPE." 3 >&2) | $CMD_ZCAT | "$CURRENT_LOCATION/helper_scripts/$PARSER" -t "$DB_TYPE" | $CURRENT_LOCATION/helper_scripts/write-to-chunk --output-dir "$DB_INDEX_OUTPUT"
 
         # Now, compress the different chunks
         CHUNKS=$(find "$DB_INDEX_OUTPUT" -name "*.chunk")
