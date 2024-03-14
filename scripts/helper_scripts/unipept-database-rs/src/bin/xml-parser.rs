@@ -4,7 +4,6 @@ use std::num::NonZeroUsize;
 use anyhow::{Context, Result};
 use clap::Parser;
 use smartstring::{LazyCompact, SmartString};
-use unipept_database::uniprot::UniprotType;
 use uniprot::uniprot::{SequentialParser, ThreadedParser};
 
 use unipept_database::utils::files::open_sin;
@@ -50,8 +49,8 @@ type SmartStr = SmartString<LazyCompact>;
 // Parse a Uniprot XML file and convert it into a TSV-file
 #[derive(Parser, Debug)]
 struct Cli {
-    #[clap(value_enum, short = 't', long, default_value_t = UniprotType::Swissprot)]
-    uniprot_type: UniprotType,
+    #[clap(short = 't', long, default_value = "swissprot")]
+    uniprot_type: String,
     #[clap(long, default_value_t = 0)]
     threads: u32,
     #[clap(short, long, default_value_t = false)]
@@ -123,7 +122,7 @@ fn parse_name(entry: &uniprot::uniprot::Entry) -> SmartStr {
 }
 
 /// Write a single UniProt entry to stdout
-fn write_entry(entry: &uniprot::uniprot::Entry, db_type: &UniprotType, verbose: bool) {
+fn write_entry(entry: &uniprot::uniprot::Entry, db_type: &str, verbose: bool) {
     let accession_number: SmartStr = entry.accessions[0].clone();
     let sequence: SmartStr = entry.sequence.value.clone();
 
@@ -165,7 +164,7 @@ fn write_entry(entry: &uniprot::uniprot::Entry, db_type: &UniprotType, verbose: 
         SmartStr::from(ec_references.join(";")),
         SmartStr::from(go_references.join(";")),
         SmartStr::from(ip_references.join(";")),
-        SmartStr::from(db_type.to_str()),
+        SmartStr::from(db_type),
         taxon_id,
     ];
 
