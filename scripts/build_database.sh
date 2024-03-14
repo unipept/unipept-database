@@ -33,8 +33,8 @@ Required parameters:
 
   * DB_SOURCES: List of UniProt source URLs. The items in this list should be delimited by comma's. Commonly used
   databases and their corresponding sources are:
-    - swissprot: https://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/complete/uniprot_sprot.xml.gz
-    - trembl: https://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/complete/uniprot_trembl.xml.gz
+    - swissprot: https://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/complete/uniprot_sprot.dat.gz
+    - trembl: https://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/complete/uniprot_trembl.dat.gz
 
   * OUTPUT_DIR: Directory in which the tsv.lz4-files that are produced by this script will be stored.
 
@@ -260,7 +260,6 @@ INTDIR="$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT" # Where should I store intermediate TS
 KMER_LENGTH=9 # What is the length (k) of the K-mer peptides?
 CMD_SORT="sort --buffer-size=$SORT_MEMORY --parallel=4" # Which sort command should I use?
 CMD_GZIP="pigz -" # Which pipe compression command should I use for .gz files?
-CMD_ZCAT="pigz -dc" # Which decompression command should I use for .gz files?
 CMD_LZ4="lz4 -c" # Which pipe compression command should I use for .lz4 files?
 CMD_LZ4CAT="lz4 -dc" # Which decompression command should I use for .lz4 files?
 ENTREZ_BATCH_SIZE=1000 # Which batch size should I use for communication with Entrez?
@@ -303,7 +302,7 @@ guz() {
 	fifo="$(uuidgen)-$(basename "$1")"
 	mkfifo "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/$fifo"
 	echo "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/$fifo"
-	{ $CMD_ZCAT "$1" > "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/$fifo" && rm "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/$fifo" || kill "$self"; } > /dev/null &
+	{ pigz -dc "$1" > "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/$fifo" && rm "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/$fifo" || kill "$self"; } > /dev/null &
 }
 
 lz() {
@@ -429,7 +428,7 @@ download_and_convert_all_sources() {
 
       reportProgress -1 "Downloading database index for $DB_TYPE." 3
 
-      curl --continue-at - --create-dirs "$DB_SOURCE" --silent | pv -i 5 -n -s "$SIZE" 2> >(reportProgress - "Downloading database index for $DB_TYPE." 3 >&2) | $CMD_ZCAT | "$CURRENT_LOCATION/helper_scripts/$PARSER" -t "$DB_TYPE" | $CURRENT_LOCATION/helper_scripts/write-to-chunk --output-dir "$DB_INDEX_OUTPUT"
+      curl --continue-at - --create-dirs "$DB_SOURCE" --silent | pv -i 5 -n -s "$SIZE" 2> >(reportProgress - "Downloading database index for $DB_TYPE." 3 >&2) | pigz -dc | $CURRENT_LOCATION/helper_scripts/$PARSER -t "$DB_TYPE" | $CURRENT_LOCATION/helper_scripts/write-to-chunk --output-dir "$DB_INDEX_OUTPUT"
 
       # Now, compress the different chunks
       CHUNKS=$(find "$DB_INDEX_OUTPUT" -name "*.chunk")
@@ -473,7 +472,7 @@ download_and_convert_all_sources() {
 
         SIZE="$(curl -I "$DB_SOURCE" -s | grep -i content-length | tr -cd '[0-9]')"
 
-        curl --continue-at - --create-dirs "$DB_SOURCE" --silent | pv -i 5 -n -s "$SIZE" 2> >(reportProgress - "Downloading database index for $DB_TYPE." 3 >&2) | $CMD_ZCAT | "$CURRENT_LOCATION/helper_scripts/$PARSER" -t "$DB_TYPE" | $CURRENT_LOCATION/helper_scripts/write-to-chunk --output-dir "$DB_INDEX_OUTPUT"
+        curl --continue-at - --create-dirs "$DB_SOURCE" --silent | pv -i 5 -n -s "$SIZE" 2> >(reportProgress - "Downloading database index for $DB_TYPE." 3 >&2) | pigz -dc | $CURRENT_LOCATION/helper_scripts/$PARSER -t "$DB_TYPE" | $CURRENT_LOCATION/helper_scripts/write-to-chunk --output-dir "$DB_INDEX_OUTPUT"
 
         # Now, compress the different chunks
         CHUNKS=$(find "$DB_INDEX_OUTPUT" -name "*.chunk")
@@ -552,11 +551,11 @@ create_most_tables() {
 
   log "Started sorting peptides table"
 
-  $CMD_LZ4CAT $INTDIR/peptides-out.tsv.lz4 \
+  $CMD_LZ4CAT "$INTDIR/peptides-out.tsv.lz4" \
     | LC_ALL=C $CMD_SORT -k2 \
-    | $CMD_LZ4 > $INTDIR/peptides-equalized.tsv.lz4
+    | $CMD_LZ4 > "$INTDIR/peptides-equalized.tsv.lz4"
 
-  rm $INTDIR/peptides-out.tsv.lz4
+  rm "$INTDIR/peptides-out.tsv.lz4"
   log "Finished calculation of most tables with status $?"
 }
 
@@ -572,8 +571,8 @@ number_sequences() {
 	mkfifo "p_eq"
 	mkfifo "p_or"
 
-	$CMD_LZ4CAT $INTDIR/peptides-equalized.tsv.lz4 | cut -f 3 | sort | uniq > "p_or" &
-	$CMD_LZ4CAT $INTDIR/peptides-equalized.tsv.lz4 | cut -f 2 | uniq > "p_eq" &
+	$CMD_LZ4CAT "$INTDIR/peptides-equalized.tsv.lz4" | cut -f 3 | sort | uniq > "p_or" &
+	$CMD_LZ4CAT "$INTDIR/peptides-equalized.tsv.lz4" | cut -f 2 | uniq > "p_eq" &
 
 	sort -u -m "p_or" "p_eq" | cat -n \
 		| sed 's/^ *//' | $CMD_LZ4 - > "$INTDIR/sequences.tsv.lz4"
@@ -587,7 +586,7 @@ substitute_aas() {
   have "$INTDIR/peptides-equalized.tsv.lz4" "$INTDIR/sequences.tsv.lz4"
 
   log "Started the substitution of equalized AA's by ID's for the peptides."
-  $CMD_LZ4CAT $INTDIR/peptides-equalized.tsv.lz4 \
+  $CMD_LZ4CAT "$INTDIR/peptides-equalized.tsv.lz4" \
     | join -t '	' -o '1.1,2.1,1.3,1.4,1.5,1.6' -1 2 -2 2 - "$(luz "$INTDIR/sequences.tsv.lz4")" \
     | $CMD_LZ4 - > "$INTDIR/peptides_by_equalized.tsv.lz4"
 
@@ -606,7 +605,7 @@ substitute_aas() {
 calculate_equalized_lcas() {
 	have "$INTDIR/peptides_by_equalized.tsv.lz4" || return
 	log "Started the calculation of equalized LCA's."
-	$CMD_LZ4CAT $INTDIR/peptides_by_equalized.tsv.lz4 | cut -f 2,6 \
+	$CMD_LZ4CAT "$INTDIR/peptides_by_equalized.tsv.lz4" | cut -f 2,6 \
 		| $CURRENT_LOCATION/helper_scripts/lcas --infile "$(luz "$OUTPUT_DIR/lineages.tsv.lz4")" \
 		| $CMD_LZ4 - > "$INTDIR/LCAs_equalized.tsv.lz4"
 	log "Finished the calculation of equalized LCA's (after substituting AA's by ID's) with status $?."
@@ -616,7 +615,7 @@ calculate_equalized_lcas() {
 calculate_original_lcas() {
 	have "$INTDIR/peptides_by_original.tsv.lz4" || return
 	log "Started the calculation of original LCA's"
-	$CMD_LZ4CAT $INTDIR/peptides_by_original.tsv.lz4 | cut -f 3,6 \
+	$CMD_LZ4CAT "$INTDIR/peptides_by_original.tsv.lz4" | cut -f 3,6 \
 		| $CURRENT_LOCATION/helper_scripts/lcas --infile "$(luz "$OUTPUT_DIR/lineages.tsv.lz4")" \
 		| $CMD_LZ4 - > "$INTDIR/LCAs_original.tsv.lz4"
 	log "Finished the calculation of original LCA's (after substituting AA's by ID's) with status $?."
