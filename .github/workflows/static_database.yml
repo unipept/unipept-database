@@ -22,7 +22,10 @@ jobs:
       - name: Install required utilities
         run: |
           sudo apt-get update
-          sudo apt-get -y install git maven curl unzip gawk sqlite3 libsqlite3-dev pv nodejs
+          sudo apt-get -y install git maven curl unzip gawk sqlite3 libsqlite3-dev pv nodejs wget
+      - name: Download Taxdmp file
+        shell: bash
+        run: wget https://ftp.ncbi.nlm.nih.gov/pub/taxonomy/taxdmp.zip
       - name: Generate tsv.gz files
         shell: bash
         run: ./scripts/build_database.sh static-database "swissprot,trembl" "https://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/complete/uniprot_sprot.xml.gz,https://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/complete/uniprot_trembl.xml.gz" "output"
@@ -60,8 +63,8 @@ jobs:
           release_name: Static database ${{ steps.date.outputs.date }}
           draft: false
           prerelease: false
-      - name: Upload Release Asset
-        id: upload-release-asset
+      - name: Upload Static Database Release Asset
+        id: upload-database-release-asset
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -69,4 +72,14 @@ jobs:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: ./output.zip
           asset_name: unipept-static-db-${{ steps.date.outputs.date }}.zip
+          asset_content_type: application/zip
+      - name: Upload NCBI Taxdmp Release Asset
+        id: upload-taxdmp-release-asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./taxdmp.zip
+          asset_name: ncbi-taxdmp.zip
           asset_content_type: application/zip
