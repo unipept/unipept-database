@@ -1,5 +1,4 @@
 use std::io::BufRead;
-use std::num::NonZeroUsize;
 
 use anyhow::Result;
 use crossbeam_channel::{bounded, Receiver};
@@ -28,7 +27,7 @@ impl<B: BufRead + Send + 'static> ThreadedDATParser<B> {
             lazy_static! {
                 static ref THREADS: usize = num_cpus::get();
             }
-            threads = unsafe { NonZeroUsize::new_unchecked(*THREADS) }.get();
+            threads = *THREADS
         }
 
         let producer = Producer::new(reader);

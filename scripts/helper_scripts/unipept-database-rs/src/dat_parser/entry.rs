@@ -1,6 +1,8 @@
-use crate::uniprot::UniprotType;
-use anyhow::Context;
 use std::collections::HashSet;
+
+use anyhow::Context;
+
+use crate::uniprot::UniprotType;
 
 // Constants to aid in parsing
 const COMMON_PREFIX_LEN: usize = "ID   ".len();
@@ -25,23 +27,14 @@ pub struct UniProtDATEntry {
 impl UniProtDATEntry {
     /// Parse an entry out of the lines of a DAT file
     pub fn from_lines(data: &mut Vec<String>) -> anyhow::Result<Self> {
-        let mut current_index: usize;
-
-        let mut version = String::new();
-        let mut name = String::new();
-        let mut ec_references = Vec::<String>::new();
-        let mut go_references = Vec::<String>::new();
-        let mut ip_references = Vec::<String>::new();
-        let mut taxon_id = String::new();
-        let mut sequence = String::new();
+        let mut current_index: usize = 0;
 
         let accession_number = parse_ac_number(data).context("Error parsing accession number")?;
-        current_index = parse_version(data, &mut version);
-        current_index = parse_name_and_ec(data, current_index, &mut ec_references, &mut name);
-        current_index = parse_taxon_id(data, current_index, &mut taxon_id);
-        current_index =
-            parse_db_references(data, current_index, &mut go_references, &mut ip_references);
-        parse_sequence(data, current_index, &mut sequence);
+        let version = parse_version(data, &mut current_index);
+        let (name, ec_references) = parse_name_and_ec(data, &mut current_index);
+        let taxon_id = parse_taxon_id(data, &mut current_index);
+        let (go_references, ip_references) = parse_db_references(data, &mut current_index);
+        let sequence = parse_sequence(data, current_index);
 
         Ok(Self {
             accession_number,
@@ -93,7 +86,7 @@ fn parse_ac_number(data: &mut [String]) -> anyhow::Result<String> {
 }
 
 /// Find the version of this entry
-fn parse_version(data: &[String], target: &mut String) -> usize {
+fn parse_version(data: &[String], index: &mut usize) -> String {
     let mut last_field: usize = 2;
 
     // Skip past previous fields to get to the dates
@@ -109,8 +102,8 @@ fn parse_version(data: &[String], target: &mut String) -> usize {
 
     // Get entry version (has prefix of constant length and ends with a dot)
     let version_end = data[last_field].len() - 1;
-    target.push_str(&(data[last_field][VERSION_STRING_FULL_PREFIX_LEN..version_end]));
-    last_field + 1
+    *index = last_field + 1;
+    data[last_field][VERSION_STRING_FULL_PREFIX_LEN..version_end].to_string()
 }
 
 /// Parse the name and EC numbers of an entry out of all available DE fields
@@ -121,19 +114,16 @@ fn parse_version(data: &[String], target: &mut String) -> usize {
 /// - Last submitted name of protein components
 /// - Last submitted name of protein domains
 /// - Submitted name of protein itself
-fn parse_name_and_ec(
-    data: &mut [String],
-    mut idx: usize,
-    ec_references: &mut Vec<String>,
-    target: &mut String,
-) -> usize {
+fn parse_name_and_ec(data: &mut [String], index: &mut usize) -> (String, Vec<String>) {
     // Find where the info starts and ends
-    while !data[idx].starts_with("DE") {
-        idx += 1;
+    while !data[*index].starts_with("DE") {
+        *index += 1;
     }
 
+    let mut name = String::new();
+    let mut ec_references = Vec::new();
     let mut ec_reference_set = HashSet::new();
-    let mut end_index = idx;
+    let mut end_index = *index;
 
     // Track all names in order of preference
     let mut name_indices: [usize; 6] = [usize::MAX; 6];
@@ -182,12 +172,7 @@ fn parse_name_and_ec(
         }
         // Find EC numbers
         else if line.starts_with("EC=") {
-            let mut ec_target = String::new();
-            read_until_metadata(
-                line,
-                ORGANISM_RECOMMENDED_NAME_EC_PREFIX_LEN,
-                &mut ec_target,
-            );
+            let ec_target = read_until_metadata(line, ORGANISM_RECOMMENDED_NAME_EC_PREFIX_LEN);
 
             // EC numbers sometimes appear multiple times, so use a set to track which ones
             // we've seen before
@@ -215,61 +200,60 @@ fn parse_name_and_ec(
     for idx in name_indices {
         if idx != usize::MAX {
             let line = &mut data[idx];
-            read_until_metadata(line, ORGANISM_RECOMMENDED_NAME_PREFIX_LEN, target);
-            return end_index;
+            *index = end_index;
+            name = read_until_metadata(line, ORGANISM_RECOMMENDED_NAME_PREFIX_LEN);
+            return (name, ec_references);
         }
     }
 
-    end_index
+    (name, ec_references)
 }
 
 /// Find the first NCBI_TaxID of this entry
-fn parse_taxon_id(data: &mut [String], mut idx: usize, target: &mut String) -> usize {
-    while !data[idx].starts_with("OX   NCBI_TaxID=") {
-        idx += 1;
+fn parse_taxon_id(data: &mut [String], index: &mut usize) -> String {
+    while !data[*index].starts_with("OX   NCBI_TaxID=") {
+        *index += 1;
     }
 
-    let line = &mut data[idx];
-    read_until_metadata(line, ORGANISM_TAXON_ID_PREFIX_LEN, target);
+    let line = &mut data[*index];
+    let taxon_id = read_until_metadata(line, ORGANISM_TAXON_ID_PREFIX_LEN);
 
-    while data[idx].starts_with("OX") {
-        idx += 1;
+    while data[*index].starts_with("OX") {
+        *index += 1;
     }
 
-    idx
+    taxon_id
 }
 
 /// Parse GO and InterPro DB references
-fn parse_db_references(
-    data: &mut Vec<String>,
-    mut idx: usize,
-    go_references: &mut Vec<String>,
-    ip_references: &mut Vec<String>,
-) -> usize {
-    let original_idx = idx;
+fn parse_db_references(data: &mut Vec<String>, index: &mut usize) -> (Vec<String>, Vec<String>) {
+    let mut go_references = Vec::new();
+    let mut ip_references = Vec::new();
+    let original_idx = *index;
     let length = data.len();
 
     // Find where references start
-    while !data[idx].starts_with("DR") {
-        idx += 1;
+    while !data[*index].starts_with("DR") {
+        *index += 1;
 
         // No references present in this entry
-        if idx == length {
-            return original_idx;
+        if *index == length {
+            *index = original_idx;
+            return (go_references, ip_references);
         }
     }
 
     // Parse all references
-    while data[idx].starts_with("DR") {
-        let line = &mut data[idx];
+    while data[*index].starts_with("DR") {
+        let line = &mut data[*index];
         line.drain(..COMMON_PREFIX_LEN);
 
-        parse_db_reference(line, go_references, ip_references);
+        parse_db_reference(line, &mut go_references, &mut ip_references);
 
-        idx += 1;
+        *index += 1;
     }
 
-    idx
+    (go_references, ip_references)
 }
 
 /// Parse a single GO or InterPro DB reference
@@ -288,26 +272,30 @@ fn parse_db_reference(
 }
 
 /// Parse the peptide sequence for this entry
-fn parse_sequence(data: &mut [String], mut idx: usize, target: &mut String) {
+fn parse_sequence(data: &mut [String], mut index: usize) -> String {
     // Find the beginning of the sequence
     // optionally skip over some fields we don't care for
-    while !data[idx].starts_with("SQ") {
-        idx += 1;
+    while !data[index].starts_with("SQ") {
+        index += 1;
     }
 
     // First line of the sequence contains some metadata we don't care for
-    idx += 1;
+    index += 1;
+
+    let mut sequence = String::new();
 
     // Combine all remaining lines
-    for line in data.iter_mut().skip(idx) {
+    for line in data.iter_mut().skip(index) {
         line.drain(..COMMON_PREFIX_LEN);
-        target.push_str(&line.replace(' ', ""));
+        sequence.push_str(&line.replace(' ', ""));
     }
+
+    sequence
 }
 
 /// Read a line until additional metadata starts
 /// Some lines end with {blocks between curly brackets} that we don't care for.
-fn read_until_metadata(line: &mut String, prefix_len: usize, target: &mut String) {
+fn read_until_metadata(line: &mut String, prefix_len: usize) -> String {
     line.drain(..prefix_len);
 
     // The line either contains some metadata, or just ends with a semicolon
@@ -331,7 +319,7 @@ fn read_until_metadata(line: &mut String, prefix_len: usize, target: &mut String
         bracket_index = line.len();
     }
 
-    target.push_str(&(line[..bracket_index - 1]));
+    line[..bracket_index - 1].to_string()
 }
 
 /// Remove all leading spaces from a line
@@ -419,21 +407,21 @@ mod tests {
     #[test]
     fn test_parse_version() {
         let want = "44";
+        let mut index = 0;
         let mut lines = get_example_entry();
-        let mut target = String::new();
-        parse_version(&mut lines, &mut target);
+        let got = parse_version(&mut lines, &mut index);
 
-        assert_eq!(target, want);
+        assert_eq!(got, want);
     }
 
     #[test]
     fn test_parse_taxon_id() {
         let want = "654924";
         let mut lines = get_example_entry();
-        let mut target = String::new();
-        parse_taxon_id(&mut lines, 8, &mut target);
+        let mut index: usize = 8;
+        let got = parse_taxon_id(&mut lines, &mut index);
 
-        assert_eq!(target, want);
+        assert_eq!(got, want);
     }
 
     #[test]
@@ -441,12 +429,11 @@ mod tests {
         let want_go = vec![String::from("GO:0046782"), String::from("GO:0016743")];
         let want_ip = vec![String::from("IPR007031"), String::from("IPR000308")];
         let mut lines = get_example_entry();
-        let mut target_go = Vec::new();
-        let mut target_ip = Vec::new();
-        parse_db_references(&mut lines, 0, &mut target_go, &mut target_ip);
+        let mut index: usize = 0;
+        let (got_go, got_ip) = parse_db_references(&mut lines, &mut index);
 
-        assert_eq!(target_go, want_go);
-        assert_eq!(target_ip, want_ip);
+        assert_eq!(got_go, want_go);
+        assert_eq!(got_ip, want_ip);
     }
 
     #[test]
@@ -478,9 +465,8 @@ mod tests {
     fn test_parse_sequence() {
         let want = "MAFSAEDVLKEYDRRRRMEALLLSLYYPNDRKLLDYKEWSPPRVQVECPKAPVEWNNPPSEKGLIVGHFSGIKYKGEKAQASEVDVNKMCCWVSKFKDAMRRYQGIQTCKIPGKVLSDLD";
         let mut lines = get_example_entry();
-        let mut target = String::new();
-        parse_sequence(&mut lines, 0, &mut target);
-        assert_eq!(target, want);
+        let got = parse_sequence(&mut lines, 0);
+        assert_eq!(got, want);
     }
 
     #[test]
@@ -489,9 +475,8 @@ mod tests {
         let mut line = String::from(format!(
             "RecName: Full={want} {{ECO:0000255|HAMAP-Rule:MF_01201}};"
         ));
-        let mut target = String::new();
-        read_until_metadata(&mut line, ORGANISM_RECOMMENDED_NAME_PREFIX_LEN, &mut target);
-        assert_eq!(target, want);
+        let got = read_until_metadata(&mut line, ORGANISM_RECOMMENDED_NAME_PREFIX_LEN);
+        assert_eq!(got, want);
     }
 
     #[test]
@@ -500,8 +485,7 @@ mod tests {
         let mut line = String::from(format!(
             "RecName: Full={want} {{ECO:0000255|HAMAP-Rule:MF_01201}};"
         ));
-        let mut target = String::new();
-        read_until_metadata(&mut line, ORGANISM_RECOMMENDED_NAME_PREFIX_LEN, &mut target);
+        let target = read_until_metadata(&mut line, ORGANISM_RECOMMENDED_NAME_PREFIX_LEN);
         assert_eq!(target, want);
     }
 
@@ -509,8 +493,7 @@ mod tests {
     fn test_read_until_metadata_none() {
         let want = "Recommended Name";
         let mut line = String::from(format!("RecName: Full={want};"));
-        let mut target = String::new();
-        read_until_metadata(&mut line, ORGANISM_RECOMMENDED_NAME_PREFIX_LEN, &mut target);
+        let target = read_until_metadata(&mut line, ORGANISM_RECOMMENDED_NAME_PREFIX_LEN);
         assert_eq!(target, want);
     }
 

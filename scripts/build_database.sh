@@ -261,7 +261,7 @@ CMD_LZ4="lz4 -c" # Which pipe compression command should I use for .lz4 files?
 CMD_LZ4CAT="lz4 -dc" # Which decompression command should I use for .lz4 files?
 ENTREZ_BATCH_SIZE=1000 # Which batch size should I use for communication with Entrez?
 
-TAXON_URL="https://ftp.ncbi.nih.gov/pub/taxonomy/taxdmp.zip"
+TAXON_FALLBACK_URL="https://ftp.ncbi.nlm.nih.gov/pub/taxonomy/taxdmp.zip"
 EC_CLASS_URL="https://ftp.expasy.org/databases/enzyme/enzclass.txt"
 EC_NUMBER_URL="https://ftp.expasy.org/databases/enzyme/enzyme.dat"
 GO_TERM_URL="http://geneontology.org/ontology/go-basic.obo"
@@ -328,11 +328,27 @@ have() {
 
 ### All the different database construction steps.
 
+download_taxdmp() {
+  # Check if our self-hosted version is available or not using the GitHub API
+  LATEST_RELEASE_URL="https://api.github.com/repos/unipept/unipept-database/releases/latest"
+  TAXDMP_RELEASE_ASSET_RE="unipept/unipept-database/releases/download/[^/]+/ncbi-taxdmp.zip"
+  SELF_HOSTED_URL=$(curl -s "$LATEST_RELEASE_URL" | egrep -o "$TAXDMP_RELEASE_ASSET_RE")
+
+  if [ "$SELF_HOSTED_URL" ]
+  then
+    TAXON_URL="https://github.com/$SELF_HOSTED_URL"
+  else
+    TAXON_URL="$TAXON_FALLBACK_URL"
+  fi
+
+  curl -L --create-dirs --silent --output "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/taxdmp.zip" "$TAXON_URL"
+}
+
 create_taxon_tables() {
 	log "Started creating the taxon tables."
 	reportProgress -1 "Creating taxon tables." 1
 
-	curl --create-dirs --silent --output "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/taxdmp.zip" "$TAXON_URL"
+	download_taxdmp
 	unzip "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/taxdmp.zip" "names.dmp" "nodes.dmp" -d "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT"
 	rm "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/taxdmp.zip"
 
