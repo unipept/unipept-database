@@ -83,7 +83,7 @@ END
 # This function removes all temporary files that have been created by this script.
 clean() {
 	# Clean contents of temporary directory
-#	rm -rf "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT"
+	rm -rf "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT"
 	export TMPDIR="$OLD_TMPDIR"
 }
 
@@ -381,7 +381,8 @@ download_and_convert_all_sources() {
   DB_TYPES_ARRAY=($DB_TYPES)
   DB_SOURCES_ARRAY=($DB_SOURCES)
 
-  IFS="$OLDIFS"
+  # Set IFS to newline to properly split the $CHUNKS variable for folders with newlines
+  IFS=$'\n'
 
   while [[ "$IDX" -ne "${#DB_TYPES_ARRAY}" ]] && [[ -n $(echo "${DB_TYPES_ARRAY[$IDX]}" | sed "s/\s//g") ]]
   do
@@ -478,6 +479,8 @@ download_and_convert_all_sources() {
 
     IDX=$((IDX + 1))
   done
+
+  IFS="$OLDIFS"
 }
 
 filter_sources_by_taxa() {
