@@ -1,5 +1,5 @@
-use std::collections::HashSet;
 use anyhow::Context;
+use std::collections::HashSet;
 
 // Constants to aid in parsing
 const COMMON_PREFIX_LEN: usize = "ID   ".len();
