@@ -382,9 +382,12 @@ create_taxon_tables() {
 url_points_to_xml() {
   URL="$1"
 
+  MATCH=$(curl -s "$URL"| gunzip | head | grep '^<?xml')
+
   # Use curl to download the first 1KB of the file and attempt to decompress it
   # Check if the decompressed output starts with an XML declaration or seems like an XML file
-  if curl -s "$URL" | gunzip | head | grep -q '^<?xml'; then
+  if [[ -n "$MATCH" ]]
+  then
     # This is an XML file, success!
     return 0
   else
@@ -442,7 +445,7 @@ download_and_convert_all_sources() {
 
       reportProgress -1 "Downloading database index for $DB_TYPE." 3
 
-      curl --continue-at - --create-dirs "$DB_SOURCE" --silent | pv -i 5 -n -s "$SIZE" 2> >(reportProgress - "Downloading database index for $DB_TYPE." 3 >&2) | pigz -dc | $CURRENT_LOCATION/helper_scripts/$PARSER -t "$DB_TYPE" | $CURRENT_LOCATION/helper_scripts/write-to-chunk --output-dir "$DB_INDEX_OUTPUT"
+      curl --continue-at - --create-dirs "$DB_SOURCE" --silent | pigz -dc | $CURRENT_LOCATION/helper_scripts/$PARSER -t "$DB_TYPE" | $CURRENT_LOCATION/helper_scripts/write-to-chunk --output-dir "$DB_INDEX_OUTPUT"
 
       # Now, compress the different chunks
       CHUNKS=$(find "$DB_INDEX_OUTPUT" -name "*.chunk")
