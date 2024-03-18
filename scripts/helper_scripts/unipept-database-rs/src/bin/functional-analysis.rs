@@ -121,7 +121,7 @@ fn write_entry(
         .join(",");
 
     let format_string = format!(
-        "{current_peptide}\t{{\"num\":{{\"all\":{num_prot},\"EC\":{num_ec},\"GO\":{num_go},\"IPR\":{num_ip},\"data\":{{{data}}}}}}}\n"
+        "{current_peptide}\t{{\"num\":{{\"all\":{num_prot},\"EC\":{num_ec},\"GO\":{num_go},\"IPR\":{num_ip}}},\"data\":{{{data}}}}}\n"
     );
 
     writer
