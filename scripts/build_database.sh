@@ -379,6 +379,20 @@ create_taxon_tables() {
 	log "Finished creating the taxon tables."
 }
 
+url_points_to_xml() {
+  URL="$1"
+
+  # Use curl to download the first 1KB of the file and attempt to decompress it
+  # Check if the decompressed output starts with an XML declaration or seems like an XML file
+  if curl -s "$URL" | gunzip | head | grep -q '^<?xml'; then
+    # This is an XML file, return true
+    return 1
+  else
+    # This is not an XML file, return false
+    return 0
+  fi
+}
+
 download_and_convert_all_sources() {
   IDX=0
 
@@ -406,7 +420,7 @@ download_and_convert_all_sources() {
     mkdir -p "$DB_INDEX_OUTPUT"
 
     # The parser that should be used, depends on the filetype of the database that's been provided to this script.
-    if [[ $DB_SOURCE == *xml.gz ]]
+    if [[ $DB_SOURCE == *xml.gz ]] || [[ url_points_to_xml "$DB_SOURCE" ]]
     then
       PARSER="xml-parser"
     elif [[ $DB_SOURCE == *dat.gz ]]
