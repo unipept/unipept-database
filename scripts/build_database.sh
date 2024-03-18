@@ -787,7 +787,6 @@ database)
 	create_taxon_tables
 	download_and_convert_all_sources
 	create_tables_and_filter
-	echo "Created tables!"
 	number_sequences
   substitute_aas
 	reportProgress "-1" "Calculating lowest common ancestors and functional annotations." 6
