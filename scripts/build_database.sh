@@ -732,7 +732,7 @@ create_kmer_index() {
 	log "Started the construction of the $KMER_LENGTH-mer index."
 	for PREFIX in A C D E F G H I K L M N P Q R S T V W Y; do
 		pv -N $PREFIX "$OUTPUT_DIR/uniprot_entries.tsv.lz4" \
-			| gunzip \
+			| $CMD_LZ4CAT \
 			| cut -f4,7 \
 			| grep "^[0-9]*	[ACDEFGHIKLMNPQRSTVWY]*$" \
 			| umgap splitkmers -k"$KMER_LENGTH" \
@@ -740,7 +740,7 @@ create_kmer_index() {
 			| LC_ALL=C $CMD_SORT \
 			| sed "s/^/$PREFIX/"
 	done \
-			| umgap joinkmers "$(guz "$OUTPUT_DIR/taxons.tsv.lz4")" \
+			| umgap joinkmers "$(luz "$OUTPUT_DIR/taxons.tsv.lz4")" \
 			| cut -d'	' -f1,2 \
 			| umgap buildindex \
 			> "$OUTPUT_DIR/$KMER_LENGTH-mer.index"
@@ -755,7 +755,7 @@ create_tryptic_index() {
 	have "$TABDIR/sequences.tsv.lz4" || return
 	log "Started the construction of the tryptic index."
 	pv "$TABDIR/sequences.tsv.lz4" \
-		| gunzip \
+		| $CMD_LZ4CAT \
 		| cut -f2,3 \
 		| grep -v "\\N" \
 		| umgap buildindex \
