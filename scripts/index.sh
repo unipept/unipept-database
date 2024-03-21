@@ -34,32 +34,4 @@ doCmd "ALTER TABLE ec_numbers ADD UNIQUE INDEX idx_ec_numbers (code ASC);"
 print "adding index to go_terms"
 doCmd "ALTER TABLE go_terms ADD UNIQUE INDEX idx_go_code (code ASC);"
 
-print "adding index to $sequencesTable"
-doCmd "ALTER TABLE $sequencesTable ADD UNIQUE INDEX idx_sequences (sequence ASC);"
-doCmd "ALTER TABLE $sequencesTable ADD INDEX fk_sequences_taxons (lca ASC);"
-doCmd "ALTER TABLE $sequencesTable ADD INDEX fk_sequences_taxons_2 (lca_il ASC);"
-
-print "adding index to peptides"
-doCmd "ALTER TABLE peptides ADD INDEX fk_peptides_sequences (sequence_id ASC);"
-doCmd "ALTER TABLE peptides ADD INDEX fk_peptides_uniprot_entries (uniprot_entry_id ASC);"
-doCmd "ALTER TABLE peptides ADD INDEX fk_peptides_original_sequences (original_sequence_id ASC);"
-
-print "adding index to embl_cross_references"
-doCmd "ALTER TABLE embl_cross_references ADD INDEX fk_embl_reference_uniprot_entries (uniprot_entry_id ASC);"
-# doCmd "ALTER TABLE embl_cross_references ADD INDEX idx_sequence_id (sequence_id ASC);"
-
-print "adding index to refseq_cross_references"
-doCmd "ALTER TABLE refseq_cross_references ADD INDEX fk_refseq_reference_uniprot_entries (uniprot_entry_id ASC);"
-
-print "adding index to go_cross_references"
-doCmd "ALTER TABLE go_cross_references ADD INDEX fk_go_reference_uniprot_entries (uniprot_entry_id ASC);"
-# doCmd "ALTER TABLE go_cross_references ADD INDEX fk_go_cross_reference_go_terms_idx (go_term_code ASC);"
-
-print "adding index to ec_cross_references"
-doCmd "ALTER TABLE ec_cross_references ADD INDEX fk_ec_reference_uniprot_entries (uniprot_entry_id ASC);"
-# doCmd "ALTER TABLE ec_cross_references ADD INDEX fk_ec_terms_reference_go_terms_idx (ec_number_code ASC);"
-
-print "adding index to interpro_cross_references"
-doCmd "ALTER TABLE interpro_cross_references ADD INDEX fk_interpro_reference_uniprot_entries (uniprot_entry_id ASC);"
-
 print "Done"

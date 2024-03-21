@@ -787,38 +787,13 @@ database)
 	create_taxon_tables
 	download_and_convert_all_sources
 	create_tables_and_filter
-	number_sequences
-  substitute_aas
-	reportProgress "-1" "Calculating lowest common ancestors and functional annotations." 6
-	calculate_equalized_lcas &
-	pid1=$!
-	calculate_original_lcas &
-	pid2=$!
-	calculate_equalized_fas &
-	pid3=$!
-	calculate_original_fas &
-	pid4=$!
-	wait $pid1
-	wait $pid2
-	wait $pid3
-	wait $pid4
-	reportProgress "-1" "Creating sequence table." 9
-	create_sequence_table
-	rm "$INTDIR/LCAs_original.tsv.lz4"
-	rm "$INTDIR/LCAs_equalized.tsv.lz4"
-	rm "$INTDIR/FAs_original.tsv.lz4"
-	rm "$INTDIR/FAs_equalized.tsv.lz4"
-	rm "$INTDIR/sequences.tsv.lz4"
-	rm "$INTDIR/peptides_by_equalized.tsv.lz4"
-	# Use the original sort as the result
-	mv "$INTDIR/peptides_by_original.tsv.lz4" "$OUTPUT_DIR/peptides.tsv.lz4"
-	reportProgress "-1" "Fetching EC numbers." 10
+	reportProgress "-1" "Fetching EC numbers." 6
 	fetch_ec_numbers
-	reportProgress "-1" "Fetching GO terms." 11
+	reportProgress "-1" "Fetching GO terms." 7
 	fetch_go_terms
-	reportProgress "-1" "Fetching InterPro entries." 12
+	reportProgress "-1" "Fetching InterPro entries." 8
 	fetch_interpro_entries
-	reportProgress "-1" "Computing database indices" 13
+	reportProgress "-1" "Computing database indices" 9
 	ENTRIES=$($CMD_LZ4CAT "$OUTPUT_DIR/uniprot_entries.tsv.lz4" | wc -l)
 	echo "Database contains: ##$ENTRIES##"
 	;;

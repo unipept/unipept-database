@@ -37,6 +37,7 @@ CREATE TABLE IF NOT EXISTS `unipept`.`uniprot_entries` (
   `type` ENUM('swissprot', 'trembl') NOT NULL,
   `name` VARCHAR(150) NOT NULL,
   `protein` TEXT NOT NULL,
+  `fa` TEXT NOT NULL ,
   PRIMARY KEY (`id`),
   INDEX `fk_uniprot_entries_taxons_idx` (`taxon_id` ASC),
   UNIQUE INDEX `idx_uniprot_entries_accession` (`uniprot_accession_number` ASC),
@@ -139,68 +140,6 @@ COLLATE = ascii_general_ci;
 
 
 -- -----------------------------------------------------
--- Table `unipept`.`sequences`
--- -----------------------------------------------------
-CREATE  TABLE IF NOT EXISTS `unipept`.`sequences` (
-  `id` INT UNSIGNED NOT NULL AUTO_INCREMENT ,
-  `sequence` VARCHAR(50) NOT NULL ,
-  `lca` MEDIUMINT UNSIGNED NULL ,
-  `lca_il` MEDIUMINT UNSIGNED NULL ,
-  `fa` BLOB NULL ,
-  `fa_il` BLOB NULL ,
-  PRIMARY KEY (`id`) ,
-  UNIQUE INDEX `uidx_sequence` (`sequence` ASC) ,
-  INDEX `fk_sequences_taxons` (`lca` ASC) ,
-  INDEX `fk_sequences_taxons_2` (`lca_il` ASC) ,
-  CONSTRAINT `fk_sequences_taxons`
-    FOREIGN KEY (`lca` )
-    REFERENCES `unipept`.`taxons` (`id` )
-    ON DELETE NO ACTION
-    ON UPDATE NO ACTION,
-  CONSTRAINT `fk_sequences_taxons_2`
-    FOREIGN KEY (`lca_il` )
-    REFERENCES `unipept`.`taxons` (`id` )
-    ON DELETE NO ACTION
-    ON UPDATE NO ACTION)
-ENGINE = InnoDB
-DEFAULT CHARACTER SET = ascii
-ROW_FORMAT=COMPRESSED KEY_BLOCK_SIZE=16
-COLLATE = ascii_general_ci;
-
-
--- -----------------------------------------------------
--- Table `unipept`.`peptides`
--- -----------------------------------------------------
-CREATE  TABLE IF NOT EXISTS `unipept`.`peptides` (
-  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT ,
-  `sequence_id` INT UNSIGNED NOT NULL ,
-  `original_sequence_id` INT UNSIGNED NOT NULL ,
-  `uniprot_entry_id` INT UNSIGNED NOT NULL ,
-  PRIMARY KEY (`id`) ,
-  INDEX `fk_peptides_sequences` (`sequence_id` ASC) ,
-  INDEX `fk_peptides_uniprot_entries` (`uniprot_entry_id` ASC) ,
-  INDEX `fk_peptides_original_sequences` (`original_sequence_id` ASC) ,
-  CONSTRAINT `fk_peptides_sequences`
-    FOREIGN KEY (`sequence_id` )
-    REFERENCES `unipept`.`sequences` (`id` )
-    ON DELETE NO ACTION
-    ON UPDATE NO ACTION,
-  CONSTRAINT `fk_peptides_uniprot_entries`
-    FOREIGN KEY (`uniprot_entry_id` )
-    REFERENCES `unipept`.`uniprot_entries` (`id` )
-    ON DELETE NO ACTION
-    ON UPDATE NO ACTION,
-  CONSTRAINT `fk_peptides_original_sequences`
-    FOREIGN KEY (`original_sequence_id` )
-    REFERENCES `unipept`.`sequences` (`id` )
-    ON DELETE NO ACTION
-    ON UPDATE NO ACTION)
-ENGINE = InnoDB
-DEFAULT CHARACTER SET = ascii
-COLLATE = ascii_general_ci;
-
-
--- -----------------------------------------------------
 -- Table `unipept`.`datasets`
 -- -----------------------------------------------------
 CREATE  TABLE IF NOT EXISTS `unipept`.`datasets` (
@@ -235,68 +174,6 @@ ENGINE = InnoDB
 DEFAULT CHARACTER SET = utf8
 COLLATE = utf8_general_ci;
 
--- -----------------------------------------------------
--- Table `unipept`.`go_cross_references`
--- -----------------------------------------------------
-CREATE TABLE IF NOT EXISTS `unipept`.`go_cross_references` (
-  `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
-  `uniprot_entry_id` INT UNSIGNED NOT NULL,
-  `go_term_code` VARCHAR(15) NOT NULL,
-  PRIMARY KEY (`id`),
-  INDEX `fk_go_reference_uniprot_entries` (`uniprot_entry_id` ASC),
-  INDEX `fk_go_cross_reference_go_terms_idx` (`go_term_code` ASC),
-  CONSTRAINT `fk_go_cross_reference_uniprot_entries`
-    FOREIGN KEY (`uniprot_entry_id`)
-    REFERENCES `unipept`.`uniprot_entries` (`id`)
-    ON DELETE NO ACTION
-    ON UPDATE NO ACTION,
-  CONSTRAINT `fk_go_cross_reference_go_terms`
-    FOREIGN KEY (`go_term_code`)
-    REFERENCES `unipept`.`go_terms` (`code`)
-    ON DELETE NO ACTION
-    ON UPDATE NO ACTION)
-ENGINE = InnoDB
-DEFAULT CHARACTER SET = ascii
-COLLATE = ascii_general_ci;
-
-
--- -----------------------------------------------------
--- Table `unipept`.`ec_cross_references`
--- -----------------------------------------------------
-CREATE TABLE IF NOT EXISTS `unipept`.`ec_cross_references` (
-  `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
-  `uniprot_entry_id` INT UNSIGNED NOT NULL,
-  `ec_number_code` VARCHAR(15) NOT NULL,
-  PRIMARY KEY (`id`),
-  INDEX `fk_ec_reference_uniprot_entries` (`uniprot_entry_id` ASC),
-  INDEX `fk_ec_cross_reference_ec_numbers_idx` (`ec_number_code` ASC),
-  CONSTRAINT `fk_ec_cross_reference_uniprot_entries`
-    FOREIGN KEY (`uniprot_entry_id`)
-    REFERENCES `unipept`.`uniprot_entries` (`id`)
-    ON DELETE NO ACTION
-    ON UPDATE NO ACTION,
-  CONSTRAINT `fk_ec_cross_reference_ec_numbers`
-    FOREIGN KEY (`ec_number_code`)
-    REFERENCES `unipept`.`ec_numbers` (`code`)
-    ON DELETE NO ACTION
-    ON UPDATE NO ACTION)
-ENGINE = InnoDB
-DEFAULT CHARACTER SET = ascii
-COLLATE = ascii_general_ci;
-
-
--- -----------------------------------------------------
--- Table `unipept`.`interpro_cross_references`
--- -----------------------------------------------------
-CREATE  TABLE IF NOT EXISTS `unipept`.`interpro_cross_references` (
-    `id` INT UNSIGNED NOT NULL AUTO_INCREMENT ,
-    `uniprot_entry_id` INT UNSIGNED NOT NULL ,
-    `interpro_entry_code` VARCHAR(9) NOT NULL ,
-    PRIMARY KEY (`id`),
-    INDEX `fk_interpro_reference_uniprot_entries` (`uniprot_entry_id` ASC))
-ENGINE = InnoDB
-DEFAULT CHARACTER SET = ascii
-COLLATE = ascii_general_ci;
 
 SET SQL_MODE=@OLD_SQL_MODE;
 SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS;

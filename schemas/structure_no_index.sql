@@ -34,6 +34,7 @@ CREATE  TABLE IF NOT EXISTS `unipept`.`uniprot_entries` (
   `type` ENUM('swissprot', 'trembl') NOT NULL ,
   `name`VARCHAR(150) NOT NULL ,
   `protein` TEXT NOT NULL ,
+  `fa` TEXT NOT NULL ,
   PRIMARY KEY (`id`))
 ENGINE = InnoDB
 DEFAULT CHARACTER SET = ascii
@@ -118,39 +119,6 @@ COLLATE = ascii_general_ci;
 
 
 -- -----------------------------------------------------
--- Table `unipept`.`sequences`
--- BLOCKSIZE 16 IS DEFAULT BLOCKSIZE
--- Only BLOBS will get compressed
--- -----------------------------------------------------
-CREATE  TABLE IF NOT EXISTS `unipept`.`sequences` (
-  `id` INT UNSIGNED NOT NULL AUTO_INCREMENT ,
-  `sequence` VARCHAR(50) NOT NULL ,
-  `lca` MEDIUMINT UNSIGNED NULL ,
-  `lca_il` MEDIUMINT UNSIGNED NULL ,
-  `fa`  MEDIUMBLOB NULL ,
-  `fa_il`  MEDIUMBLOB NULL ,
-  PRIMARY KEY (`id`))
-ENGINE = InnoDB
-DEFAULT CHARACTER SET = ascii
-ROW_FORMAT=COMPRESSED KEY_BLOCK_SIZE=16
-COLLATE = ascii_general_ci;
-
-
--- -----------------------------------------------------
--- Table `unipept`.`peptides`
--- -----------------------------------------------------
-CREATE  TABLE IF NOT EXISTS `unipept`.`peptides` (
-  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT ,
-  `sequence_id` INT UNSIGNED NOT NULL ,
-  `original_sequence_id` INT UNSIGNED NOT NULL ,
-  `uniprot_entry_id` INT UNSIGNED NOT NULL ,
-  PRIMARY KEY (`id`))
-ENGINE = InnoDB
-DEFAULT CHARACTER SET = ascii
-COLLATE = ascii_general_ci;
-
-
--- -----------------------------------------------------
 -- Table `unipept`.`datasets`
 -- -----------------------------------------------------
 CREATE  TABLE IF NOT EXISTS `unipept`.`datasets` (
@@ -184,44 +152,6 @@ CREATE  TABLE IF NOT EXISTS `unipept`.`dataset_items` (
 ENGINE = InnoDB
 DEFAULT CHARACTER SET = utf8
 COLLATE = utf8_general_ci;
-
--- -----------------------------------------------------
--- Table `unipept`.`go_cross_references`
--- -----------------------------------------------------
-CREATE  TABLE IF NOT EXISTS `unipept`.`go_cross_references` (
-  `id` INT UNSIGNED NOT NULL AUTO_INCREMENT ,
-  `uniprot_entry_id` INT UNSIGNED NOT NULL ,
-  `go_term_code` VARCHAR(15) NOT NULL ,
-  PRIMARY KEY (`id`))
-ENGINE = InnoDB
-DEFAULT CHARACTER SET = ascii
-COLLATE = ascii_general_ci;
-
-
--- -----------------------------------------------------
--- Table `unipept`.`ec_cross_references`
--- -----------------------------------------------------
-CREATE  TABLE IF NOT EXISTS `unipept`.`ec_cross_references` (
-  `id` INT UNSIGNED NOT NULL AUTO_INCREMENT ,
-  `uniprot_entry_id` INT UNSIGNED NOT NULL ,
-  `ec_number_code` VARCHAR(15) NOT NULL ,
-  PRIMARY KEY (`id`))
-ENGINE = InnoDB
-DEFAULT CHARACTER SET = ascii
-COLLATE = ascii_general_ci;
-
--- -----------------------------------------------------
--- Table `unipept`.`interpro_cross_references`
--- -----------------------------------------------------
-CREATE  TABLE IF NOT EXISTS `unipept`.`interpro_cross_references` (
-  `id` INT UNSIGNED NOT NULL AUTO_INCREMENT ,
-  `uniprot_entry_id` INT UNSIGNED NOT NULL ,
-  `interpro_entry_code` VARCHAR(9) NOT NULL ,
-  PRIMARY KEY (`id`))
-ENGINE = InnoDB
-DEFAULT CHARACTER SET = ascii
-COLLATE = ascii_general_ci;
-
 
 SET SQL_MODE=@OLD_SQL_MODE;
 SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS;

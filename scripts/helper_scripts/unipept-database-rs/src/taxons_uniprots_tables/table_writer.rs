@@ -74,8 +74,8 @@ impl TableWriter {
 
         writeln!(
             &mut self.uniprot_entries,
-            "{}\t{}\t{}\t{}",
-            self.uniprot_count, accession_number, taxon_id, summarized_fas
+            "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+            self.uniprot_count, accession_number, entry.version, taxon_id, entry.type_, entry.name, entry.sequence, summarized_fas
         )
         .context("Error writing to TSV")?;
 
