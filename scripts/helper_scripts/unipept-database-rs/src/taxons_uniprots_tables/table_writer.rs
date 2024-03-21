@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashSet};
 use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::path::PathBuf;
@@ -99,30 +99,23 @@ impl TableWriter {
             .filter(|x| !x.is_empty())
             .map(|x| format!("IPR:{}", x));
 
-        let mut m: HashMap<String, u32> = HashMap::new();
+        let mut m: HashSet<String> = HashSet::new();
 
         for go in go_ids {
             if !go.is_empty() {
-                *m.entry(go.clone()).or_insert(0) += 1;
+                m.insert(go.clone());
             }
         }
 
         for ec in ec_ids {
-            *m.entry(ec.clone()).or_insert(0) += 1;
+            m.insert(ec.clone());
         }
 
         for ipr in ip_ids {
-            *m.entry(ipr.clone()).or_insert(0) += 1;
+            m.insert(ipr.clone());
         }
 
-        let data = m
-            .iter()
-            .map(|(key, value)| format!(r#""{key}":{value}"#))
-            .collect::<Vec<String>>()
-            .join(",");
-
-        return format!(
-            "{{{data}}}"
-        );
+        let string_vec: Vec<String> = m.iter().cloned().collect();
+        return string_vec.join(";");
     }
 }
