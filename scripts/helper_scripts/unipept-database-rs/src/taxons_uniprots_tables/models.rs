@@ -3,9 +3,6 @@ use strum_macros::{Display, EnumCount, EnumIter, EnumString};
 
 #[derive(Debug)]
 pub struct Entry {
-    pub min_length: u32,
-    pub max_length: u32,
-
     // The "version" and "accession_number" fields are actually integers, but they are never used as such,
     // so there is no use converting/parsing them
     pub accession_number: String,
@@ -23,8 +20,6 @@ pub struct Entry {
 impl Entry {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        min_length: u32,
-        max_length: u32,
         type_: String,
         accession_number: String,
         sequence: String,
@@ -40,9 +35,6 @@ impl Entry {
             .with_context(|| format!("Failed to parse {} to i32", taxon_id))?;
 
         Ok(Entry {
-            min_length,
-            max_length,
-
             accession_number,
             version,
             taxon_id: parsed_id,
@@ -57,34 +49,6 @@ impl Entry {
     }
 }
 
-pub fn calculate_entry_digest(
-    sequence: &String,
-    min_length: usize,
-    max_length: usize,
-) -> Vec<&[u8]> {
-    let mut result = Vec::new();
-
-    let mut start: usize = 0;
-    let length = sequence.len();
-    let content = sequence.as_bytes();
-
-    for (i, c) in content.iter().enumerate() {
-        if (*c == b'K' || *c == b'R') && (i + 1 < length && content[i + 1] != b'P') {
-            if i + 1 - start >= min_length && i + 1 - start <= max_length {
-                result.push(&content[start..i + 1]);
-            }
-
-            start = i + 1;
-        }
-    }
-
-    // Add last one
-    if length - start >= min_length && length - start <= max_length {
-        result.push(&content[start..length]);
-    }
-
-    result
-}
 
 // This is taken directly from UMGAP, with Infraclass and Parvorder removed
 // Once these changes are merged in UMGAP, this can be replaced with a dependency

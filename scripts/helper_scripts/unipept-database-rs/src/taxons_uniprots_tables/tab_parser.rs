@@ -8,13 +8,11 @@ use crate::utils::files::open_sin;
 pub struct TabParser {
     lines: Lines<BufReader<Stdin>>,
     header_map: HashMap<String, usize>,
-    min_length: u32,
-    max_length: u32,
     verbose: bool,
 }
 
 impl TabParser {
-    pub fn new(peptide_min: u32, peptide_max: u32, verbose: bool) -> Result<Self> {
+    pub fn new(verbose: bool) -> Result<Self> {
         // First read the header line
         let reader = open_sin();
         let mut map = HashMap::new();
@@ -33,8 +31,6 @@ impl TabParser {
         Ok(TabParser {
             lines,
             header_map: map,
-            min_length: peptide_min,
-            max_length: peptide_max,
             verbose,
         })
     }
@@ -72,8 +68,6 @@ impl Iterator for TabParser {
             .collect();
 
         let entry = Entry::new(
-            self.min_length,
-            self.max_length,
             fields[self.header_map["Status"]].trim().to_string(),
             fields[self.header_map["Entry"]].trim().to_string(),
             fields[self.header_map["Sequence"]].trim().to_string(),
