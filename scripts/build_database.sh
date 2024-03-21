@@ -556,23 +556,8 @@ create_most_tables() {
 
 	mkdir -p "$OUTPUT_DIR" "$INTDIR"
 
-	cat - | $CURRENT_LOCATION/helper_scripts/taxons-uniprots-tables \
-		--peptide-min "$PEPTIDE_MIN_LENGTH" \
-		--peptide-max "$PEPTIDE_MAX_LENGTH" \
-		--taxons "$(luz "$OUTPUT_DIR/taxons.tsv.lz4")" \
-		--peptides "$(lz "$INTDIR/peptides-out.tsv.lz4")" \
-		--uniprot-entries "$(lz "$OUTPUT_DIR/uniprot_entries.tsv.lz4")" \
-		--ec "$(lz "$OUTPUT_DIR/ec_cross_references.tsv.lz4")" \
-		--go "$(lz "$OUTPUT_DIR/go_cross_references.tsv.lz4")" \
-		--interpro "$(lz "$OUTPUT_DIR/interpro_cross_references.tsv.lz4")"
+	cat - | $CURRENT_LOCATION/helper_scripts/taxons-uniprots-tables --uniprot-entries "$(lz "$OUTPUT_DIR/uniprot_entries.tsv.lz4")"
 
-  log "Started sorting peptides table"
-
-  $CMD_LZ4CAT "$INTDIR/peptides-out.tsv.lz4" \
-    | LC_ALL=C $CMD_SORT -k2 \
-    | $CMD_LZ4 > "$INTDIR/peptides-equalized.tsv.lz4"
-
-  rm "$INTDIR/peptides-out.tsv.lz4"
   log "Finished calculation of most tables with status $?"
 }
 
