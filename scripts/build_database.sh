@@ -661,6 +661,17 @@ calculate_original_fas() {
 }
 
 
+sort_peptides() {
+	have "$INTDIR/peptides_by_original.tsv.lz4" || return
+	log "Started sorting the peptides table."
+	mkdir -p "$OUTPUT_DIR"
+	$CMD_LZ4CAT "$INTDIR/peptides_by_original.tsv.lz4" \
+		| LC_ALL=C $CMD_SORT -n \
+		| $CMD_LZ4 - > "$OUTPUT_DIR/peptides.tsv.lz4"
+	log "Finished sorting the peptides table."
+}
+
+
 create_sequence_table() {
 	have "$INTDIR/LCAs_original.tsv.lz4" "$INTDIR/LCAs_equalized.tsv.lz4" "$INTDIR/FAs_original.tsv.lz4" "$INTDIR/FAs_equalized.tsv.lz4" "$INTDIR/sequences.tsv.lz4" || return
 	log "Started the creation of the sequences table."
@@ -802,6 +813,8 @@ database)
 	wait $pid2
 	wait $pid3
 	wait $pid4
+  reportProgress "-1" "Sorting peptides." 8  # TODO remove this step for Postgres
+  sort_peptides
 	reportProgress "-1" "Creating sequence table." 9
 	create_sequence_table
 	rm "$INTDIR/LCAs_original.tsv.lz4"
@@ -810,8 +823,9 @@ database)
 	rm "$INTDIR/FAs_equalized.tsv.lz4"
 	rm "$INTDIR/sequences.tsv.lz4"
 	rm "$INTDIR/peptides_by_equalized.tsv.lz4"
-	# Use the original sort as the result
-	mv "$INTDIR/peptides_by_original.tsv.lz4" "$OUTPUT_DIR/peptides.tsv.lz4"
+	# Use the original sort as the result TODO this does not play nicely for MariaDB
+  #	mv "$INTDIR/peptides_by_original.tsv.lz4" "$OUTPUT_DIR/peptides.tsv.lz4"
+	rm "$INTDIR/peptides_by_original.tsv.lz4"
 	reportProgress "-1" "Fetching EC numbers." 10
 	fetch_ec_numbers
 	reportProgress "-1" "Fetching GO terms." 11
