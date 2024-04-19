@@ -1,7 +1,7 @@
 shopt -s expand_aliases
 
 export db=unipept
-export user=root
+export user=unipept
 export pass=unipept
 export host=localhost
 
