@@ -20,7 +20,7 @@ function load_table() {
     else
         lz4cat $file
     fi
-    } | PGPASSWORD=$pass psql -U $user -h $host -c "COPY $db.$tbl FROM STDIN WITH (FORMAT TEXT, DELIMITER E'\t', HEADER false, NULL '\N');" 2>&1
+    } | PGPASSWORD=$pass psql -U $user -c "COPY $db.$tbl FROM STDIN WITH (FORMAT TEXT, DELIMITER E'\t', HEADER false, NULL '\N');" 2>&1
 }
 
 export -f load_table
