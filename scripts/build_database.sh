@@ -696,7 +696,9 @@ fetch_ec_numbers() {
 			/^DE/ { gsub(/.$/, "", $2)
 			        name = name $2 }
 			END   { print id, name }'
-	} | cat -n | sed 's/^ *//' | $CMD_LZ4 - > "$OUTPUT_DIR/ec_numbers.tsv.lz4"
+	} | cat -n \
+	| awk -F'\t' 'BEGIN {OFS=FS} { if (length($3) > 155) $3 = substr($3, 1, 155); print }' - \
+	| sed 's/^ *//' | $CMD_LZ4 - > "$OUTPUT_DIR/ec_numbers.tsv.lz4"
 	log "Finished creating EC numbers."
 }
 
