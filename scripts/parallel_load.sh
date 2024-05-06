@@ -1,9 +1,10 @@
 shopt -s expand_aliases
 
-export db=unipept
-export user=unipept
-export pass=unipept
-export host=localhost
+# Define PSQL connection parameters
+export DB_USER="unipept"
+export DB_PASSWORD="unipept"
+export DB_HOST="localhost"
+export DB_NAME="unipept"
 
 dir="$1"
 
@@ -20,7 +21,7 @@ function load_table() {
     else
         lz4cat $file
     fi
-    } | PGPASSWORD=$pass psql -U $user -c "COPY $db.$tbl FROM STDIN WITH (FORMAT TEXT, DELIMITER E'\t', HEADER false, NULL '\N');" 2>&1
+    } | PGPASSWORD=$DB_PASSWORD psql -U $DB_USER -h "$DB_HOST" -c "COPY $DB_NAME.$tbl FROM STDIN WITH (FORMAT TEXT, DELIMITER E'\t', HEADER false, NULL '\N');" 2>&1
 }
 
 export -f load_table

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Define MySQL connection parameters
+# Define PSQL connection parameters
 DB_USER="unipept"
 DB_PASSWORD="unipept"
 DB_HOST="localhost"
