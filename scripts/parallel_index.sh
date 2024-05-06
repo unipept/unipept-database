@@ -3,7 +3,6 @@
 # Define PSQL connection parameters
 DB_USER="unipept"
 DB_PASSWORD="unipept"
-DB_HOST="localhost"
 DB_NAME="unipept"
 
 # Function to add an index in the background
