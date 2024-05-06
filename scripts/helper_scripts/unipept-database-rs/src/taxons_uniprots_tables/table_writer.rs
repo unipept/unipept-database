@@ -154,12 +154,16 @@ impl TableWriter {
         {
             self.uniprot_count += 1;
 
-            let accession_number = &entry.accession_number;
-            let version = entry.version.clone();
+            let accession_number = if entry.accession_number.len() <= 10 {
+                &entry.accession_number
+            } else {
+                &entry.accession_number[..10]
+            };
+            let version = &entry.version;
             let taxon_id = entry.taxon_id;
-            let type_ = entry.type_.clone();
-            let name = entry.name.clone();
-            let sequence = entry.sequence.clone();
+            let type_ = &entry.type_;
+            let name = &entry.name;
+            let sequence = &entry.sequence;
 
             writeln!(
                 &mut self.uniprot_entries,

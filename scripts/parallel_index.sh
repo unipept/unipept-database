@@ -1,9 +1,8 @@
 #!/bin/bash
 
-# Define MySQL connection parameters
+# Define PSQL connection parameters
 DB_USER="unipept"
 DB_PASSWORD="unipept"
-DB_HOST="localhost"
 DB_NAME="unipept"
 
 # Function to add an index in the background
@@ -12,7 +11,7 @@ add_index() {
     local column_name=$2
 
     # Execute the "add index" statement
-    mariadb -u "$DB_USER" -p"$DB_PASSWORD" -h "$DB_HOST" -e "ALTER TABLE $DB_NAME.$table_name ADD INDEX idx_$column_name ($column_name);" &
+    PGPASSWORD="$DB_PASSWORD" psql -U "$DB_USER" -c "CREATE INDEX idx_${table_name}_$column_name ON $DB_NAME.$table_name($column_name);" &
 }
 
 # List of tables and columns for which you want to add indexes
