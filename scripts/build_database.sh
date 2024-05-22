@@ -568,9 +568,9 @@ create_most_tables() {
 
   log "Started sorting peptides table"
 
-  $CMD_LZ4CAT "$INTDIR/peptides-out.tsv.lz4" \
-    | LC_ALL=C $CMD_SORT -k2 \
-    | $CMD_LZ4 > "$INTDIR/peptides-equalized.tsv.lz4"
+#   $CMD_LZ4CAT "$INTDIR/peptides-out.tsv.lz4" \
+#     | LC_ALL=C $CMD_SORT -k2 \
+#     | $CMD_LZ4 > "$INTDIR/peptides-equalized.tsv.lz4"
 
   rm "$INTDIR/peptides-out.tsv.lz4"
   log "Finished calculation of most tables with status $?"
