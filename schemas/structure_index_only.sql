@@ -34,19 +34,6 @@ ALTER TABLE interpro_entries ADD UNIQUE INDEX idx_interpro_code (code ASC);
 
 
 -- -----------------------------------------------------
--- Table `unipept`.`sequences`
--- -----------------------------------------------------
-ALTER TABLE sequences ADD UNIQUE INDEX idx_sequences (sequence ASC);
-ALTER TABLE sequences ADD INDEX fk_sequences_taxons (lca ASC), ADD INDEX fk_sequences_taxons_2 (lca_il ASC);
-
-
--- -----------------------------------------------------
--- Table `unipept`.`peptides`
--- -----------------------------------------------------
-ALTER TABLE peptides ADD INDEX fk_peptides_sequences (sequence_id ASC), ADD INDEX fk_peptides_uniprot_entries (uniprot_entry_id ASC), ADD INDEX fk_peptides_original_sequences (original_sequence_id ASC);
-
-
--- -----------------------------------------------------
 -- Table `unipept`.`go_cross_references`
 -- -----------------------------------------------------
 ALTER TABLE go_cross_references ADD INDEX fk_go_reference_uniprot_entries (uniprot_entry_id ASC);

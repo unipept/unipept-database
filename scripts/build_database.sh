@@ -25,7 +25,7 @@ Usage: $(basename "$0") [OPTIONS] BUILD_TYPE DB_NAMES DB_SOURCES OUTPUT_DIR
 Build Unipept database from a specific collection of UniProt resources.
 
 Required parameters:
-  * BUILD_TYPE: One of database, static-database, kmer-index, tryptic-index.
+  * BUILD_TYPE: One of database, static-database, kmer-index, tryptic-index, suffix-array-index.
 
   * DB_NAMES: List with all names of the different databases that should be parsed. Every name in this list
   corresponds with the respective database source given for the DB_SOURCES parameter. The items in this list should be
@@ -863,5 +863,13 @@ tryptic-index)
 		# TODO remove temp files
 	fi
 	create_tryptic_index
+	;;
+suffix-array-index)
+	create_taxon_tables
+	download_and_convert_all_sources
+	create_tables_and_filter
+	fetch_ec_numbers
+	fetch_go_terms
+	fetch_interpro_entries
 	;;
 esac
