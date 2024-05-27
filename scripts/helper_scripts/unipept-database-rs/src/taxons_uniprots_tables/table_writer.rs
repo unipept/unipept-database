@@ -161,10 +161,33 @@ impl TableWriter {
             let name = entry.name.clone();
             let sequence = entry.sequence.clone();
 
+            let ec = entry
+                .ec_references
+                .iter()
+                .filter(|x| !x.is_empty())
+                .map(|x| format!("EC:{}", x))
+                .collect::<Vec<String>>()
+                .join(";");
+            let go = entry.go_references.join(";");
+            let ip = entry
+                .ip_references
+                .iter()
+                .filter(|x| !x.is_empty())
+                .map(|x| format!("IPR:{}", x))
+                .collect::<Vec<String>>()
+                .join(";");
+
+            let mut fa = String::with_capacity(ec.len() + go.len() + ip.len() + 2);
+            fa.push_str(&ec);
+            fa.push(';');
+            fa.push_str(&go);
+            fa.push(';');
+            fa.push_str(&ip);
+
             writeln!(
                 &mut self.uniprot_entries,
-                "{}\t{}\t{}\t{}\t{}\t{}\t{}",
-                self.uniprot_count, accession_number, version, taxon_id, type_, name, sequence
+                "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+                self.uniprot_count, accession_number, version, taxon_id, type_, name, sequence, fa
             )
             .context("Error writing to TSV")?;
 
