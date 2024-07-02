@@ -34,6 +34,7 @@ CREATE  TABLE IF NOT EXISTS `unipept`.`uniprot_entries` (
   `type` ENUM('swissprot', 'trembl') NOT NULL ,
   `name`VARCHAR(150) NOT NULL ,
   `protein` TEXT NOT NULL ,
+  `fa` TEXT NOT NULL ,
   PRIMARY KEY (`id`))
 ENGINE = InnoDB
 DEFAULT CHARACTER SET = ascii
