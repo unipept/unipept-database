@@ -19,12 +19,6 @@ add_index() {
 table_columns=(
     "uniprot_entries:taxon_id"
     "uniprot_entries:uniprot_accession_number"
-    "ec_numbers:code"
-    "go_terms:code"
-    "interpro_entries:code"
-    "go_cross_references:uniprot_entry_id"
-    "ec_cross_references:uniprot_entry_id"
-    "interpro_cross_references:uniprot_entry_id"
 )
 
 # Loop through the list and add indexes in parallel
