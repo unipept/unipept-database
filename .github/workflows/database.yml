@@ -34,9 +34,11 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get -y install git curl unzip gawk sqlite3 libsqlite3-dev pv nodejs wget uuid-runtime pigz lz4 parallel
+      - name: Prepare temporary directories
+        run: sudo mkdir -p "/index" "/unipept-temp"
       - name: Generate tsv.gz files
         shell: bash
-        run: ./scripts/build_database.sh -i "/index" -d "/unipept-temp" -m "128M" database "swissprot" "https://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/complete/uniprot_sprot.xml.gz" "output"
+        run: ./scripts/build_database.sh -m "128M" database "swissprot" "https://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/complete/uniprot_sprot.xml.gz" "output"
       - name: Rename the tsv.gz files according to the branch used
         shell: bash
         run: cd output && for file in *.tsv.gz; do mv "$file" "${file%.tsv.gz}.${{ matrix.branch }}.tsv.gz"; done
