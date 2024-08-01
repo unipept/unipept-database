@@ -1,4 +1,4 @@
-name: Static Database
+name: Database
 
 on:
   workflow_dispatch:
@@ -7,7 +7,7 @@ on:
     - cron:  '0 0 1 * *'
 
 jobs:
-  generate_static_database:
+  generate_tsv_files:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -26,12 +26,9 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get -y install git curl unzip gawk sqlite3 libsqlite3-dev pv nodejs wget uuid-runtime pigz lz4 parallel
-      - name: Download Taxdmp file
-        shell: bash
-        run: wget https://ftp.ncbi.nlm.nih.gov/pub/taxonomy/taxdmp.zip
       - name: Generate tsv.gz files
         shell: bash
-        run: ./scripts/build_database.sh static-database "swissprot,trembl" "https://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/complete/uniprot_sprot.xml.gz,https://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/complete/uniprot_trembl.xml.gz" "output"
+        run: ./scripts/build_database.sh database "swissprot" "https://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/complete/uniprot_sprot.xml.gz" "output"
       - name: Build SQLite database from generated files
         shell: bash
         run: |
