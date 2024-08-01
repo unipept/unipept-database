@@ -98,7 +98,13 @@ terminateAndExit() {
 # Can be called when an error has occurred during the execution of the script. This function will inform the user that
 # an error has occurred and will properly exit the script.
 errorAndExit() {
+  local exit_status="$?"        # Capture the exit status of the last command
+  local line_no=${BASH_LINENO[0]}  # Get the line number where the error occurred
+  local command="${BASH_COMMAND}"  # Get the command that was executed
+
 	echo "Error: the script experienced an error while trying to build the requested database." 1>&2
+  echo "Error: Command '$command' failed with exit status $exit_status at line $line_no."
+
 	if [[ -n "$1" ]]
 	then
 	  echo "Error details: $1" 1>&2
