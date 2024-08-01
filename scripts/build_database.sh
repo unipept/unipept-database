@@ -103,11 +103,12 @@ errorAndExit() {
   local command="${BASH_COMMAND}"  # Get the command that was executed
 
 	echo "Error: the script experienced an error while trying to build the requested database." 1>&2
-  echo "Error: Command '$command' failed with exit status $exit_status at line $line_no."
+	echo "Error details:" 1>&2
+  echo "Command '$command' failed with exit status $exit_status at line $line_no." 1>&2
 
 	if [[ -n "$1" ]]
 	then
-	  echo "Error details: $1" 1>&2
+	  echo "$1" 1>&2
   fi
 	echo "" 1>&2
 	clean
