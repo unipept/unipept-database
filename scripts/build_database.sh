@@ -601,10 +601,10 @@ number_sequences() {
   rm -f "p_eq" "p_or"
 	mkfifo "p_eq" "p_or"
 
-	$CMD_LZ4CAT "$INTDIR/peptides-equalized.tsv.lz4" | cut -f 3 | sort | uniq > "p_or" &
+	$CMD_LZ4CAT "$INTDIR/peptides-equalized.tsv.lz4" | cut -f 3 | $CMD_SORT | uniq > "p_or" &
 	$CMD_LZ4CAT "$INTDIR/peptides-equalized.tsv.lz4" | cut -f 2 | uniq > "p_eq" &
 
-	sort -u -m "p_or" "p_eq" | cat -n \
+	$CMD_SORT -u -m "p_or" "p_eq" | cat -n \
 		| sed 's/^ *//' | $CMD_LZ4 - > "$INTDIR/sequences.tsv.lz4"
 
 	rm "p_eq" "p_or"
