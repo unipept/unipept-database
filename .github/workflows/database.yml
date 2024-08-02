@@ -38,7 +38,7 @@ jobs:
         run: sudo mkdir -p "index" "unipept-temp"
       - name: Generate tsv.gz files
         shell: bash
-        run: ./scripts/build_database.sh -i "index" -d "unipept-temp" -m "128M" database "swissprot" "https://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/complete/uniprot_sprot.xml.gz" "output"
+        run: sudo ./scripts/build_database.sh -i "index" -d "unipept-temp" -m "128M" database "swissprot" "https://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/complete/uniprot_sprot.xml.gz" "output"
       - name: Rename the tsv.gz files according to the branch used
         shell: bash
         run: cd output && for file in *.tsv.gz; do mv "$file" "${file%.tsv.gz}.${{ matrix.branch }}.tsv.gz"; done
