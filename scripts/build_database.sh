@@ -98,10 +98,17 @@ terminateAndExit() {
 # Can be called when an error has occurred during the execution of the script. This function will inform the user that
 # an error has occurred and will properly exit the script.
 errorAndExit() {
+  local exit_status="$?"        # Capture the exit status of the last command
+  local line_no=${BASH_LINENO[0]}  # Get the line number where the error occurred
+  local command="${BASH_COMMAND}"  # Get the command that was executed
+
 	echo "Error: the script experienced an error while trying to build the requested database." 1>&2
+	echo "Error details:" 1>&2
+  echo "Command '$command' failed with exit status $exit_status at line $line_no." 1>&2
+
 	if [[ -n "$1" ]]
 	then
-	  echo "Error details: $1" 1>&2
+	  echo "$1" 1>&2
   fi
 	echo "" 1>&2
 	clean
@@ -259,6 +266,7 @@ TABDIR="$OUTPUT_DIR" # Where should I store the final TSV files (large, single-w
 INTDIR="$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT" # Where should I store intermediate TSV files (large, single-write, multiple-read?
 KMER_LENGTH=9 # What is the length (k) of the K-mer peptides?
 CMD_SORT="sort --buffer-size=$SORT_MEMORY --parallel=4" # Which sort command should I use?
+CMD_AWK="gawk"
 CMD_GZIP="pigz -" # Which pipe compression command should I use for .gz files?
 CMD_LZ4="lz4 -c" # Which pipe compression command should I use for .lz4 files?
 CMD_LZ4CAT="lz4 -dc" # Which decompression command should I use for .lz4 files?
@@ -292,6 +300,7 @@ reportProgress() {
 
 gz() {
 	fifo="$(uuidgen)-$(basename "$1")"
+	rm -f "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/$fifo"
 	mkfifo "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/$fifo"
 	echo "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/$fifo"
 	mkdir -p "$(dirname "$1")"
@@ -300,6 +309,7 @@ gz() {
 
 guz() {
 	fifo="$(uuidgen)-$(basename "$1")"
+	rm -f "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/$fifo"
 	mkfifo "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/$fifo"
 	echo "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/$fifo"
 	{ pigz -dc "$1" > "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/$fifo" && rm "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/$fifo" || kill "$self"; } > /dev/null &
@@ -307,6 +317,7 @@ guz() {
 
 lz() {
 	fifo="$(uuidgen)-$(basename "$1")"
+	rm -f "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/$fifo"
 	mkfifo "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/$fifo"
 	echo "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/$fifo"
 	mkdir -p "$(dirname "$1")"
@@ -315,6 +326,7 @@ lz() {
 
 luz() {
 	fifo="$(uuidgen)-$(basename "$1")"
+	rm -f "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/$fifo"
 	mkfifo "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/$fifo"
 	echo "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/$fifo"
 	{ $CMD_LZ4CAT "$1" > "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/$fifo" && rm "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/$fifo" || kill "$self"; } > /dev/null &
@@ -586,8 +598,8 @@ number_sequences() {
   have "$INTDIR/peptides-equalized.tsv.lz4" || return
 	log "Started the numbering of sequences."
 
-	mkfifo "p_eq"
-	mkfifo "p_or"
+  rm -f "p_eq" "p_or"
+	mkfifo "p_eq" "p_or"
 
 	$CMD_LZ4CAT "$INTDIR/peptides-equalized.tsv.lz4" | cut -f 3 | sort | uniq > "p_or" &
 	$CMD_LZ4CAT "$INTDIR/peptides-equalized.tsv.lz4" | cut -f 2 | uniq > "p_eq" &
@@ -643,6 +655,7 @@ calculate_original_lcas() {
 calculate_equalized_fas() {
 	have "$INTDIR/peptides_by_equalized.tsv.lz4" || return
 	log "Started the calculation of equalized FA's."
+	rm -f "peptides_eq"
 	mkfifo "peptides_eq"
 	$CMD_LZ4CAT "$INTDIR/peptides_by_equalized.tsv.lz4" | cut -f2,5 > "peptides_eq" &
 	$CURRENT_LOCATION/helper_scripts/functional-analysis -i "peptides_eq" -o "$(lz "$INTDIR/FAs_equalized.tsv.lz4")"
@@ -654,6 +667,7 @@ calculate_equalized_fas() {
 calculate_original_fas() {
 	have "$INTDIR/peptides_by_original.tsv.lz4" || return
 	log "Started the calculation of original FA's."
+	rm -f "peptides_orig"
 	mkfifo "peptides_orig"
 	$CMD_LZ4CAT "$INTDIR/peptides_by_original.tsv.lz4" | cut -f3,5 > "peptides_orig" &
 	$CURRENT_LOCATION/helper_scripts/functional-analysis -i "peptides_orig" -o "$(lz "$INTDIR/FAs_original.tsv.lz4")"
@@ -666,12 +680,13 @@ create_sequence_table() {
 	have "$INTDIR/LCAs_original.tsv.lz4" "$INTDIR/LCAs_equalized.tsv.lz4" "$INTDIR/FAs_original.tsv.lz4" "$INTDIR/FAs_equalized.tsv.lz4" "$INTDIR/sequences.tsv.lz4" || return
 	log "Started the creation of the sequences table."
 	mkdir -p "$OUTPUT_DIR"
+	rm -f "olcas" "elcas" "ofas" "efas"
 	mkfifo "olcas" "elcas" "ofas" "efas"
-	$CMD_LZ4CAT "$INTDIR/LCAs_original.tsv.lz4"  | gawk '{ printf("%012d\t%s\n", $1, $2) }' > "olcas" &
-	$CMD_LZ4CAT "$INTDIR/LCAs_equalized.tsv.lz4" | gawk '{ printf("%012d\t%s\n", $1, $2) }' > "elcas" &
-	$CMD_LZ4CAT "$INTDIR/FAs_original.tsv.lz4"   | gawk '{ printf("%012d\t%s\n", $1, $2) }' > "ofas" &
-	$CMD_LZ4CAT "$INTDIR/FAs_equalized.tsv.lz4"  | gawk '{ printf("%012d\t%s\n", $1, $2) }' > "efas" &
-	$CMD_LZ4CAT "$INTDIR/sequences.tsv.lz4"      | gawk '{ printf("%012d\t%s\n", $1, $2) }' \
+	$CMD_LZ4CAT "$INTDIR/LCAs_original.tsv.lz4"  | $CMD_AWK '{ printf("%012d\t%s\n", $1, $2) }' > "olcas" &
+	$CMD_LZ4CAT "$INTDIR/LCAs_equalized.tsv.lz4" | $CMD_AWK '{ printf("%012d\t%s\n", $1, $2) }' > "elcas" &
+	$CMD_LZ4CAT "$INTDIR/FAs_original.tsv.lz4"   | $CMD_AWK '{ printf("%012d\t%s\n", $1, $2) }' > "ofas" &
+	$CMD_LZ4CAT "$INTDIR/FAs_equalized.tsv.lz4"  | $CMD_AWK '{ printf("%012d\t%s\n", $1, $2) }' > "efas" &
+	$CMD_LZ4CAT "$INTDIR/sequences.tsv.lz4"      | $CMD_AWK '{ printf("%012d\t%s\n", $1, $2) }' \
 		| join --nocheck-order -a1 -e '\N' -t '	' -o "1.1 1.2 2.2" - "olcas" \
 		| join --nocheck-order -a1 -e '\N' -t '	' -o "1.1 1.2 1.3 2.2" - "elcas" \
 		| join --nocheck-order -a1 -e '\N' -t '	' -o '1.1 1.2 1.3 1.4 2.2' - "ofas" \
@@ -688,7 +703,7 @@ fetch_ec_numbers() {
 	mkdir -p "$OUTPUT_DIR"
 	{
 		curl -s "$EC_CLASS_URL" | grep '^[1-9]' | sed 's/\. *\([-0-9]\)/.\1/g' | sed 's/  */\t/' | sed 's/\.*$//'
-		curl -s "$EC_NUMBER_URL" | grep -E '^ID|^DE' | gawk '
+		curl -s "$EC_NUMBER_URL" | grep -E '^ID|^DE' | $CMD_AWK '
 			BEGIN { FS="   "
 			        OFS="\t" }
 			/^ID/ { if(id != "") { print id, name }
@@ -704,7 +719,7 @@ fetch_ec_numbers() {
 fetch_go_terms() {
 	log "Started creating GO terms."
 	mkdir -p "$OUTPUT_DIR"
-	curl -Ls "$GO_TERM_URL" | gawk '
+	curl -Ls "$GO_TERM_URL" | $CMD_AWK '
 		BEGIN { OFS = "	"; id = 1 }
 		/^\[.*\]$/ { # start of a record
 			type = $0
