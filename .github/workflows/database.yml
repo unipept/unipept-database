@@ -3,7 +3,7 @@ name: Database
 on:
   push:
     branches:
-      - "feature/generate-tsv-action"
+      - "master"
   workflow_dispatch:
   schedule:
     # * is a special character in YAML so you have to quote this string
@@ -37,9 +37,6 @@ jobs:
       - name: Generate tsv.gz files
         shell: bash
         run: sudo ./scripts/build_database.sh -i "index" -d "unipept-temp" -m "256M" "${{ matrix.type }}" "swissprot" "https://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/complete/uniprot_sprot.xml.gz" "output"
-      - name: Rename the tsv.gz files according to the database type used
-        shell: bash
-        run: cd output && for file in *.tsv.gz; do mv "$file" "${file%.tsv.gz}.${{ matrix.type }}.tsv.gz"; done
       - name: Zip all tsv.gz files
         shell: bash
         run: zip -r output/${{ matrix.type }}.zip output/*.tsv.gz
