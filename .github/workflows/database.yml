@@ -39,7 +39,7 @@ jobs:
         run: sudo ./scripts/build_database.sh -i "index" -d "unipept-temp" -m "256M" "${{ matrix.type }}" "swissprot" "https://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/complete/uniprot_sprot.xml.gz" "output"
       - name: Zip all tsv.gz files
         shell: bash
-        run: zip -r output/${{ matrix.type }}.zip output/*.tsv.gz
+        run: zip -r "${{ matrix.type }}.zip" "output/"
       - name: Create Release
         id: create_release
         uses: actions/create-release@v1
@@ -57,6 +57,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: output/${{ matrix.type }}.zip
+          asset_path: "${{ matrix.type }}.zip"
           asset_name: ${{ matrix.type }}-${{ steps.date.outputs.date }}.zip
           asset_content_type: application/zip
