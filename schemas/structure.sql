@@ -139,6 +139,68 @@ COLLATE = ascii_general_ci;
 
 
 -- -----------------------------------------------------
+-- Table `unipept`.`sequences`
+-- -----------------------------------------------------
+CREATE  TABLE IF NOT EXISTS `unipept`.`sequences` (
+  `id` INT UNSIGNED NOT NULL AUTO_INCREMENT ,
+  `sequence` VARCHAR(50) NOT NULL ,
+  `lca` MEDIUMINT UNSIGNED NULL ,
+  `lca_il` MEDIUMINT UNSIGNED NULL ,
+  `fa` BLOB NULL ,
+  `fa_il` BLOB NULL ,
+  PRIMARY KEY (`id`) ,
+  UNIQUE INDEX `uidx_sequence` (`sequence` ASC) ,
+  INDEX `fk_sequences_taxons` (`lca` ASC) ,
+  INDEX `fk_sequences_taxons_2` (`lca_il` ASC) ,
+  CONSTRAINT `fk_sequences_taxons`
+    FOREIGN KEY (`lca` )
+    REFERENCES `unipept`.`taxons` (`id` )
+    ON DELETE NO ACTION
+    ON UPDATE NO ACTION,
+  CONSTRAINT `fk_sequences_taxons_2`
+    FOREIGN KEY (`lca_il` )
+    REFERENCES `unipept`.`taxons` (`id` )
+    ON DELETE NO ACTION
+    ON UPDATE NO ACTION)
+ENGINE = InnoDB
+DEFAULT CHARACTER SET = ascii
+ROW_FORMAT=COMPRESSED KEY_BLOCK_SIZE=16
+COLLATE = ascii_general_ci;
+
+
+-- -----------------------------------------------------
+-- Table `unipept`.`peptides`
+-- -----------------------------------------------------
+CREATE  TABLE IF NOT EXISTS `unipept`.`peptides` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT ,
+  `sequence_id` INT UNSIGNED NOT NULL ,
+  `original_sequence_id` INT UNSIGNED NOT NULL ,
+  `uniprot_entry_id` INT UNSIGNED NOT NULL ,
+  PRIMARY KEY (`id`) ,
+  INDEX `fk_peptides_sequences` (`sequence_id` ASC) ,
+  INDEX `fk_peptides_uniprot_entries` (`uniprot_entry_id` ASC) ,
+  INDEX `fk_peptides_original_sequences` (`original_sequence_id` ASC) ,
+  CONSTRAINT `fk_peptides_sequences`
+    FOREIGN KEY (`sequence_id` )
+    REFERENCES `unipept`.`sequences` (`id` )
+    ON DELETE NO ACTION
+    ON UPDATE NO ACTION,
+  CONSTRAINT `fk_peptides_uniprot_entries`
+    FOREIGN KEY (`uniprot_entry_id` )
+    REFERENCES `unipept`.`uniprot_entries` (`id` )
+    ON DELETE NO ACTION
+    ON UPDATE NO ACTION,
+  CONSTRAINT `fk_peptides_original_sequences`
+    FOREIGN KEY (`original_sequence_id` )
+    REFERENCES `unipept`.`sequences` (`id` )
+    ON DELETE NO ACTION
+    ON UPDATE NO ACTION)
+ENGINE = InnoDB
+DEFAULT CHARACTER SET = ascii
+COLLATE = ascii_general_ci;
+
+
+-- -----------------------------------------------------
 -- Table `unipept`.`datasets`
 -- -----------------------------------------------------
 CREATE  TABLE IF NOT EXISTS `unipept`.`datasets` (

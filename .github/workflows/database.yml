@@ -14,11 +14,9 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        branch: ['database', 'suffix-array']
+        type: ['database', 'suffix-array']
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ matrix.branch }}
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         id: cache
@@ -38,13 +36,13 @@ jobs:
         run: sudo mkdir -p "index" "unipept-temp"
       - name: Generate tsv.gz files
         shell: bash
-        run: sudo ./scripts/build_database.sh -i "index" -d "unipept-temp" -m "128M" database "swissprot" "https://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/complete/uniprot_sprot.xml.gz" "output"
-      - name: Rename the tsv.gz files according to the branch used
+        run: sudo ./scripts/build_database.sh -i "index" -d "unipept-temp" -m "256M" "${{ matrix.type }}" "swissprot" "https://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/complete/uniprot_sprot.xml.gz" "output"
+      - name: Rename the tsv.gz files according to the database type used
         shell: bash
-        run: cd output && for file in *.tsv.gz; do mv "$file" "${file%.tsv.gz}.${{ matrix.branch }}.tsv.gz"; done
+        run: cd output && for file in *.tsv.gz; do mv "$file" "${file%.tsv.gz}.${{ matrix.type }}.tsv.gz"; done
       - name: Zip all tsv.gz files
         shell: bash
-        run: zip -r output/${{ matrix.branch }}.zip output/*.tsv.gz
+        run: zip -r output/${{ matrix.type }}.zip output/*.tsv.gz
       - name: Create Release
         id: create_release
         uses: actions/create-release@v1
@@ -62,6 +60,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: output/${{ matrix.branch }}.zip
-          asset_name: ${{ matrix.branch }}-${{ steps.date.outputs.date }}.zip
+          asset_path: output/${{ matrix.type }}.zip
+          asset_name: ${{ matrix.type }}-${{ steps.date.outputs.date }}.zip
           asset_content_type: application/zip

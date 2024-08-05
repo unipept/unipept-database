@@ -578,11 +578,11 @@ create_most_tables() {
 		--go "$(lz "$OUTPUT_DIR/go_cross_references.tsv.lz4")" \
 		--interpro "$(lz "$OUTPUT_DIR/interpro_cross_references.tsv.lz4")"
 
-#  log "Started sorting peptides table"
+  log "Started sorting peptides table"
 
-#   $CMD_LZ4CAT "$INTDIR/peptides-out.tsv.lz4" \
-#     | LC_ALL=C $CMD_SORT -k2 \
-#     | $CMD_LZ4 > "$INTDIR/peptides-equalized.tsv.lz4"
+  $CMD_LZ4CAT "$INTDIR/peptides-out.tsv.lz4" \
+   | LC_ALL=C $CMD_SORT -k2 \
+   | $CMD_LZ4 > "$INTDIR/peptides-equalized.tsv.lz4"
 
   log "Removing peptides-out.tsv.lz4"
   rm "$INTDIR/peptides-out.tsv.lz4"
@@ -880,7 +880,7 @@ tryptic-index)
 	fi
 	create_tryptic_index
 	;;
-suffix-array-index)
+suffix-array)
 	create_taxon_tables
 	download_and_convert_all_sources
 	create_tables_and_filter
