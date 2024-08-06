@@ -560,7 +560,10 @@ filter_sources_by_taxa() {
   done
 }
 
+# First argument indicates whe
 create_most_tables() {
+  skip_sort="$1"
+
 	have "$OUTPUT_DIR/taxons.tsv.lz4" || return
 	log "Started calculation of most tables."
 
@@ -578,11 +581,13 @@ create_most_tables() {
 		--go "$(lz "$OUTPUT_DIR/go_cross_references.tsv.lz4")" \
 		--interpro "$(lz "$OUTPUT_DIR/interpro_cross_references.tsv.lz4")"
 
-  log "Started sorting peptides table"
+  if [[ -n "$skip_sort" ]]; then
+    log "Started sorting peptides table"
 
-  $CMD_LZ4CAT "$INTDIR/peptides-out.tsv.lz4" \
-   | LC_ALL=C $CMD_SORT -k2 \
-   | $CMD_LZ4 > "$INTDIR/peptides-equalized.tsv.lz4"
+    $CMD_LZ4CAT "$INTDIR/peptides-out.tsv.lz4" \
+    | LC_ALL=C $CMD_SORT -k2 \
+    | $CMD_LZ4 > "$INTDIR/peptides-equalized.tsv.lz4"
+  fi
 
   log "Removing peptides-out.tsv.lz4"
   rm "$INTDIR/peptides-out.tsv.lz4"
@@ -590,7 +595,9 @@ create_most_tables() {
 }
 
 create_tables_and_filter() {
-  filter_sources_by_taxa | create_most_tables
+  skip_sort="$1"
+
+  filter_sources_by_taxa | create_most_tables "$skip_sort"
 }
 
 
@@ -883,7 +890,7 @@ tryptic-index)
 suffix-array)
 	create_taxon_tables
 	download_and_convert_all_sources
-	create_tables_and_filter
+	create_tables_and_filter "skip sort"
 	fetch_ec_numbers
 	fetch_go_terms
 	fetch_interpro_entries
