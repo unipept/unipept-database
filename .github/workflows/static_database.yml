@@ -49,13 +49,13 @@ jobs:
           sqlite3 output.db < workflows/static_database/init_virtual_tables.sql
 
           # Compress the database before uploading it to a Github release
-          zip output.zip output.db
+          zip unipept-static-db-${{ env.date }}.zip output.db
       - name: Upload or Update Release
         id: upload_or_update_release
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            ./output.zip
+            ./unipept-static-db-${{ env.date }}.zip
             ./taxdmp.zip
           tag_name: database-${{ env.date }}
           name: Static database ${{ env.date }}
