@@ -1,9 +1,6 @@
 name: Database
 
 on:
-  push:
-    branches:
-      - "master"
   workflow_dispatch:
   schedule:
     # * is a special character in YAML so you have to quote this string

@@ -21,7 +21,7 @@ jobs:
       - run: ./scripts/build_binaries.sh
       - name: Get current date
         id: date
-        run: echo "::set-output name=date::$(date +'%Y-%m-%d')"
+        run: echo "date=$(date +'%Y-%m-%d')" >> $GITHUB_ENV
       - name: Install required utilities
         run: |
           sudo apt-get update
@@ -50,39 +50,17 @@ jobs:
 
           # Compress the database before uploading it to a Github release
           zip output.zip output.db
-      - name: Create new tag
-        uses: rickstaa/action-create-tag@v1
-        id: "tag_create"
+      - name: Upload or Update Release
+        id: upload_or_update_release
+        uses: softprops/action-gh-release@v1
         with:
-          tag: database-${{ steps.date.outputs.date }}
-          message: "Static information database built on ${{ steps.date.outputs.date }}"
-      - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: database-${{ steps.date.outputs.date }}
-          release_name: Static database ${{ steps.date.outputs.date }}
+          files: |
+            ./output.zip
+            ./taxdmp.zip
+          tag_name: database-${{ env.date }}
+          name: Static database ${{ env.date }}
+          commitish: ${{ github.sha }}
           draft: false
           prerelease: false
-      - name: Upload Static Database Release Asset
-        id: upload-database-release-asset
-        uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./output.zip
-          asset_name: unipept-static-db-${{ steps.date.outputs.date }}.zip
-          asset_content_type: application/zip
-      - name: Upload NCBI Taxdmp Release Asset
-        id: upload-taxdmp-release-asset
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./taxdmp.zip
-          asset_name: ncbi-taxdmp.zip
-          asset_content_type: application/zip
