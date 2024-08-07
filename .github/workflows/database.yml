@@ -27,7 +27,7 @@ jobs:
       - run: ./scripts/build_binaries.sh
       - name: Get current date
         id: date
-        run: echo "::set-output name=date::$(date +'%Y-%m-%d')"
+        run: echo "date=$(date +'%Y-%m-%d')" >> $GITHUB_ENV
       - name: Install required utilities
         run: |
           sudo apt-get update
@@ -40,23 +40,15 @@ jobs:
       - name: Zip all tsv.gz files
         shell: bash
         run: zip -r "${{ matrix.type }}.zip" "output/"
-      - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Upload or Update Release
+        id: upload_or_update_release
+        uses: softprops/action-gh-release@v1
         with:
-          tag_name: database-${{ steps.date.outputs.date }}
-          release_name: Database ${{ steps.date.outputs.date }}
+          files: ${{ matrix.type }}.zip
+          tag_name: database-${{ env.date }}
+          name: Database ${{ env.date }}
+          commitish: ${{ github.sha }}
           draft: false
           prerelease: false
-      - name: Upload Static Database Release Asset
-        id: upload-database-release-asset
-        uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: "${{ matrix.type }}.zip"
-          asset_name: ${{ matrix.type }}-${{ steps.date.outputs.date }}.zip
-          asset_content_type: application/zip
