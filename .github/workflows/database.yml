@@ -36,7 +36,7 @@ jobs:
         run: sudo ./scripts/build_database.sh -i "index" -d "unipept-temp" -m "256M" "${{ matrix.type }}" "swissprot" "https://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/complete/uniprot_sprot.xml.gz" "output"
       - name: Zip all tsv.gz files
         shell: bash
-        run: cd output && zip "${{ matrix.type }}.zip" "*.tsv.lz4"
+        run: cd output && zip -r "../${{ matrix.type }}.zip" *
       - name: Upload or Update Release
         id: upload_or_update_release
         uses: softprops/action-gh-release@v1
