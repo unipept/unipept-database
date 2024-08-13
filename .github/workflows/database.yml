@@ -28,7 +28,7 @@ jobs:
       - name: Install required utilities
         run: |
           sudo apt-get update
-          sudo apt-get -y install git curl unzip gawk sqlite3 libsqlite3-dev pv nodejs wget uuid-runtime pigz lz4 parallel
+          sudo apt-get -y install git curl unzip gawk sqlite3 libsqlite3-dev pv nodejs wget uuid-runtime pigz lz4 parallel libxml2-utils
       - name: Prepare temporary directories
         run: sudo mkdir -p "index" "unipept-temp"
       - name: Generate tsv.gz files
@@ -36,7 +36,7 @@ jobs:
         run: sudo ./scripts/build_database.sh -i "index" -d "unipept-temp" -m "256M" "${{ matrix.type }}" "swissprot" "https://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/complete/uniprot_sprot.xml.gz" "output"
       - name: Zip all tsv.gz files
         shell: bash
-        run: cd output && zip -r "../${{ matrix.type }}.zip" *
+        run: cd output && zip -r "../${{ matrix.type }}.zip" * && zip -u "../${{ matrix.type }}.zip" ".version"ß
       - name: Upload or Update Release
         id: upload_or_update_release
         uses: softprops/action-gh-release@v1

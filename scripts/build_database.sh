@@ -74,9 +74,10 @@ Dependencies:
   * curl
   * pv
   * pigz
-  * uuidgen
+  * uuidgen (can be installed through uuid-runtime)
   * parallel
   * lz4
+  * xmllint (can be installed through libxml2-utils)
 END
 }
 
@@ -342,6 +343,34 @@ have() {
 }
 
 ### All the different database construction steps.
+
+extract_uniprot_version() {
+  # URL of the XML file
+  local xml_url="https://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/complete/RELEASE.metalink"
+
+  # Use curl to download the XML content
+  local xml_content
+  xml_content=$(curl -s "$xml_url")
+
+  # Use xmllint to parse and extract the version tag value
+  local version_value
+  version_value=$(echo "$xml_content" | xmllint --xpath 'string(//version)' -)
+
+  # Check if the version value is not empty
+  if [[ -z "$version_value" ]]; then
+    echo "Version tag not found or empty in the XML file. Writing unknown to version file."
+    version_value="0000_00"
+  fi
+
+  # Convert YYYY_MM to YYYY.MM
+  local formatted_version
+  formatted_version="${version_value/_/.}"
+
+  # Write the formatted version to the .version file
+  echo "$formatted_version" > "$OUTPUT_DIR/.version"
+  echo "Version $formatted_version written to .version file."
+}
+
 
 download_taxdmp() {
   # Check if our self-hosted version is available or not using the GitHub API
@@ -836,6 +865,7 @@ database)
 	fetch_interpro_entries
 	reportProgress "-1" "Computing database indices" 13
 	ENTRIES=$($CMD_LZ4CAT "$OUTPUT_DIR/uniprot_entries.tsv.lz4" | wc -l)
+	extract_uniprot_version
 	echo "Database contains: ##$ENTRIES##"
 	;;
 static-database)
@@ -887,5 +917,6 @@ suffix-array)
 	fetch_ec_numbers
 	fetch_go_terms
 	fetch_interpro_entries
+	extract_uniprot_version
 	;;
 esac
