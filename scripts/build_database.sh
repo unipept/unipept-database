@@ -354,7 +354,7 @@ extract_uniprot_version() {
 
   # Use xmllint to parse and extract the version tag value
   local version_value
-  version_value=$(echo "$xml_content" | xmllint --xpath 'string(//version)' -)
+  version_value=$(echo "$xml_content" | xmllint --xpath 'string(//*[local-name()="version"])' -)
 
   # Check if the version value is not empty
   if [[ -z "$version_value" ]]; then
