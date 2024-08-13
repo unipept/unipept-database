@@ -358,8 +358,7 @@ extract_uniprot_version() {
 
   # Check if the version value is not empty
   if [[ -z "$version_value" ]]; then
-    echo "Version tag not found or empty in the XML file. Exiting"
-    exit 1
+    errorAndExit "No valid version tag found for UniProt."
   fi
 
   # Convert YYYY_MM to YYYY.MM
