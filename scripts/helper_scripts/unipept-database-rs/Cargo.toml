@@ -11,7 +11,7 @@ homepage = "https://unipept.ugent.be/"
 license = "MIT"
 
 [dependencies]
-anyhow = "1.0.75"
+anyhow = "1.0.89"
 bit-vec = "0.6.3"
 chrono = "0.4.31"
 clap = { version = "4.4.6", features = ["derive"] }
