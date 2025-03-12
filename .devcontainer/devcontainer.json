@@ -13,7 +13,7 @@
   // "forwardPorts": [],
 
   // Use 'postCreateCommand' to run commands after the container is created.
-  "postCreateCommand": "apt update && apt -y install curl pv pigz uuid-runtime parallel lz4 gawk",
+  "postCreateCommand": "apt update && apt -y install curl pv pigz uuid-runtime parallel lz4 gawk libxml2-utils",
 
   // Configure tool-specific properties.
   // "customizations": {},

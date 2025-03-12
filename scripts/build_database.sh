@@ -278,6 +278,7 @@ EC_CLASS_URL="https://ftp.expasy.org/databases/enzyme/enzclass.txt"
 EC_NUMBER_URL="https://ftp.expasy.org/databases/enzyme/enzyme.dat"
 GO_TERM_URL="http://geneontology.org/ontology/go-basic.obo"
 INTERPRO_URL="http://ftp.ebi.ac.uk/pub/databases/interpro/current_release/entry.list"
+REFERENCE_PROTEOME_URL="https://rest.uniprot.org/proteomes/stream?fields=upid,organism_id,protein_count&format=tsv&query=(*)+AND+(proteome_type:1)"
 
 ### Utility functions required for the database construction process.
 
@@ -374,7 +375,8 @@ extract_uniprot_version() {
 download_taxdmp() {
   # Check if our self-hosted version is available or not using the GitHub API
   LATEST_RELEASE_URL="https://api.github.com/repos/unipept/unipept-database/releases/latest"
-  TAXDMP_RELEASE_ASSET_RE="unipept/unipept-database/releases/download/[^/]+/ncbi-taxdmp.zip"
+  TAXDMP_RELEASE_ASSET_RE="unipept/unipept-database/releases/download/[^/]+/taxdmp.zip"
+
   # Temporary disable the pipefail check (cause egrep can exit with code 1 if nothing is found).
   set +eo pipefail
   SELF_HOSTED_URL=$(curl -s "$LATEST_RELEASE_URL" | egrep -o "$TAXDMP_RELEASE_ASSET_RE")
@@ -783,6 +785,13 @@ fetch_interpro_entries() {
 	log "Finished creating InterPro Entries."
 }
 
+fetch_reference_proteomes() {
+  log "Started creating UniProt Reference Proteomes."
+  mkdir -p "$OUTPUT_DIR"
+  curl -s "$REFERENCE_PROTEOME_URL" | tail -n +2 | cat -n | sed 's/^ *//' | $CMD_LZ4 - > "$OUTPUT_DIR/reference_proteomes.tsv.lz4"
+  log "Finished creating UniProt Reference Proteomes."
+}
+
 #dot: uniprot_entries -> create_kmer_index
 #dot: taxons -> create_kmer_index
 #dot: create_kmer_index [shape=box,color="#4e79a7"]
@@ -916,6 +925,7 @@ suffix-array)
 	fetch_ec_numbers
 	fetch_go_terms
 	fetch_interpro_entries
+	fetch_reference_proteomes
 	extract_uniprot_version
 	;;
 esac

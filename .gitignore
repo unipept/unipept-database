@@ -19,3 +19,6 @@ scripts/helper_scripts/parser/output
 scripts/helper_scripts/parser/src/META-INF
 .idea/
 *.iml
+index/
+output/
+temp/
