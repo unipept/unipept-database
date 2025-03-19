@@ -4,12 +4,11 @@ use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 
+use crate::taxons_uniprots_tables::models::{Rank};
 use crate::taxons_uniprots_tables::utils::now_str;
 use crate::utils::files::{open_read, open_sin};
 
-const GENUS: u8 = 18;
-const RANKS: u8 = 27;
-const SPECIES: u8 = 22;
+const RANKS: usize = 29;
 const NULL_STRING: &str = "\\N";
 const SEPARATOR: &str = "\t";
 
@@ -28,7 +27,7 @@ impl Taxonomy {
             let line = line.with_context(|| {
                 format!("Error reading line from input file {}", infile.display())
             })?;
-            let mut elements = line.splitn(28, SEPARATOR).map(parse_int);
+            let mut elements = line.splitn(RANKS, SEPARATOR).map(parse_int);
             let key = elements
                 .next()
                 .context("Unable to access key at first index of line")??;
@@ -92,6 +91,8 @@ impl Taxonomy {
 
     fn calculate_lca(&self, taxa: &[i32]) -> i32 {
         let mut lca = 1;
+        let genus_rank_idx = Rank::Genus.index();
+        let species_rank_idx = Rank::Species.index();
 
         let lineages: Vec<&Vec<i32>> = taxa
             .iter()
@@ -107,7 +108,7 @@ impl Taxonomy {
                 .iter()
                 .map(|&x| x[final_rank as usize])
                 .filter(|&x| {
-                    if final_rank == GENUS || final_rank == SPECIES {
+                    if final_rank == genus_rank_idx || final_rank == species_rank_idx {
                         x > 0
                     } else {
                         x >= 0
