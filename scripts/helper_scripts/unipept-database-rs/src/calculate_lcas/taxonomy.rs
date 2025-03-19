@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 
-use crate::taxons_uniprots_tables::models::{Rank};
+use crate::taxons_uniprots_tables::models::Rank;
 use crate::taxons_uniprots_tables::utils::now_str;
 use crate::utils::files::{open_read, open_sin};
 
