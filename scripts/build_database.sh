@@ -382,13 +382,13 @@ download_taxdmp() {
   SELF_HOSTED_URL=$(curl -s "$LATEST_RELEASE_URL" | egrep -o "$TAXDMP_RELEASE_ASSET_RE")
   set -eo pipefail
 
-  if [ "$BUILD_TYPE" != "static-database" ] && [ "$SELF_HOSTED_URL" ]
-  then
-    TAXON_URL="https://github.com/$SELF_HOSTED_URL"
-  else
-    log "Using fallback taxon URL"
-    TAXON_URL="$TAXON_FALLBACK_URL"
-  fi
+#  if [ "$BUILD_TYPE" != "static-database" ] && [ "$SELF_HOSTED_URL" ]
+#  then
+#    TAXON_URL="https://github.com/$SELF_HOSTED_URL"
+#  else
+  log "Using fallback taxon URL"
+  TAXON_URL="$TAXON_FALLBACK_URL"
+#  fi
 
   curl -L --create-dirs --silent --output "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/taxdmp.zip" "$TAXON_URL"
 }
@@ -401,6 +401,7 @@ create_taxon_tables() {
 	unzip "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/taxdmp.zip" "names.dmp" "nodes.dmp" -d "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT"
 	rm "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/taxdmp.zip"
 
+  # Replace ranks not used by Unipept by "no rank". And replace the no_rank of viruses by domain.
 	sed -i'' -e 's/subcohort/no rank/' -e 's/cohort/no rank/' \
 		-e 's/subsection/no rank/' -e 's/section/no rank/' \
 		-e 's/series/no rank/' -e 's/biotype/no rank/' \
@@ -409,7 +410,7 @@ create_taxon_tables() {
 		-e 's/pathogroup/no rank/' -e 's/forma specialis/no rank/' \
 		-e 's/serotype/no rank/' -e 's/clade/no rank/' \
 		-e 's/isolate/no rank/' -e 's/infraclass/no rank/' \
-		-e 's/parvorder/no rank/' "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/nodes.dmp"
+		-e 's/parvorder/no rank/' -e 's/no_rank/domain/' "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/nodes.dmp"
 
 	mkdir -p "$OUTPUT_DIR"
 	$CURRENT_LOCATION/helper_scripts/taxons-lineages \
