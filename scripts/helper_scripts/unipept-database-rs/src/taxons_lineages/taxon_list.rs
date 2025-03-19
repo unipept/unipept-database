@@ -164,7 +164,7 @@ impl TaxonList {
     pub fn write_lineages(&self, pb: &PathBuf) -> Result<()> {
         let mut writer = open_write(pb).context("Unable to open lineage output file")?;
         let n_ranks = Rank::iter().count();
-
+        
         for (i, taxon) in self.entries.iter().enumerate() {
             if taxon.is_none() {
                 continue;

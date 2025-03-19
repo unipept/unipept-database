@@ -27,6 +27,7 @@ impl Taxonomy {
             let line = line.with_context(|| {
                 format!("Error reading line from input file {}", infile.display())
             })?;
+            
             let mut elements = line.splitn(RANKS, SEPARATOR).map(parse_int);
             let key = elements
                 .next()
@@ -93,14 +94,17 @@ impl Taxonomy {
         let mut lca = 1;
         let genus_rank_idx = Rank::Genus.index();
         let species_rank_idx = Rank::Species.index();
-
+        
         let lineages: Vec<&Vec<i32>> = taxa
             .iter()
             .map(|x| &self.taxonomy[*x as usize])
             .filter(|x| !x.is_empty())
             .collect();
-
-        for rank in 0..RANKS {
+        
+        // Iterate until RANKS - 1 since the root rank is not present in the lineage array
+        // (Each array should implicitly start with 1, but this is handled by the default lca value
+        // which is set to 1).
+        for rank in 0..(RANKS - 1) {
             let final_rank = rank;
             let mut value = -1;
 
