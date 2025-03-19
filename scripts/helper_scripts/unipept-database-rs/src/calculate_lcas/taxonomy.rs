@@ -92,8 +92,9 @@ impl Taxonomy {
 
     fn calculate_lca(&self, taxa: &[i32]) -> i32 {
         let mut lca = 1;
-        let genus_rank_idx = Rank::Genus.index();
-        let species_rank_idx = Rank::Species.index();
+        // -1 for each rank to account for the root that's not explicitly part of the lineage array
+        let genus_rank_idx = Rank::Genus.index() - 1;
+        let species_rank_idx = Rank::Species.index() - 1;
 
         let lineages: Vec<&Vec<i32>> = taxa
             .iter()
