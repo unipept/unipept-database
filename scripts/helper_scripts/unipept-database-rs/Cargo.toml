@@ -18,7 +18,7 @@ clap = { version = "4.4.6", features = ["derive"] }
 crossbeam-channel = "0.5.11"
 regex = "1.10.2"
 smartstring = { version = "1.0" }
-strum = "0.25.0"
+strum = "0.26.3"
 strum_macros = "0.25.3"
 uniprot = "0.7.0"
 lazy_static = "1.4.0"
