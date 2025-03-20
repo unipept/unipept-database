@@ -38,7 +38,8 @@ CREATE TABLE IF NOT EXISTS `taxons` (
 
 CREATE TABLE `lineages` (
   `taxon_id` INT NOT NULL ,
-  `superkingdom` INT NULL DEFAULT NULL ,
+  `domain` INT NULL DEFAULT NULL ,
+  `realm` INT NULL DEFAULT NULL ,
   `kingdom` INT NULL DEFAULT NULL ,
   `subkingdom` INT NULL DEFAULT NULL ,
   `superphylum` INT NULL DEFAULT NULL ,

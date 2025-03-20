@@ -32,7 +32,8 @@ impl TaxonList {
             let taxon_id = parse_id(node_row[0])?;
             let parent_id = parse_id(node_row[1])?;
 
-            let rank = Rank::from_str(node_row[2].trim()).context("Unable to parse Taxon Rank")?;
+            let rank = Rank::from_str(node_row[2].trim())
+                .context("Unable to parse Taxon Rank".to_owned() + node_row[2])?;
 
             let mut name = String::new();
             let mut clas = String::new();

@@ -4,12 +4,11 @@ use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 
+use crate::taxons_uniprots_tables::models::Rank;
 use crate::taxons_uniprots_tables::utils::now_str;
 use crate::utils::files::{open_read, open_sin};
 
-const GENUS: u8 = 18;
-const RANKS: u8 = 27;
-const SPECIES: u8 = 22;
+const RANKS: usize = 29;
 const NULL_STRING: &str = "\\N";
 const SEPARATOR: &str = "\t";
 
@@ -28,7 +27,8 @@ impl Taxonomy {
             let line = line.with_context(|| {
                 format!("Error reading line from input file {}", infile.display())
             })?;
-            let mut elements = line.splitn(28, SEPARATOR).map(parse_int);
+
+            let mut elements = line.splitn(RANKS, SEPARATOR).map(parse_int);
             let key = elements
                 .next()
                 .context("Unable to access key at first index of line")??;
@@ -92,6 +92,9 @@ impl Taxonomy {
 
     fn calculate_lca(&self, taxa: &[i32]) -> i32 {
         let mut lca = 1;
+        // -1 for each rank to account for the root that's not explicitly part of the lineage array
+        let genus_rank_idx = Rank::Genus.index() - 1;
+        let species_rank_idx = Rank::Species.index() - 1;
 
         let lineages: Vec<&Vec<i32>> = taxa
             .iter()
@@ -99,7 +102,10 @@ impl Taxonomy {
             .filter(|x| !x.is_empty())
             .collect();
 
-        for rank in 0..RANKS {
+        // Iterate until RANKS - 1 since the root rank is not present in the lineage array
+        // (Each array should implicitly start with 1, but this is handled by the default lca value
+        // which is set to 1).
+        for rank in 0..(RANKS - 1) {
             let final_rank = rank;
             let mut value = -1;
 
@@ -107,7 +113,7 @@ impl Taxonomy {
                 .iter()
                 .map(|&x| x[final_rank as usize])
                 .filter(|&x| {
-                    if final_rank == GENUS || final_rank == SPECIES {
+                    if final_rank == genus_rank_idx || final_rank == species_rank_idx {
                         x > 0
                     } else {
                         x >= 0

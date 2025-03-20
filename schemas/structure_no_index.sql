@@ -14,7 +14,7 @@ USE `unipept` ;
 CREATE  TABLE IF NOT EXISTS `unipept`.`taxons` (
   `id` MEDIUMINT UNSIGNED NOT NULL ,
   `name` VARCHAR(120) NOT NULL ,
-  `rank` ENUM('no rank', 'superkingdom', 'kingdom', 'subkingdom', 'superphylum', 'phylum', 'subphylum', 'superclass', 'class', 'subclass', 'superorder', 'order', 'suborder', 'infraorder', 'superfamily', 'family', 'subfamily', 'tribe', 'subtribe', 'genus', 'subgenus', 'species group', 'species subgroup', 'species', 'subspecies', 'strain', 'varietas', 'forma' ) NULL DEFAULT NULL ,
+  `rank` ENUM('no rank', 'domain', 'realm', 'kingdom', 'subkingdom', 'superphylum', 'phylum', 'subphylum', 'superclass', 'class', 'subclass', 'superorder', 'order', 'suborder', 'infraorder', 'superfamily', 'family', 'subfamily', 'tribe', 'subtribe', 'genus', 'subgenus', 'species group', 'species subgroup', 'species', 'subspecies', 'strain', 'varietas', 'forma' ) NULL DEFAULT NULL ,
   `parent_id` MEDIUMINT UNSIGNED NULL DEFAULT NULL ,
   `valid_taxon` BIT NOT NULL DEFAULT 1 ,
   PRIMARY KEY (`id`))
@@ -84,7 +84,8 @@ COLLATE = ascii_general_ci;
 -- -----------------------------------------------------
 CREATE  TABLE IF NOT EXISTS `unipept`.`lineages` (
   `taxon_id` MEDIUMINT UNSIGNED NOT NULL ,
-  `superkingdom` MEDIUMINT NULL DEFAULT NULL ,
+  `domain` MEDIUMINT NULL DEFAULT NULL ,
+  `realm` MEDIUMINT NULL DEFAULT NULL ,
   `kingdom` MEDIUMINT NULL DEFAULT NULL ,
   `subkingdom` MEDIUMINT NULL DEFAULT NULL ,
   `superphylum` MEDIUMINT NULL DEFAULT NULL ,
