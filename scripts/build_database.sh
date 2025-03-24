@@ -400,6 +400,8 @@ create_taxon_tables() {
   if [ "$BUILD_TYPE" == "database" ]
   then
     curl -L --create-dirs --silent --output "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/database.zip" "https://github.com/unipept/unipept-database/releases/download/database-2024-09-01/database.zip"
+    # Cleanup potential leftovers of previous runs
+    rm -f "$OUTPUT_DIR/taxons.tsv.lz4" "$OUTPUT_DIR/lineages.tsv.lz4"
     unzip "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/database.zip" "taxons.tsv.lz4" "lineages.tsv.lz4" -d "$OUTPUT_DIR"
   else
     download_taxdmp
