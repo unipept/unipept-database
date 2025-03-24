@@ -28,7 +28,9 @@ jobs:
           sudo apt-get -y install git curl unzip gawk sqlite3 libsqlite3-dev pv nodejs wget uuid-runtime pigz lz4 parallel libxml2-utils
       - name: Download Taxdmp file
         shell: bash
-        run: wget https://ftp.ncbi.nlm.nih.gov/pub/taxonomy/taxdmp.zip
+        run: |
+          wget https://ftp.ncbi.nlm.nih.gov/pub/taxonomy/taxdmp.zip
+          mv taxdmp.zip taxdmp_v2.zip
       - name: Generate tsv.gz files
         shell: bash
         run: ./scripts/build_database.sh static-database "swissprot,trembl" "https://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/complete/uniprot_sprot.xml.gz,https://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/complete/uniprot_trembl.xml.gz" "output"
@@ -55,6 +57,7 @@ jobs:
         run: |
           wget https://github.com/unipept/unipept-database/releases/download/database-2025-03-12/unipept-static-db-2025-03-12.zip
           mv unipept-static-db-2025-03-12.zip unipept-static-db-${{ env.date }}.zip
+          wget https://github.com/unipept/unipept-database/releases/download/database-2025-01-01/taxdmp.zip taxdmp.zip
       - name: Upload or Update Release
         id: upload_or_update_release
         uses: softprops/action-gh-release@v1
@@ -63,6 +66,7 @@ jobs:
             ./unipept-static-db-${{ env.date }}.zip
             ./unipept-static-db-v2-${{ env.date }}.zip
             ./taxdmp.zip
+            ./taxdmp_v2.zip
           tag_name: database-${{ env.date }}
           name: Static database ${{ env.date }}
           commitish: ${{ github.sha }}
