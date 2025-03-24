@@ -375,12 +375,7 @@ extract_uniprot_version() {
 download_taxdmp() {
   # Check if our self-hosted version is available or not using the GitHub API
   LATEST_RELEASE_URL="https://api.github.com/repos/unipept/unipept-database/releases/latest"
-  if [ "$BUILD_TYPE" == "database" ]
-  then
-    TAXDMP_RELEASE_ASSET_RE="unipept/unipept-database/releases/download/[^/]+/taxdmp.zip"
-  else
-    TAXDMP_RELEASE_ASSET_RE="unipept/unipept-database/releases/download/[^/]+/taxdmp_v2.zip"
-  fi
+  TAXDMP_RELEASE_ASSET_RE="unipept/unipept-database/releases/download/[^/]+/taxdmp_v2.zip"
 
   # Temporary disable the pipefail check (cause egrep can exit with code 1 if nothing is found).
   set +eo pipefail
