@@ -402,29 +402,35 @@ create_taxon_tables() {
 	log "Started creating the taxon tables."
 	reportProgress -1 "Creating taxon tables." 1
 
-	download_taxdmp
-	unzip "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/taxdmp.zip" "names.dmp" "nodes.dmp" -d "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT"
-	rm "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/taxdmp.zip"
+  if [ "$BUILD_TYPE" == "database" ]
+  then
+    curl -L --create-dirs --silent --output "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/database.zip" "https://github.com/unipept/unipept-database/releases/download/database-2024-09-01/database.zip"
+    unzip "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/database.zip" "taxons.tsv.lz4" "lineages.tsv.lz4" -d "$OUTPUT_DIR"
+  else
+    download_taxdmp
+    unzip "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/taxdmp.zip" "names.dmp" "nodes.dmp" -d "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT"
+    rm "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/taxdmp.zip"
 
-  # Replace ranks not used by Unipept by "no rank". And replace the no_rank of viruses by domain.
-	sed -i'' -e 's/subcohort/no rank/' -e 's/cohort/no rank/' \
-		-e 's/subsection/no rank/' -e 's/section/no rank/' \
-		-e 's/series/no rank/' -e 's/biotype/no rank/' \
-		-e 's/serogroup/no rank/' -e 's/morph/no rank/' \
-		-e 's/genotype/no rank/' -e 's/subvariety/no rank/' \
-		-e 's/pathogroup/no rank/' -e 's/forma specialis/no rank/' \
-		-e 's/serotype/no rank/' -e 's/clade/no rank/' \
-		-e 's/isolate/no rank/' -e 's/infraclass/no rank/' \
-		-e 's/parvorder/no rank/' -e 's/no_rank/domain/' "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/nodes.dmp"
+    # Replace ranks not used by Unipept by "no rank". And replace the no_rank of viruses by domain.
+    sed -i'' -e 's/subcohort/no rank/' -e 's/cohort/no rank/' \
+      -e 's/subsection/no rank/' -e 's/section/no rank/' \
+      -e 's/series/no rank/' -e 's/biotype/no rank/' \
+      -e 's/serogroup/no rank/' -e 's/morph/no rank/' \
+      -e 's/genotype/no rank/' -e 's/subvariety/no rank/' \
+      -e 's/pathogroup/no rank/' -e 's/forma specialis/no rank/' \
+      -e 's/serotype/no rank/' -e 's/clade/no rank/' \
+      -e 's/isolate/no rank/' -e 's/infraclass/no rank/' \
+      -e 's/parvorder/no rank/' -e 's/no_rank/domain/' "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/nodes.dmp"
 
-	mkdir -p "$OUTPUT_DIR"
-	$CURRENT_LOCATION/helper_scripts/taxons-lineages \
-		--names "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/names.dmp" --nodes "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/nodes.dmp" \
-		--taxons "$(lz "$OUTPUT_DIR/taxons.tsv.lz4")" \
-		--lineages "$(lz "$OUTPUT_DIR/lineages.tsv.lz4")"
+    mkdir -p "$OUTPUT_DIR"
+    $CURRENT_LOCATION/helper_scripts/taxons-lineages \
+      --names "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/names.dmp" --nodes "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/nodes.dmp" \
+      --taxons "$(lz "$OUTPUT_DIR/taxons.tsv.lz4")" \
+      --lineages "$(lz "$OUTPUT_DIR/lineages.tsv.lz4")"
 
-	rm "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/names.dmp" "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/nodes.dmp"
-	log "Finished creating the taxon tables."
+    rm "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/names.dmp" "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/nodes.dmp"
+    log "Finished creating the taxon tables."
+  fi
 }
 
 url_points_to_xml() {
