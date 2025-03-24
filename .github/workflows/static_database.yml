@@ -57,7 +57,7 @@ jobs:
         run: |
           wget https://github.com/unipept/unipept-database/releases/download/database-2025-03-12/unipept-static-db-2025-03-12.zip
           mv unipept-static-db-2025-03-12.zip unipept-static-db-${{ env.date }}.zip
-          wget https://github.com/unipept/unipept-database/releases/download/database-2025-01-01/taxdmp.zip taxdmp.zip
+          wget https://github.com/unipept/unipept-database/releases/download/database-2025-01-01/taxdmp.zip
       - name: Upload or Update Release
         id: upload_or_update_release
         uses: softprops/action-gh-release@v1
