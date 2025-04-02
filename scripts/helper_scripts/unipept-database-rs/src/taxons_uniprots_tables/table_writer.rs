@@ -195,7 +195,7 @@ impl TableWriter {
         } else if !self.wrong_ids.contains(&entry.taxon_id) {
             self.wrong_ids.insert(entry.taxon_id);
             eprintln!(
-                "[{}]\t{} added to the list of {} invalid taxonIds",
+                "[{}] {} added to the list of {} invalid taxonIds",
                 now_str(),
                 entry.taxon_id,
                 self.wrong_ids.len()
