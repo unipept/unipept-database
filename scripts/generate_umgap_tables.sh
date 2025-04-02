@@ -203,6 +203,8 @@ generate_uniprot_entries() {
 #   $2 - Temporary directory used to store intermediate files                  #
 #   $3 - Temporary constant to identify this script's files in the temp dir    #
 #   $4 - Output directory where the resulting files will be created            #
+#   $5 - Minimum length for tryptic peptides                                   #
+#   $6 - Maximum length for tryptic peptides                                   #
 #                                                                              #
 # Outputs:                                                                     #
 #   peptides-equalized.tsv.lz4 - Sorted and compressed peptide table           #
@@ -220,6 +222,8 @@ generate_proteins_and_sequences() {
   local temp_dir="$2"
   local temp_constant="$3"
   local output_dir="$4"
+  local peptide_min_length="$5"
+  local peptide_max_length="$6"
 
 	have "$output_dir/taxons.tsv.lz4" || return
 	log "Started generating the uniprot_entries file."
@@ -239,8 +243,8 @@ generate_proteins_and_sequences() {
   }
 
 	generate_stdout "$1" | "$CURRENT_LOCATION"/helper_scripts/taxons-uniprots-tables \
-		--peptide-min "$PEPTIDE_MIN_LENGTH" \
-		--peptide-max "$PEPTIDE_MAX_LENGTH" \
+		--peptide-min "$peptide_min_length" \
+		--peptide-max "$peptide_max_length" \
 		--taxons "$(luz "$output_dir/taxons.tsv.lz4")" \
 		--peptides "$(lz "$temp_dir/$temp_constant/peptides-out.tsv.lz4")" \
 		--uniprot-entries "$(lz "$output_dir/uniprot_entries.tsv.lz4")" \
@@ -666,9 +670,9 @@ create_tryptic_index() {
 ################################################################################
 
 ################################################################################
-# parse_arguments                                                              #
+# parse_kmer_arguments                                                         #
 #                                                                              #
-# Parses command-line arguments and validates them.                            #
+# Parses command-line arguments and validates them for k-mer mode.             #
 #                                                                              #
 # Globals:                                                                     #
 #   DB_TYPES     - Comma-separated list of database sources                    #
@@ -732,7 +736,95 @@ parse_kmer_arguments() {
   fi
 }
 
-# Check if all the dependencies are installed
+################################################################################
+# parse_tryptic_arguments                                                      #
+#                                                                              #
+# Parses command-line arguments and validates them for tryptic mode.           #
+#                                                                              #
+# Globals:                                                                     #
+#   DB_TYPES          - Comma-separated list of database sources               #
+#   OUTPUT_DIR        - Directory to save the output files                     #
+#   TEMP_DIR          - Temporary directory for intermediate files             #
+#   SORT_MEMORY       - Amount of memory to be used by the sort utility        #
+#   MIN_PEPTIDE_LENGTH - Minimum length of tryptic peptides                    #
+#   MAX_PEPTIDE_LENGTH - Maximum length of tryptic peptides                    #
+#                                                                              #
+# Arguments:                                                                   #
+#   Command-line arguments                                                     #
+#                                                                              #
+# Outputs:                                                                     #
+#   None                                                                       #
+#                                                                              #
+# Returns:                                                                     #
+#   None                                                                       #
+################################################################################
+parse_tryptic_arguments() {
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --database-sources)
+        DB_TYPES="$2"
+        # Check if the input is a valid list of database type identifiers
+        if ! [[ "$DB_TYPES" =~ ^(swissprot|trembl)(,(swissprot|trembl))*$ ]]; then
+          echo "Error: --database-sources must be a comma-separated list containing only 'swissprot', 'trembl', or both."
+          exit 1
+        fi
+        shift 2
+        ;;
+      --output-dir)
+        OUTPUT_DIR="$2"
+        shift 2
+        ;;
+      --temp-dir)
+        TEMP_DIR="$2"
+        shift 2
+        ;;
+      --sort-memory)
+        SORT_MEMORY="$2"
+        shift 2
+        ;;
+      --min-peptide-length)
+        if ! [[ "$2" =~ ^[0-9]+$ ]]; then
+          echo "Error: --min-peptide-length must be a positive integer."
+          exit 1
+        fi
+        PEPTIDE_MIN_LENGTH="$2"
+        shift 2
+        ;;
+      --max-peptide-length)
+        if ! [[ "$2" =~ ^[0-9]+$ ]]; then
+          echo "Error: --max-peptide-length must be a positive integer."
+          exit 1
+        fi
+        PEPTIDE_MAX_LENGTH="$2"
+        shift 2
+        ;;
+      *)
+        echo "Unknown argument: $1"
+        exit 1
+        ;;
+    esac
+  done
+
+  # Check if OUTPUT_DIR is specified
+  if [[ -z "$OUTPUT_DIR" ]]; then
+    echo "Error: --output-dir is required"
+    exit 1
+  fi
+}
+
+################################################################################
+# Main                                                                         #
+################################################################################
+
+if [[ $# -lt 1 ]]; then
+  echo "Error: Mode must be specified as the first argument ('kmer' or 'tryptic')."
+  exit 1
+fi
+
+MODE="$1"  # First argument specifies the mode
+shift      # Remove mode from arguments
+
+# Check if all the required dependencies are installed
 checkdep curl
 checkdep uuidgen
 checkdep lz4
@@ -740,23 +832,26 @@ checkdep pigz
 checkdep pv
 checkdep umgap "umgap crate (for umgap buildindex)"
 
-# For k-mer index
-parse_kmer_arguments "$@"
-create_taxon_tables "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT" "$OUTPUT_DIR"
-download_and_process_uniprot "$DB_TYPES" "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT"
-generate_uniprot_entries "$DB_TYPES" "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT" "$OUTPUT_DIR"
-create_kmer_index "$OUTPUT_DIR" "$KMER_LENGTH"
-
-# For tryptic index
-parse_kmer_arguments "$@"
-create_taxon_tables "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT" "$OUTPUT_DIR"
-download_and_process_uniprot "$DB_TYPES" "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT"
-generate_proteins_and_sequences "$DB_TYPES" "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT" "$OUTPUT_DIR"
-number_sequences "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT"
-substitute_aas "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT"
-calculate_equalized_lcas "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT" "$OUTPUT_DIR"
-calculate_original_lcas "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT" "$OUTPUT_DIR"
-calculate_equalized_fas "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT"
-calculate_original_fas "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT"
-create_sequence_table "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT" "$OUTPUT_DIR"
-create_tryptic_index "$OUTPUT_DIR"
+if [[ "$MODE" == "kmer" ]]; then
+  parse_kmer_arguments "$@"
+  create_taxon_tables "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT" "$OUTPUT_DIR"
+  download_and_process_uniprot "$DB_TYPES" "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT"
+  generate_uniprot_entries "$DB_TYPES" "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT" "$OUTPUT_DIR"
+  create_kmer_index "$OUTPUT_DIR" "$KMER_LENGTH"
+elif [[ "$MODE" == "tryptic" ]]; then
+  parse_tryptic_arguments "$@"
+  create_taxon_tables "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT" "$OUTPUT_DIR"
+  download_and_process_uniprot "$DB_TYPES" "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT"
+  generate_proteins_and_sequences "$DB_TYPES" "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT" "$OUTPUT_DIR" "$PEPTIDE_MIN_LENGTH" "$PEPTIDE_MAX_LENGTH"
+  number_sequences "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT"
+  substitute_aas "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT"
+  calculate_equalized_lcas "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT" "$OUTPUT_DIR"
+  calculate_original_lcas "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT" "$OUTPUT_DIR"
+  calculate_equalized_fas "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT"
+  calculate_original_fas "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT"
+  create_sequence_table "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT" "$OUTPUT_DIR"
+  create_tryptic_index "$OUTPUT_DIR"
+else
+  echo "Error: Invalid mode '$MODE'. Supported modes are 'kmer' and 'tryptic'."
+  exit 1
+fi
