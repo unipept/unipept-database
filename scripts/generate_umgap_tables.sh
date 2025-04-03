@@ -698,6 +698,7 @@ parse_kmer_arguments() {
         # Check if the input is a valid list of database type identifiers
         if ! [[ "$DB_TYPES" =~ ^(swissprot|trembl)(,(swissprot|trembl))*$ ]]; then
           echo "Error: --database-sources must be a comma-separated list containing only 'swissprot', 'trembl', or both."
+          print_help
           exit 1
         fi
         shift 2
@@ -717,13 +718,19 @@ parse_kmer_arguments() {
       --kmer-length)
         if ! [[ "$2" =~ ^[0-9]+$ ]]; then
           echo "Error: --kmer-length must be a positive integer."
+          print_help
           exit 1
         fi
         KMER_LENGTH="$2"
         shift 2
         ;;
+      --help)
+        print_help
+        exit 0
+        ;;
       *)
         echo "Unknown argument: $1"
+        print_help
         exit 1
         ;;
     esac
@@ -732,6 +739,7 @@ parse_kmer_arguments() {
   # Check if OUTPUT_DIR is specified
   if [[ -z "$OUTPUT_DIR" ]]; then
     echo "Error: --output-dir is required"
+    print_help
     exit 1
   fi
 }
@@ -766,6 +774,7 @@ parse_tryptic_arguments() {
         # Check if the input is a valid list of database type identifiers
         if ! [[ "$DB_TYPES" =~ ^(swissprot|trembl)(,(swissprot|trembl))*$ ]]; then
           echo "Error: --database-sources must be a comma-separated list containing only 'swissprot', 'trembl', or both."
+          print_help
           exit 1
         fi
         shift 2
@@ -785,6 +794,7 @@ parse_tryptic_arguments() {
       --min-peptide-length)
         if ! [[ "$2" =~ ^[0-9]+$ ]]; then
           echo "Error: --min-peptide-length must be a positive integer."
+          print_help
           exit 1
         fi
         PEPTIDE_MIN_LENGTH="$2"
@@ -793,13 +803,19 @@ parse_tryptic_arguments() {
       --max-peptide-length)
         if ! [[ "$2" =~ ^[0-9]+$ ]]; then
           echo "Error: --max-peptide-length must be a positive integer."
+          print_help
           exit 1
         fi
         PEPTIDE_MAX_LENGTH="$2"
         shift 2
         ;;
+      --help)
+        print_help
+        exit 0
+        ;;
       *)
         echo "Unknown argument: $1"
+        print_help
         exit 1
         ;;
     esac
@@ -808,8 +824,48 @@ parse_tryptic_arguments() {
   # Check if OUTPUT_DIR is specified
   if [[ -z "$OUTPUT_DIR" ]]; then
     echo "Error: --output-dir is required"
+    print_tryptic_help
     exit 1
   fi
+}
+
+
+################################################################################
+# print_help                                                                   #
+#                                                                              #
+# Prints the usage information, including details for all supported modes.     #
+#                                                                              #
+# Outputs:                                                                     #
+#   Prints the usage information to the console.                               #
+#                                                                              #
+# Returns:                                                                     #
+#   None                                                                       #
+################################################################################
+print_help() {
+  echo "Usage: $0 <mode> [OPTIONS]"
+  echo ""
+  echo "Modes:"
+  echo "  kmer    Creates a k-mer index based on UniProt entries."
+  echo "  tryptic Creates a tryptic peptide index based on sequence data."
+  echo ""
+  echo "Options (common):"
+  echo "  --output-dir        Directory to save the output files (required)."
+  echo "  --database-sources  Comma-separated list of database sources ('swissprot', 'trembl'), (optional, default: ('swissprot', 'trembl'))"
+  echo "  --temp-dir          Temporary directory for intermediate files (optional, default: '/tmp')"
+  echo "  --sort-memory       Amount of memory (e.g., '2G') for the sort utility (optional, default: '$SORT_MEMORY')"
+  echo "  --help              Prints this help message."
+  echo ""
+  echo "Options for 'kmer' mode:"
+  echo "  --kmer-length       Length of k-mers for the index (optional, default: $KMER_LENGTH). "
+  echo ""
+  echo "Options for 'tryptic' mode:"
+  echo "  --min-peptide-length Minimum length of tryptic peptides (optional, default: $PEPTIDE_MIN_LENGTH)"
+  echo "  --max-peptide-length Maximum length of tryptic peptides (optional, default: $PEPTIDE_MAX_LENGTH)."
+  echo ""
+  echo "Examples:"
+  echo "  $0 kmer --database-sources swissprot,trembl --output-dir /path/to/output --kmer-length 7"
+  echo "  $0 tryptic --database-sources swissprot --output-dir /path/to/output --min-peptide-length 6 --max-peptide-length 30"
+  echo ""
 }
 
 ################################################################################
@@ -818,6 +874,7 @@ parse_tryptic_arguments() {
 
 if [[ $# -lt 1 ]]; then
   echo "Error: Mode must be specified as the first argument ('kmer' or 'tryptic')."
+  print_help
   exit 1
 fi
 
