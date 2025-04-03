@@ -486,7 +486,7 @@ create_taxon_tables() {
     -e 's/pathogroup/no rank/' -e 's/forma specialis/no rank/' \
     -e 's/serotype/no rank/' -e 's/clade/no rank/' \
     -e 's/isolate/no rank/' -e 's/infraclass/no rank/' \
-    -e 's/acellular root/no rank/' \
+    -e 's/acellular root/no rank/' -e 's/cellular root/no rank/' \
     -e 's/parvorder/no rank/' -e 's/no_rank/domain/' "$temp_dir/$temp_constant/nodes.dmp"
 
   log "Parsing names.dmp and nodes.dmp files"
