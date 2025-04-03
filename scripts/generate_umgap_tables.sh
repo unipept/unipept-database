@@ -511,7 +511,7 @@ calculate_original_fas() {
   local temp_dir="$1"
   local temp_constant="$2"
 
-	have "$INTDIR/peptides_by_original.tsv.lz4" || return
+	have "$temp_dir/$temp_constant/peptides_by_original.tsv.lz4" || return
 	
 	log "Started the calculation of original FA's."
 	rm -f "peptides_orig"

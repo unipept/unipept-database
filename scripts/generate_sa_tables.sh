@@ -172,7 +172,6 @@ generate_uniprot_entries() {
 # This is the main section of the script where arguments and options are       #
 # processed and the generation of output tables is initiated.                  #
 ################################################################################
-
 ################################################################################
 # parse_arguments                                                              #
 #                                                                              #
@@ -195,11 +194,17 @@ generate_uniprot_entries() {
 parse_arguments() {
   while [[ $# -gt 0 ]]; do
     case "$1" in
+      --help)
+        print_help
+        exit 0
+        ;;
       --database-sources)
         DB_TYPES="$2"
         # Check if the input is a valid list of database type identifiers
         if ! [[ "$DB_TYPES" =~ ^(swissprot|trembl)(,(swissprot|trembl))*$ ]]; then
           echo "Error: --database-sources must be a comma-separated list containing only 'swissprot', 'trembl', or both."
+          echo ""
+          print_help
           exit 1
         fi
         shift 2
@@ -214,6 +219,8 @@ parse_arguments() {
         ;;
       *)
         echo "Unknown argument: $1"
+        echo ""
+        print_help
         exit 1
         ;;
     esac
@@ -222,8 +229,36 @@ parse_arguments() {
   # Check if OUTPUT_DIR is specified
   if [[ -z "$OUTPUT_DIR" ]]; then
     echo "Error: --output-dir is required"
+    echo ""
+    print_help
     exit 1
   fi
+}
+
+################################################################################
+# print_help                                                                   #
+#                                                                              #
+# Prints the usage information, including details for all supported options.   #
+#                                                                              #
+# Outputs:                                                                     #
+#   Prints the usage information to the console.                               #
+#                                                                              #
+# Returns:                                                                     #
+#   None                                                                       #
+################################################################################
+print_help() {
+  echo "Usage: $0 [OPTIONS]"
+  echo ""
+  echo "Options:"
+  echo "  --output-dir        Directory to save the output files (required)."
+  echo "  --database-sources  Comma-separated list of database sources ('swissprot', 'trembl'), (optional, default: 'swissprot,trembl')."
+  echo "  --temp-dir          Temporary directory for intermediate files (optional, default: '/tmp')."
+  echo "  --help              Prints this help message."
+  echo ""
+  echo "Examples:"
+  echo "  $0 --database-sources swissprot,trembl --output-dir /path/to/output"
+  echo "  $0 --database-sources swissprot --output-dir /path/to/output --temp-dir /custom/tmp"
+  echo ""
 }
 
 # Now, start running the actual script and all of it's functions
