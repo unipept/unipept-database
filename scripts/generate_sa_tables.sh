@@ -136,8 +136,8 @@ generate_uniprot_entries() {
   local temp_constant="$3"
   local output_dir="$4"
 
-	have "$output_dir/taxons.tsv.lz4" || return
-	log "Started generating the uniprot_entries file."
+  have "$output_dir/taxons.tsv.lz4" || return
+  log "Started generating the uniprot_entries file."
 
   generate_stdout() {
     # Print the header
@@ -153,15 +153,15 @@ generate_uniprot_entries() {
     done
   }
 
-	generate_stdout "$1" | "$CURRENT_LOCATION"/helper_scripts/taxons-uniprots-tables \
-		--peptide-min "5" \
-		--peptide-max "50" \
-		--taxons "$(luz "$output_dir/taxons.tsv.lz4")" \
-		--peptides "/dev/null" \
-		--uniprot-entries "$(lz "$output_dir/uniprot_entries.tsv.lz4")" \
-		--ec "/dev/null" \
-		--go "/dev/null" \
-		--interpro "/dev/null"
+  generate_stdout "$1" | "$CURRENT_LOCATION"/helper_scripts/taxons-uniprots-tables \
+    --peptide-min "5" \
+    --peptide-max "50" \
+    --taxons "$(luz "$output_dir/taxons.tsv.lz4")" \
+    --peptides "/dev/null" \
+    --uniprot-entries "$(lz "$output_dir/uniprot_entries.tsv.lz4")" \
+    --ec "/dev/null" \
+    --go "/dev/null" \
+    --interpro "/dev/null"
 
   log "Finished generating the uniprot_entries file."
 }
