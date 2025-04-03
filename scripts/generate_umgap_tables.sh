@@ -572,7 +572,6 @@ create_sequence_table() {
 		| join --nocheck-order -a1 -e '\N' -t '	' -o '1.1 1.2 1.3 1.4 2.2' - "ofas" \
 		| join --nocheck-order -a1 -e '\N' -t '	' -o '1.1 1.2 1.3 1.4 1.5 2.2' - "efas" \
 		| sed 's/^0*//' \
-		| awk -F'\t' 'BEGIN {OFS="\t"} {gsub(/Z/, "K", $2); print}' \
 		| $CMD_LZ4 - > "$output_dir/sequences.tsv.lz4"
 	rm "olcas" "elcas" "ofas" "efas"
 	log "Finished the creation of the sequences table."
