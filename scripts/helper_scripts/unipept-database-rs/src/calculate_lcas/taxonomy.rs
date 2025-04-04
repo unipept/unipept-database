@@ -62,7 +62,7 @@ impl Taxonomy {
 
         for (i, line) in reader.lines().enumerate() {
             if i % 10000000 == 0 && i != 0 {
-                eprintln!("{}: {}", now_str(), i);
+                eprintln!("[{}] {}", now_str(), i);
             }
 
             let line = line.context("error reading line from stdin")?;

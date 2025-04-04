@@ -5,7 +5,7 @@ use std::io::{BufRead, BufWriter, Write};
 use std::path::PathBuf;
 
 use clap::Parser;
-
+use unipept_database::taxons_uniprots_tables::utils::now_str;
 use unipept_database::utils::files::{open_read, open_write};
 
 fn main() -> Result<()> {
@@ -86,7 +86,7 @@ fn main() -> Result<()> {
         done += 1;
 
         if done % 1000000 == 0 {
-            println!("FA {} rows", done);
+            eprintln!("[{}] FA {} rows", now_str(), done);
         }
     }
 

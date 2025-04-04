@@ -31,27 +31,6 @@ jobs:
         run: |
           wget https://ftp.ncbi.nlm.nih.gov/pub/taxonomy/taxdmp.zip
           mv taxdmp.zip taxdmp_v2.zip
-      - name: Generate tsv.gz files
-        shell: bash
-        run: ./scripts/build_database.sh static-database "swissprot,trembl" "https://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/complete/uniprot_sprot.xml.gz,https://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/complete/uniprot_trembl.xml.gz" "output"
-      - name: Build SQLite database from generated files
-        shell: bash
-        run: |
-          # Initialize the database
-          sqlite3 output.db < workflows/static_database/structure.sql
-
-          # Read all generated data into this database
-          lz4cat output/ec_numbers.tsv.lz4 | sqlite3 -csv -separator '	' output.db '.import /dev/stdin ec_numbers'
-          lz4cat output/go_terms.tsv.lz4 | sqlite3 -csv -separator '	' output.db '.import /dev/stdin go_terms'
-          lz4cat output/interpro_entries.tsv.lz4 | sqlite3 -csv -separator '	' output.db '.import /dev/stdin interpro_entries'
-          lz4cat output/taxons.tsv.lz4 | sqlite3 -csv -separator '	' output.db '.import /dev/stdin taxons'
-          lz4cat output/lineages.tsv.lz4 | sqlite3 -csv -separator '	' output.db '.import /dev/stdin lineages'
-
-          # Create virtual tables
-          sqlite3 output.db < workflows/static_database/init_virtual_tables.sql
-
-          # Compress the database before uploading it to a Github release
-          zip unipept-static-db-v2-${{ env.date }}.zip output.db
       - name: Copy static database from previous release for desktop app
         shell: bash
         run: |
@@ -64,7 +43,6 @@ jobs:
         with:
           files: |
             ./unipept-static-db-${{ env.date }}.zip
-            ./unipept-static-db-v2-${{ env.date }}.zip
             ./taxdmp.zip
             ./taxdmp_v2.zip
           tag_name: database-${{ env.date }}
