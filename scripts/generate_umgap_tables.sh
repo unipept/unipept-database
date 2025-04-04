@@ -857,7 +857,7 @@ print_help() {
   echo ""
   echo "Options (common):"
   echo "  --output-dir        Directory to save the output files (required)."
-  echo "  --database-sources  Comma-separated list of database sources ('swissprot', 'trembl'), (optional, default: ('swissprot', 'trembl'))"
+  echo "  --database-sources  Comma-separated list of database sources ('swissprot', 'trembl'), (optional, default: 'swissprot,trembl')"
   echo "  --temp-dir          Temporary directory for intermediate files (optional, default: '/tmp')"
   echo "  --sort-memory       Amount of memory (e.g., '2G') for the sort utility (optional, default: '$SORT_MEMORY')"
   echo "  --help              Prints this help message."
