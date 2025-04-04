@@ -889,6 +889,7 @@ MODE="$1"  # First argument specifies the mode
 shift      # Remove mode from arguments
 
 # Check if all the required dependencies are installed
+checkdep cargo "Rust toolchain"
 checkdep curl
 checkdep uuidgen
 checkdep lz4
@@ -898,12 +899,14 @@ checkdep umgap "umgap crate (for umgap buildindex)"
 
 if [[ "$MODE" == "kmer" ]]; then
   parse_kmer_arguments "$@"
+  build_binaries
   create_taxon_tables "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT" "$OUTPUT_DIR"
   download_and_process_uniprot "$DB_TYPES" "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT"
   generate_uniprot_entries "$DB_TYPES" "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT" "$OUTPUT_DIR"
   create_kmer_index "$OUTPUT_DIR" "$KMER_LENGTH"
 elif [[ "$MODE" == "tryptic" ]]; then
   parse_tryptic_arguments "$@"
+  build_binaries
   create_taxon_tables "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT" "$OUTPUT_DIR"
   download_and_process_uniprot "$DB_TYPES" "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT"
   generate_proteins_and_sequences "$DB_TYPES" "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT" "$OUTPUT_DIR" "$PEPTIDE_MIN_LENGTH" "$PEPTIDE_MAX_LENGTH"

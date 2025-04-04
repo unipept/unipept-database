@@ -349,6 +349,36 @@ checkdep() {
 log() { echo "$(date +'[%s (%F %T)]')" "$@"; }
 
 ################################################################################
+# build_binaries                                                               #
+#                                                                              #
+# Builds the release binaries for the unipept-database-rs project and copies   #
+# the generated executable files to the /helper_scripts folder for further use.#
+# This function ensures that all the required binaries are available for the   #
+# database building process.                                                   #
+#                                                                              #
+# Globals:                                                                     #
+#   CURRENT_LOCATION - Directory where the script is currently running         #
+#                                                                              #
+# Arguments:                                                                   #
+#   None                                                                       #
+#                                                                              #
+# Outputs:                                                                     #
+#   Copies built binaries to the /helper_scripts folder                        #
+#                                                                              #
+# Returns:                                                                     #
+#   None                                                                       #
+################################################################################
+build_binaries() {
+  log "Started building Rust utilities"
+  # Build binaries and copy them to the /helper_scripts folder
+  cd "$CURRENT_LOCATION"/helper_scripts/unipept-database-rs
+  cargo build --release --quiet
+  cd - > /dev/null
+  find "$CURRENT_LOCATION"/helper_scripts/unipept-database-rs/target/release -maxdepth 1 -type f -executable -exec cp {} "$CURRENT_LOCATION"/helper_scripts/ \;
+  log "Finished building Rust utilities"
+}
+
+################################################################################
 # extract_uniprot_version                                                      #
 #                                                                              #
 # Fetches the version number of the current UniProtKB release from its         #

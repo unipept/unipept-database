@@ -268,6 +268,7 @@ print_help() {
 # Now, start running the actual script and all of it's functions
 
 # Check if all the dependencies are installed
+checkdep cargo "Rust toolchain"
 checkdep curl
 checkdep uuidgen
 checkdep pv
@@ -275,6 +276,7 @@ checkdep lz4
 checkdep pigz
 
 parse_arguments "$@"
+build_binaries
 create_taxon_tables "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT" "$OUTPUT_DIR"
 download_and_process_uniprot "$DB_TYPES" "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT"
 generate_uniprot_entries "$DB_TYPES" "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT" "$OUTPUT_DIR"
