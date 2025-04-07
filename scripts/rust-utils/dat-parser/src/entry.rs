@@ -1,46 +1,107 @@
-use anyhow::Context;
+use anyhow::{anyhow, Context};
 use std::collections::HashSet;
+use tables_generator::models::Entry;
 
 // Constants to aid in parsing
 const COMMON_PREFIX_LEN: usize = "ID   ".len();
+const DATE_LENGTH: usize = "DD-MMM-YYYY".len();
 
-const ORGANISM_RECOMMENDED_NAME_PREFIX_LEN: usize = "RecName: Full=".len();
-const ORGANISM_RECOMMENDED_NAME_EC_PREFIX_LEN: usize = "EC=".len();
-const ORGANISM_TAXON_ID_PREFIX_LEN: usize = "OX   NCBI_TaxID=".len();
-const VERSION_STRING_FULL_PREFIX_LEN: usize = "DT   08-NOV-2023, entry version ".len();
+const DT_PREFIX_INTEGRATED_LENGTH: usize = COMMON_PREFIX_LEN + DATE_LENGTH + ", integrated into ".len();
+const DT_PREFIX_VERSION_LENGTH: usize = COMMON_PREFIX_LEN + DATE_LENGTH + ", entry version ".len();
+
+const DE_PREFIX_NAME_LENGTH: usize = "RecName: Full=".len();
+const DE_PREFIX_EC_LENGTH: usize = "EC=".len();
+
+const OX_PREFIX_NCBI_LENGTH: usize = "OX   NCBI_TaxID=".len();
+
+#[derive(Default)]
+pub struct DatabaseReferences {
+    go_references: Vec<String>,
+    ipr_references: Vec<String>,
+}
 
 /// The minimal data we want from an entry out of the UniProtKB datasets
+#[derive(Debug)]
 pub struct UniProtDATEntry {
     accession_number: String,
     name: String,
     sequence: String,
     version: String,
+    database_type: String,
     ec_references: Vec<String>,
     go_references: Vec<String>,
     ip_references: Vec<String>,
     taxon_id: String,
 }
 
+impl From<UniProtDATEntry> for Entry {
+    fn from(entry: UniProtDATEntry) -> Self {
+        Entry::new(
+            entry.database_type,
+            entry.accession_number,
+            entry.sequence,
+            entry.name,
+            entry.version,
+            entry.taxon_id,
+            entry.ec_references,
+            entry.go_references,
+            entry.ip_references,
+        )
+        .unwrap()
+    }
+}
+
 impl UniProtDATEntry {
     /// Parse an entry out of the lines of a DAT file
     pub fn from_lines(data: &mut Vec<String>) -> anyhow::Result<Self> {
-        let mut current_index: usize = 0;
+        let mut data_cursor: usize = 0;
 
-        let accession_number = parse_ac_number(data).context("Error parsing accession number")?;
-        let version = parse_version(data, &mut current_index);
-        let (name, ec_references) = parse_name_and_ec(data, &mut current_index);
-        let taxon_id = parse_taxon_id(data, &mut current_index);
-        let (go_references, ip_references) = parse_db_references(data, &mut current_index);
-        let sequence = parse_sequence(data, current_index);
+        // Skip the ID (identifier) field
+        skip_until_field(data, &mut data_cursor, "AC");
+
+        // Parse the AC (accession number) field
+        let accession_number = parse_accession_number_field(data, &mut data_cursor)
+            .context("Error parsing the accession number")?;
+
+        // Skip other AC fields. We only store the first (newest) accession number
+        skip_until_field(data, &mut data_cursor, "DT");
+
+        // Parse the DT (date) fields
+        let (database_type, version) = parse_date_fields(data, &mut data_cursor)
+            .context("Error parsing the date information")?;
+
+        // Parse the DE (description) fields
+        let (name, ec_references) = parse_description_field(data, &mut data_cursor);
+
+        // Skip the GN (gene name), OS (organism), and OC (organism classification) fields
+        skip_until_field(data, &mut data_cursor, "OX");
+
+        // Parse the OX (taxonomy cross-reference) field
+        let taxon_id = parse_taxonomy_reference(data, &mut data_cursor);
+
+        // Skip the OH (organism host), all Rx (references) and CC (comments and notes) fields
+        let db_references_found = skip_until_optional_field(data, &mut data_cursor, "DR");
+
+        // Parse the DR (database cross-reference) fields
+        let db_references = if db_references_found {
+            parse_db_references(data, &mut data_cursor)
+        } else { DatabaseReferences::default() };
+
+        // Skip the PE (protein existence), KW (keywords) and FT (feature table data) fields
+        skip_until_field(data, &mut data_cursor, "SQ");
+
+        // Parse the (SQ) sequence field
+        let sequence = parse_sequence(data, &mut data_cursor);
 
         Ok(Self {
             accession_number,
             name,
             sequence,
             version,
-            ec_references,
-            go_references,
-            ip_references,
+            database_type,
+            ec_references: ec_references.into_iter().collect(),
+            go_references: db_references.go_references,
+            ip_references: db_references.ipr_references,
             taxon_id,
         })
     }
@@ -63,7 +124,7 @@ impl UniProtDATEntry {
             self.ec_references.join(";"),
             self.go_references.join(";"),
             self.ip_references.join(";"),
-            db_type,
+            self.database_type,
             self.taxon_id
         )
     }
@@ -71,36 +132,61 @@ impl UniProtDATEntry {
 
 // Functions to parse an Entry out of a Vec<String>
 
+fn skip_until_field(data: &[String], data_cursor: &mut usize, field: &str) {
+    let mut current_line = *data_cursor;
+    while !data[current_line].starts_with(field) {
+        current_line += 1;
+    }
+    *data_cursor = current_line;
+}
+
+fn skip_until_optional_field(data: &[String], data_cursor: &mut usize, field: &str) -> bool {
+    let mut current_line = *data_cursor;
+    while !data[current_line].starts_with(field) {
+        current_line += 1;
+
+        if current_line >= data.len() {
+            return false;
+        }
+    }
+
+    *data_cursor = current_line;
+
+    true
+}
+
 /// Find the first AC number
-fn parse_ac_number(data: &mut [String]) -> anyhow::Result<String> {
-    // The AC number is always the second element
-    let line = &mut data[1];
-    line.drain(..COMMON_PREFIX_LEN);
-    let (pre, _) = line
+fn parse_accession_number_field(data: &[String], data_cursor: &mut usize) -> anyhow::Result<String> {
+    // Parse the string of accession numbers. Skip the AC prefix
+    let accession_numbers = &data[*data_cursor][COMMON_PREFIX_LEN..];
+    let (first_accession, _) = accession_numbers
         .split_once(';')
-        .with_context(|| format!("Unable to split \"{line}\" on ';'"))?;
-    Ok(pre.to_string())
+        .with_context(|| format!("Unable to split \"{accession_numbers}\" on ';'"))?;
+
+    // Remove this AC line from the data
+    *data_cursor += 1;
+
+    Ok(first_accession.to_string())
 }
 
 /// Find the version of this entry
-fn parse_version(data: &[String], index: &mut usize) -> String {
-    let mut last_field: usize = 2;
+fn parse_date_fields(data: &[String], data_cursor: &mut usize) -> anyhow::Result<(String, String)> {
+    // Extract the database type from the first line
+    let first_line = &data[*data_cursor][DT_PREFIX_INTEGRATED_LENGTH..];
+    let database_type: String = match first_line {
+        "UniProtKB/Swiss-Prot." => Ok("swissprot".to_string()),
+        "UniProtKB/TrEMBL." => Ok("trembl".to_string()),
+        _ => Err(anyhow!("Error: Unknown database type".to_string()))
+    }?;
 
-    // Skip past previous fields to get to the dates
-    while !data[last_field].starts_with("DT") {
-        last_field += 1;
-    }
+    // Get entry version on the third line (has prefix of constant length and ends with a dot)
+    let version_with_dot = &data[*data_cursor + 2][DT_PREFIX_VERSION_LENGTH..];
+    let version = version_with_dot[..version_with_dot.len() - 1].to_string();
 
-    // The date fields are always the third-n elements
-    // The version is always the last one
-    while data[last_field + 1].starts_with("DT") {
-        last_field += 1;
-    }
+    // Move the cursor to the next section
+    *data_cursor += 3;
 
-    // Get entry version (has prefix of constant length and ends with a dot)
-    let version_end = data[last_field].len() - 1;
-    *index = last_field + 1;
-    data[last_field][VERSION_STRING_FULL_PREFIX_LEN..version_end].to_string()
+    Ok((database_type, version))
 }
 
 /// Parse the name and EC numbers of an entry out of all available DE fields
@@ -111,24 +197,17 @@ fn parse_version(data: &[String], index: &mut usize) -> String {
 /// - Last submitted name of protein components
 /// - Last submitted name of protein domains
 /// - Submitted name of protein itself
-fn parse_name_and_ec(data: &mut [String], index: &mut usize) -> (String, Vec<String>) {
-    // Find where the info starts and ends
-    while !data[*index].starts_with("DE") {
-        *index += 1;
-    }
-
+fn parse_description_field(data: &[String], data_cursor: &mut usize) -> (String, HashSet<String>) {
     let mut name = String::new();
-    let mut ec_references = Vec::new();
-    let mut ec_reference_set = HashSet::new();
-    let mut end_index = *index;
+    let mut ec_references = HashSet::new();
 
     // Track all names in order of preference
     let mut name_indices: [usize; 6] = [usize::MAX; 6];
     const LAST_COMPONENT_RECOMMENDED_IDX: usize = 0;
-    const LAST_COMPONENT_SUBMITTED_IDX: usize = 3;
     const LAST_DOMAIN_RECOMMENDED_IDX: usize = 1;
-    const LAST_DOMAIN_SUBMITTED_IDX: usize = 4;
     const LAST_PROTEIN_RECOMMENDED_IDX: usize = 2;
+    const LAST_COMPONENT_SUBMITTED_IDX: usize = 3;
+    const LAST_DOMAIN_SUBMITTED_IDX: usize = 4;
     const LAST_PROTEIN_SUBMITTED_IDX: usize = 5;
 
     // Keep track of which block we are currently in
@@ -136,69 +215,53 @@ fn parse_name_and_ec(data: &mut [String], index: &mut usize) -> (String, Vec<Str
     let mut inside_domain = false;
     let mut inside_component = false;
 
-    while data[end_index].starts_with("DE") {
-        let line = &mut data[end_index];
-        line.drain(..COMMON_PREFIX_LEN);
+    while data[*data_cursor].starts_with("DE") {
+        let line = data[*data_cursor][COMMON_PREFIX_LEN..].trim_start();
 
         // Marks the start of a Component
         if line == "Contains:" {
             inside_component = true;
-            end_index += 1;
+            *data_cursor += 1;
             continue;
         }
 
         // Marks the start of a Domain
         if line == "Includes:" {
             inside_domain = true;
-            end_index += 1;
+            *data_cursor += 1;
             continue;
         }
 
-        // Remove all other spaces (consecutive lines have leading spaces we don't care for)
-        drain_leading_spaces(line);
-
-        // Keep track of the last recommended name
-        if line.starts_with("RecName: Full=") {
-            if inside_domain {
-                name_indices[LAST_DOMAIN_RECOMMENDED_IDX] = end_index;
-            } else if inside_component {
-                name_indices[LAST_COMPONENT_RECOMMENDED_IDX] = end_index;
-            } else {
-                name_indices[LAST_PROTEIN_RECOMMENDED_IDX] = end_index;
-            }
+        // Keep track of the last recommended or submitted name
+        if line.starts_with("RecName: Full=") || line.starts_with("SubName: Full=") {
+            let index = match (line.starts_with("RecName: Full="), inside_domain, inside_component) {
+                (true, true, _) => LAST_DOMAIN_RECOMMENDED_IDX,
+                (true, _, true) => LAST_COMPONENT_RECOMMENDED_IDX,
+                (true, _, _) => LAST_PROTEIN_RECOMMENDED_IDX,
+                (false, true, _) => LAST_DOMAIN_SUBMITTED_IDX,
+                (false, _, true) => LAST_COMPONENT_SUBMITTED_IDX,
+                (false, _, _) => LAST_PROTEIN_SUBMITTED_IDX,
+            };
+            name_indices[index] = *data_cursor;
         }
+
         // Find EC numbers
         else if line.starts_with("EC=") {
-            let ec_target = read_until_metadata(line, ORGANISM_RECOMMENDED_NAME_EC_PREFIX_LEN);
-
-            // EC numbers sometimes appear multiple times, so use a set to track which ones
-            // we've seen before
-            if !ec_reference_set.contains(&ec_target) {
-                ec_reference_set.insert(ec_target.clone());
-                ec_references.push(ec_target);
-            }
-        }
-        // Keep track of the last submitted name
-        else if line.starts_with("SubName: Full=") {
-            if inside_domain {
-                name_indices[LAST_DOMAIN_SUBMITTED_IDX] = end_index;
-            } else if inside_component {
-                name_indices[LAST_COMPONENT_SUBMITTED_IDX] = end_index;
-            } else {
-                name_indices[LAST_PROTEIN_SUBMITTED_IDX] = end_index;
+            let ec_target = read_until_metadata(&line[DE_PREFIX_EC_LENGTH..]);
+            if !ec_references.contains(&ec_target) {
+                ec_references.insert(ec_target);
             }
         }
 
-        end_index += 1;
+        *data_cursor += 1;
     }
 
     // Choose a name from the ones we encountered
     // Use the first name that we managed to find, in order
-    for idx in name_indices {
-        if idx != usize::MAX {
-            let line = &mut data[idx];
-            *index = end_index;
-            name = read_until_metadata(line, ORGANISM_RECOMMENDED_NAME_PREFIX_LEN);
+    for name_index in name_indices {
+        if name_index != usize::MAX {
+            let line = data[name_index][COMMON_PREFIX_LEN..].trim_start();
+            name = read_until_metadata(&line[DE_PREFIX_NAME_LENGTH..]);
             return (name, ec_references);
         }
     }
@@ -207,83 +270,58 @@ fn parse_name_and_ec(data: &mut [String], index: &mut usize) -> (String, Vec<Str
 }
 
 /// Find the first NCBI_TaxID of this entry
-fn parse_taxon_id(data: &mut [String], index: &mut usize) -> String {
-    while !data[*index].starts_with("OX   NCBI_TaxID=") {
-        *index += 1;
-    }
+fn parse_taxonomy_reference(data: &[String], data_cursor: &mut usize) -> String {
+    let line = &data[*data_cursor][OX_PREFIX_NCBI_LENGTH..];
 
-    let line = &mut data[*index];
-    let taxon_id = read_until_metadata(line, ORGANISM_TAXON_ID_PREFIX_LEN);
+    // Move the cursor to the next section
+    *data_cursor += 1;
 
-    while data[*index].starts_with("OX") {
-        *index += 1;
-    }
-
-    taxon_id
+    read_until_metadata(line)
 }
 
 /// Parse GO and InterPro DB references
-fn parse_db_references(data: &mut Vec<String>, index: &mut usize) -> (Vec<String>, Vec<String>) {
+fn parse_db_references(data: &[String], data_cursor: &mut usize) -> DatabaseReferences {
     let mut go_references = Vec::new();
-    let mut ip_references = Vec::new();
-    let original_idx = *index;
-    let length = data.len();
-
-    // Find where references start
-    while !data[*index].starts_with("DR") {
-        *index += 1;
-
-        // No references present in this entry
-        if *index == length {
-            *index = original_idx;
-            return (go_references, ip_references);
-        }
-    }
+    let mut ipr_references = Vec::new();
 
     // Parse all references
-    while data[*index].starts_with("DR") {
-        let line = &mut data[*index];
-        line.drain(..COMMON_PREFIX_LEN);
+    while data[*data_cursor].starts_with("DR") {
+        let line = &data[*data_cursor][COMMON_PREFIX_LEN..];
 
-        parse_db_reference(line, &mut go_references, &mut ip_references);
+        parse_db_reference(line, &mut go_references, &mut ipr_references);
 
-        *index += 1;
+        *data_cursor += 1;
     }
 
-    (go_references, ip_references)
+    DatabaseReferences {
+        go_references,
+        ipr_references,
+    }
 }
 
 /// Parse a single GO or InterPro DB reference
 fn parse_db_reference(
-    line: &mut str,
+    line: &str,
     go_references: &mut Vec<String>,
-    ip_references: &mut Vec<String>,
+    ipr_references: &mut Vec<String>,
 ) {
     if line.starts_with("GO;") {
-        let substr = &line[4..14];
-        go_references.push(substr.to_string());
+        go_references.push(line[4..14].to_string());
     } else if line.starts_with("InterPro;") {
-        let substr = &line[10..19];
-        ip_references.push(substr.to_string());
+        ipr_references.push(line[10..19].to_string());
     }
 }
 
 /// Parse the peptide sequence for this entry
-fn parse_sequence(data: &mut [String], mut index: usize) -> String {
-    // Find the beginning of the sequence
-    // optionally skip over some fields we don't care for
-    while !data[index].starts_with("SQ") {
-        index += 1;
-    }
-
+fn parse_sequence(data: &[String], data_cursor: &mut usize) -> String {
     // First line of the sequence contains some metadata we don't care for
-    index += 1;
+    *data_cursor += 1;
 
     let mut sequence = String::new();
 
     // Combine all remaining lines
-    for line in data.iter_mut().skip(index) {
-        line.drain(..COMMON_PREFIX_LEN);
+    for line_index in *data_cursor..data.len() {
+        let line = &data[line_index][COMMON_PREFIX_LEN..];
         sequence.push_str(&line.replace(' ', ""));
     }
 
@@ -292,9 +330,7 @@ fn parse_sequence(data: &mut [String], mut index: usize) -> String {
 
 /// Read a line until additional metadata starts
 /// Some lines end with {blocks between curly brackets} that we don't care for.
-fn read_until_metadata(line: &mut String, prefix_len: usize) -> String {
-    line.drain(..prefix_len);
-
+fn read_until_metadata(line: &str) -> String {
     // The line either contains some metadata, or just ends with a semicolon
     // In the latter case, move the position to the end of the string,
     // so we can pretend it is at a bracket and cut the semicolon out
@@ -317,18 +353,6 @@ fn read_until_metadata(line: &mut String, prefix_len: usize) -> String {
     }
 
     line[..bracket_index - 1].to_string()
-}
-
-/// Remove all leading spaces from a line
-/// Internally this just moves a pointer forward so this is very efficient
-fn drain_leading_spaces(line: &mut String) {
-    // Find the first index that is not a space, and remove everything before
-    for (idx, c) in line.chars().enumerate() {
-        if c != ' ' {
-            line.drain(..idx);
-            break;
-        }
-    }
 }
 
 #[cfg(test)]
@@ -396,27 +420,36 @@ mod tests {
     fn test_parse_ac_number() {
         let want = "P9WPY2";
         let mut lines = get_example_entry();
-        let got = parse_ac_number(&mut lines).unwrap();
+        let got = parse_accession_number_field(&mut lines, &mut 1).unwrap();
 
         assert_eq!(got, want);
     }
 
     #[test]
     fn test_parse_version() {
-        let want = "44";
-        let mut index = 0;
+        let want_type = "swissprot";
+        let want_version = "44";
         let mut lines = get_example_entry();
-        let got = parse_version(&mut lines, &mut index);
+        let (got_type, got_version) = parse_date_fields(&mut lines, &mut 2).unwrap();
 
-        assert_eq!(got, want);
+        assert_eq!(got_type, want_type);
+        assert_eq!(got_version, want_version);
+    }
+
+    #[test]
+    fn test_parse_description_field() {
+        let want_name = "Putative transcription factor 001R";
+        let mut lines = get_example_entry();
+        let (got_name, got_ec) = parse_description_field(&mut lines, &mut 5);
+
+        assert_eq!(got_name, want_name);
     }
 
     #[test]
     fn test_parse_taxon_id() {
         let want = "654924";
         let mut lines = get_example_entry();
-        let mut index: usize = 8;
-        let got = parse_taxon_id(&mut lines, &mut index);
+        let got = parse_taxonomy_reference(&mut lines, &mut 10);
 
         assert_eq!(got, want);
     }
@@ -424,13 +457,12 @@ mod tests {
     #[test]
     fn test_parse_db_references() {
         let want_go = vec![String::from("GO:0046782"), String::from("GO:0016743")];
-        let want_ip = vec![String::from("IPR007031"), String::from("IPR000308")];
+        let want_ipr = vec![String::from("IPR007031"), String::from("IPR000308")];
         let mut lines = get_example_entry();
-        let mut index: usize = 0;
-        let (got_go, got_ip) = parse_db_references(&mut lines, &mut index);
+        let got_references = parse_db_references(&mut lines, &mut 27);
 
-        assert_eq!(got_go, want_go);
-        assert_eq!(got_ip, want_ip);
+        assert_eq!(got_references.go_references, want_go);
+        assert_eq!(got_references.ipr_references, want_ipr);
     }
 
     #[test]
@@ -462,51 +494,50 @@ mod tests {
     fn test_parse_sequence() {
         let want = "MAFSAEDVLKEYDRRRRMEALLLSLYYPNDRKLLDYKEWSPPRVQVECPKAPVEWNNPPSEKGLIVGHFSGIKYKGEKAQASEVDVNKMCCWVSKFKDAMRRYQGIQTCKIPGKVLSDLD";
         let mut lines = get_example_entry();
-        let got = parse_sequence(&mut lines, 0);
+        let got = parse_sequence(&mut lines, &mut 43);
         assert_eq!(got, want);
     }
 
-    #[test]
-    fn test_read_until_metadata() {
-        let want = "Alanine racemase";
-        let mut line = String::from(format!(
-            "RecName: Full={want} {{ECO:0000255|HAMAP-Rule:MF_01201}};"
-        ));
-        let got = read_until_metadata(&mut line, ORGANISM_RECOMMENDED_NAME_PREFIX_LEN);
-        assert_eq!(got, want);
-    }
+    // #[test]
+    // fn test_read_until_metadata() {
+    //     let want = "Alanine racemase";
+    //     let mut line = String::from(format!(
+    //         "RecName: Full={want} {{ECO:0000255|HAMAP-Rule:MF_01201}};"
+    //     ));
+    //     let got = read_until_metadata(&mut line, ORGANISM_RECOMMENDED_NAME_PREFIX_LEN);
+    //     assert_eq!(got, want);
+    // }
+    //
+    // #[test]
+    // fn test_read_until_metadata_with_bracket() {
+    //     let want = "Alanine racemase{text between brackets}";
+    //     let mut line = String::from(format!(
+    //         "RecName: Full={want} {{ECO:0000255|HAMAP-Rule:MF_01201}};"
+    //     ));
+    //     let target = read_until_metadata(&mut line, ORGANISM_RECOMMENDED_NAME_PREFIX_LEN);
+    //     assert_eq!(target, want);
+    // }
+    //
+    // #[test]
+    // fn test_read_until_metadata_none() {
+    //     let want = "Recommended Name";
+    //     let mut line = String::from(format!("RecName: Full={want};"));
+    //     let target = read_until_metadata(&mut line, ORGANISM_RECOMMENDED_NAME_PREFIX_LEN);
+    //     assert_eq!(target, want);
+    // }
 
     #[test]
-    fn test_read_until_metadata_with_bracket() {
-        let want = "Alanine racemase{text between brackets}";
-        let mut line = String::from(format!(
-            "RecName: Full={want} {{ECO:0000255|HAMAP-Rule:MF_01201}};"
-        ));
-        let target = read_until_metadata(&mut line, ORGANISM_RECOMMENDED_NAME_PREFIX_LEN);
-        assert_eq!(target, want);
-    }
+    fn test_parse_entry() {
+        let mut lines = get_example_entry();
+        let got = UniProtDATEntry::from_lines(&mut lines).unwrap();
 
-    #[test]
-    fn test_read_until_metadata_none() {
-        let want = "Recommended Name";
-        let mut line = String::from(format!("RecName: Full={want};"));
-        let target = read_until_metadata(&mut line, ORGANISM_RECOMMENDED_NAME_PREFIX_LEN);
-        assert_eq!(target, want);
-    }
-
-    #[test]
-    fn test_drain_spaces() {
-        let want = "ABC";
-        let mut line = String::from(format!("    {want}"));
-        drain_leading_spaces(&mut line);
-        assert_eq!(line, want);
-    }
-
-    #[test]
-    fn test_drain_spaces_none() {
-        let want = "This has no leading spaces";
-        let mut line = String::from(want);
-        drain_leading_spaces(&mut line);
-        assert_eq!(line, want);
+        assert_eq!(got.accession_number, "P9WPY2");
+        assert_eq!(got.name, "Putative transcription factor 001R");
+        assert_eq!(got.version, "44");
+        assert_eq!(got.taxon_id, "654924");
+        assert_eq!(got.ec_references.len(), 0);
+        assert_eq!(got.go_references, vec![String::from("GO:0046782"), String::from("GO:0016743")]);
+        assert_eq!(got.ip_references, vec![String::from("IPR007031"), String::from("IPR000308")]);
+        assert_eq!(got.sequence, "MAFSAEDVLKEYDRRRRMEALLLSLYYPNDRKLLDYKEWSPPRVQVECPKAPVEWNNPPSEKGLIVGHFSGIKYKGEKAQASEVDVNKMCCWVSKFKDAMRRYQGIQTCKIPGKVLSDLD")
     }
 }

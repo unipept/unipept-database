@@ -1,8 +1,7 @@
 use std::io::{BufRead, Lines};
 
 use anyhow::{Error, Result};
-
-use crate::dat_parser::entry::UniProtDATEntry;
+use crate::entry::UniProtDATEntry;
 
 /// A simple single-threaded DAT parser
 pub struct SequentialDATParser<B: BufRead> {

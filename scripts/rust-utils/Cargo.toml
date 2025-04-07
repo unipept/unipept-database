@@ -1,3 +1,12 @@
 [workspace]
 resolver = "2"
-members = ["dat-parser", "function-calculator", "lca-calculator", "tables-generator", "taxdmp-parser", "uniprot-parser", "uniprot-parser-tryptic"]
+members = [
+    "dat-parser",
+#    "function-calculator",
+#    "lca-calculator",
+    "tables-generator",
+    "taxdmp-parser",
+    "uniprot-parser",
+    "uniprot-parser-tryptic",
+    "utils"
+]

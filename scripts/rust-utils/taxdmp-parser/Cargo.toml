@@ -4,3 +4,9 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+clap = { version = "4.4.6", features = ["derive"] }
+anyhow = "1.0.75"
+regex = "1.10.2"
+strum = "0.25.0"
+strum_macros = "0.25.3"
+utils = { path = "../utils" }
