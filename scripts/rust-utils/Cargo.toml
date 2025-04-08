@@ -2,8 +2,8 @@
 resolver = "2"
 members = [
     "dat-parser",
-#    "function-calculator",
-#    "lca-calculator",
+    "function-calculator",
+    "lca-calculator", "ncbi",
     "tables-generator",
     "taxdmp-parser",
     "uniprot-parser",

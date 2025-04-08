@@ -8,7 +8,7 @@ use bit_vec::BitVec;
 use utils::open_write;
 use crate::models::{calculate_entry_digest, Entry};
 use crate::taxon_list::parse_taxon_file_basic;
-use crate::utils::now_str;
+use utils::now_str;
 
 pub struct EntryTableWriter {
     taxa: BitVec,

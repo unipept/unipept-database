@@ -3,7 +3,6 @@ use clap::Parser;
 use std::path::PathBuf;
 use crate::taxon_list::TaxonList;
 
-mod taxon;
 mod taxon_list;
 
 fn main() -> Result<()> {

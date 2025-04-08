@@ -7,4 +7,3 @@ edition = "2024"
 anyhow = "1.0.97"
 utils = { path = "../utils" }
 bit-vec = "0.8.0"
-chrono = "0.4.40"

@@ -5,8 +5,8 @@ use std::str::FromStr;
 use anyhow::{Context, Error, Result};
 use regex::Regex;
 use strum::IntoEnumIterator;
+use ncbi::{Rank, Taxon};
 use utils::{open_read, open_write};
-use crate::taxon::{Rank, Taxon};
 
 pub struct TaxonList {
     entries: Vec<Option<Taxon>>,
