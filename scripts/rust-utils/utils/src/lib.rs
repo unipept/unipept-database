@@ -40,4 +40,3 @@ pub fn now_str() -> String {
     let dt: DateTime<Utc> = SystemTime::now().into();
     format!("{} ({})", n, dt.format("%Y-%m-%d %H:%M:%S"))
 }
-

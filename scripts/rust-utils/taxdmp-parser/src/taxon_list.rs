@@ -232,18 +232,6 @@ impl TaxonList {
             Err(Error::msg(format!("Missing taxon with id {}", id)))
         }
     }
-
-    pub fn get(&self, i: usize) -> &Option<Taxon> {
-        &self.entries[i]
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.entries.is_empty()
-    }
-
-    pub fn len(&self) -> usize {
-        self.entries.len()
-    }
 }
 
 fn parse_id(v: &str) -> Result<usize> {

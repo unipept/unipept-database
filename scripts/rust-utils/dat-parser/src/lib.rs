@@ -6,7 +6,6 @@ pub mod entry;
 mod producer;
 pub mod sequential_parser;
 pub mod threaded_parser;
-pub mod utils;
 
 use self::entry::UniProtDATEntry;
 use self::sequential_parser::SequentialDATParser;

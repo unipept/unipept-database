@@ -107,7 +107,7 @@ impl UniProtDATEntry {
     }
 
     /// Write an entry to stdout
-    pub fn write(&self, db_type: &str) {
+    pub fn write(&self) {
         if self.name.is_empty() {
             eprintln!(
                 "Could not find a name for entry AC-{}",

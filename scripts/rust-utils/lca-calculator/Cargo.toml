@@ -7,3 +7,4 @@ edition = "2024"
 anyhow = "1.0.97"
 utils = { path = "../utils" }
 ncbi = { path = "../ncbi" }
+clap = { version = "4.5.35", features = ["derive"] }

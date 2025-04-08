@@ -2,7 +2,6 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 use clap::Parser;
 use dat_parser::uniprot_dat_parser;
-use dat_parser::utils::write_header;
 use tables_generator::table_writer::{EntryTableWriter};
 use utils::open_sin;
 
