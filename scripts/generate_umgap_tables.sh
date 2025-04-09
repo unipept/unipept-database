@@ -11,6 +11,14 @@ CURRENT_LOCATION="${BASH_SOURCE%/*}"
 #                                    Imports                                   #
 ################################################################################
 
+# Imports various helper variables.
+# Globals imported from generate_tables_helper.sh:
+#   - SORT_MEMORY
+#   - CMD_SORT
+#   - CMD_LZ4
+#   - CMD_LZ4CAT
+#   - PEPTIDE_MIN_LENGTH
+#   - PEPTIDE_MAX_LENGTH
 source "${CURRENT_LOCATION}/generate_tables_helper.sh"
 
 ################################################################################
@@ -849,7 +857,7 @@ print_help() {
   echo ""
   echo "Options (common):"
   echo "  --output-dir        Directory to save the output files (required)."
-  echo "  --database-sources  Comma-separated list of database sources ('swissprot', 'trembl'), (optional, default: ('swissprot', 'trembl'))"
+  echo "  --database-sources  Comma-separated list of database sources ('swissprot', 'trembl'), (optional, default: 'swissprot,trembl')"
   echo "  --temp-dir          Temporary directory for intermediate files (optional, default: '/tmp')"
   echo "  --sort-memory       Amount of memory (e.g., '2G') for the sort utility (optional, default: '$SORT_MEMORY')"
   echo "  --help              Prints this help message."
@@ -881,6 +889,7 @@ MODE="$1"  # First argument specifies the mode
 shift      # Remove mode from arguments
 
 # Check if all the required dependencies are installed
+checkdep cargo "Rust toolchain"
 checkdep curl
 checkdep uuidgen
 checkdep lz4
@@ -890,12 +899,14 @@ checkdep umgap "umgap crate (for umgap buildindex)"
 
 if [[ "$MODE" == "kmer" ]]; then
   parse_kmer_arguments "$@"
+  build_binaries
   create_taxon_tables "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT" "$OUTPUT_DIR"
   download_and_process_uniprot "$DB_TYPES" "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT"
   generate_uniprot_entries "$DB_TYPES" "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT" "$OUTPUT_DIR"
   create_kmer_index "$OUTPUT_DIR" "$KMER_LENGTH"
 elif [[ "$MODE" == "tryptic" ]]; then
   parse_tryptic_arguments "$@"
+  build_binaries
   create_taxon_tables "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT" "$OUTPUT_DIR"
   download_and_process_uniprot "$DB_TYPES" "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT"
   generate_proteins_and_sequences "$DB_TYPES" "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT" "$OUTPUT_DIR" "$PEPTIDE_MIN_LENGTH" "$PEPTIDE_MAX_LENGTH"
