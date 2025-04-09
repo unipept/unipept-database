@@ -54,7 +54,7 @@ impl From<UniProtDATEntry> for Entry {
 
 impl UniProtDATEntry {
     /// Parse an entry out of the lines of a DAT file
-    pub fn from_lines(data: &mut Vec<String>) -> anyhow::Result<Self> {
+    pub fn from_lines(data: &[String]) -> anyhow::Result<Self> {
         let mut data_cursor: usize = 0;
 
         // Skip the ID (identifier) field
@@ -329,8 +329,8 @@ fn parse_sequence(data: &[String], data_cursor: &mut usize) -> String {
     let mut sequence = String::new();
 
     // Combine all remaining lines
-    for line_index in *data_cursor..data.len() {
-        let line = &data[line_index][COMMON_PREFIX_LEN..];
+    for line in data.iter().skip(*data_cursor) {
+        let line = &line[COMMON_PREFIX_LEN..];
         sequence.push_str(&line.replace(' ', ""));
     }
 

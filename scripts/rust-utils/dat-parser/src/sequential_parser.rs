@@ -29,7 +29,7 @@ impl<B: BufRead> Iterator for SequentialDATParser<B> {
                 None => return None,
                 Some(Err(e)) => return Some(Err(Error::new(e).context("Error reading line"))),
                 Some(Ok(line)) if line == "//" => {
-                    let entry = UniProtDATEntry::from_lines(&mut self.data);
+                    let entry = UniProtDATEntry::from_lines(&self.data);
                     self.data.clear();
                     return Some(entry);
                 }

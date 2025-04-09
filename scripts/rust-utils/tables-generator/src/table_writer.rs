@@ -135,7 +135,7 @@ impl PeptideTableWriter {
                 "{}\t{}\t{}\t{}\t{}\t{}",
                 self.peptide_count,
                 String::from_utf8_lossy(&equated_sequence),
-                String::from_utf8_lossy(&sequence),
+                String::from_utf8_lossy(sequence),
                 entry_id,
                 &summary,
                 entry.taxon_id

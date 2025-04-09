@@ -106,16 +106,13 @@ impl Taxonomy {
             let final_rank = rank;
             let mut value = -1;
 
-            let iterator = lineages
-                .iter()
-                .map(|&x| x[final_rank as usize])
-                .filter(|&x| {
-                    if final_rank == genus_rank_idx || final_rank == species_rank_idx {
-                        x > 0
-                    } else {
-                        x >= 0
-                    }
-                });
+            let iterator = lineages.iter().map(|&x| x[final_rank]).filter(|&x| {
+                if final_rank == genus_rank_idx || final_rank == species_rank_idx {
+                    x > 0
+                } else {
+                    x >= 0
+                }
+            });
 
             // Check if all elements in the iterator are the same
             // This was near-impossible to do with the iterators above,
