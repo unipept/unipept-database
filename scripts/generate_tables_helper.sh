@@ -351,8 +351,7 @@ log() { echo "$(date +'[%s (%F %T)]')" "$@"; }
 ################################################################################
 # build_binaries                                                               #
 #                                                                              #
-# Builds the release binaries for the unipept-database-rs project and copies   #
-# the generated executable files to the /helper_scripts folder for further use.#
+# Builds the release binaries for the rust-utils project and copies            #
 # This function ensures that all the required binaries are available for the   #
 # database building process.                                                   #
 #                                                                              #
@@ -363,18 +362,16 @@ log() { echo "$(date +'[%s (%F %T)]')" "$@"; }
 #   None                                                                       #
 #                                                                              #
 # Outputs:                                                                     #
-#   Copies built binaries to the /helper_scripts folder                        #
+#   None                                                                       #
 #                                                                              #
 # Returns:                                                                     #
 #   None                                                                       #
 ################################################################################
 build_binaries() {
   log "Started building Rust utilities"
-  # Build binaries and copy them to the /helper_scripts folder
-  cd "$CURRENT_LOCATION"/helper_scripts/unipept-database-rs
+  cd "$CURRENT_LOCATION"/rust-utils
   cargo build --release --quiet
   cd - > /dev/null
-  find "$CURRENT_LOCATION"/helper_scripts/unipept-database-rs/target/release -maxdepth 1 -type f -executable -exec cp {} "$CURRENT_LOCATION"/helper_scripts/ \;
   log "Finished building Rust utilities"
 }
 
@@ -521,9 +518,10 @@ create_taxon_tables() {
 
   log "Parsing names.dmp and nodes.dmp files"
   mkdir -p "$output_dir"
-  "$CURRENT_LOCATION"/helper_scripts/taxons-lineages \
-    --names "$temp_dir/$temp_constant/names.dmp" --nodes "$temp_dir/$temp_constant/nodes.dmp" \
-    --taxons "$(lz "$output_dir/taxons.tsv.lz4")" \
+  "$CURRENT_LOCATION"/rust-utils/target/release/taxdmp-parser \
+    --names "$temp_dir/$temp_constant/names.dmp" \
+    --nodes "$temp_dir/$temp_constant/nodes.dmp" \
+    --taxa "$(lz "$output_dir/taxons.tsv.lz4")" \
     --lineages "$(lz "$output_dir/lineages.tsv.lz4")"
 
   rm "$temp_dir/$temp_constant/names.dmp" "$temp_dir/$temp_constant/nodes.dmp"

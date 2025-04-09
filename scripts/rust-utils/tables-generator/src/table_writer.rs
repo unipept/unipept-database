@@ -8,7 +8,6 @@ use bit_vec::BitVec;
 use utils::open_write;
 use crate::models::{calculate_entry_digest, Entry};
 use crate::taxon_list::parse_taxon_file_basic;
-use utils::now_str;
 
 pub struct EntryTableWriter {
     taxa: BitVec,
@@ -83,12 +82,6 @@ impl EntryTableWriter {
             return Ok(self.uniprot_count);
         } else if !self.wrong_ids.contains(&entry.taxon_id) {
             self.wrong_ids.insert(entry.taxon_id);
-            eprintln!(
-                "[{}] {} added to the list of {} invalid taxonIds",
-                now_str(),
-                entry.taxon_id,
-                self.wrong_ids.len()
-            );
         }
 
         Ok(-1)
