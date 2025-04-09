@@ -424,6 +424,63 @@ extract_uniprot_version() {
 }
 
 ################################################################################
+# download_uniprot                                                             #
+#                                                                              #
+# Downloads UniProtKB databases specified as a comma-separated list in the     #
+# first argument ($1). The function supports "swissprot" and "trembl". For     #
+# each database type, it attempts to download and decompress the UniProtKB     #
+# files and writes them to stdout                                              #
+#                                                                              #
+# Globals:                                                                     #
+#   CURRENT_LOCATION   - Current script directory                              #
+#                                                                              #
+# Arguments:                                                                   #
+#   $1 - Comma-separated list of database sources to download. Supported       #
+#                                                                              #
+# Outputs:                                                                     #
+#   None                                                                       #
+#                                                                              #
+# Returns:                                                                     #
+#   stream of decompressed UniProtKB entries (stdout)                          #
+################################################################################
+download_uniprot() {
+  local old_ifs="$IFS"
+  IFS=","
+  local db_types_array=($1)
+  IFS="$old_ifs"
+
+  local idx=0
+
+  while [[ "$idx" -ne "${#db_types_array}" ]] && [[ -n $(echo "${db_types_array[$idx]}" | sed "s/\s//g") ]]
+  do
+    local db_type=${db_types_array[$idx]}
+    local db_source=${SOURCE_URLS["$db_type"]}
+
+    log "Started downloading UniProtKB - $db_type."
+
+    # Where should we store the index of this converted database.
+    local db_output_dir="${temp_dir:?}/${temp_constant}/$db_type"
+
+    # Remove previous database (if it exist) and continue building the new database.
+    rm -rf "$db_output_dir"
+    mkdir -p "$db_output_dir"
+
+    # Extract the total size of the database that's being downloaded. This is required for pv to know which percentage
+    # of the total download has been processed.
+    local size="$(curl -I "$db_source" -s | grep -i content-length | tr -cd '[0-9]')"
+
+    # Effectively download the database and convert to a tabular format
+    curl --continue-at - --create-dirs "$db_source" --silent \
+    | pv -i 5 -n -s "$size" 2> >(reportProgress - "Downloading database for $db_type" >&2) \
+    | pigz -dc
+
+    log "Finished downloading UniProtKB - $db_type."
+
+    idx=$((idx + 1))
+  done
+}
+
+################################################################################
 # download_taxdmp                                                              #
 #                                                                              #
 # Downloads the taxdmp file required for generating taxon tables. This function#
