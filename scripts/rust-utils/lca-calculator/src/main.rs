@@ -1,10 +1,10 @@
 mod taxonomy;
 
+use crate::taxonomy::Taxonomy;
 use anyhow::{Context, Result};
 use clap::Parser;
 use std::path::PathBuf;
 use utils::now_str;
-use crate::taxonomy::Taxonomy;
 
 fn main() -> Result<()> {
     let args = Cli::parse();
@@ -20,5 +20,5 @@ fn main() -> Result<()> {
 struct Cli {
     /// TODO
     #[clap(long)]
-    input_file: PathBuf
+    input_file: PathBuf,
 }

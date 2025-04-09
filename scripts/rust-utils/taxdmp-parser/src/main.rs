@@ -1,7 +1,7 @@
+use crate::taxon_list::TaxonList;
 use anyhow::{Context, Result};
 use clap::Parser;
 use std::path::PathBuf;
-use crate::taxon_list::TaxonList;
 
 mod taxon_list;
 
@@ -10,10 +10,14 @@ fn main() -> Result<()> {
 
     let mut taxon_list = TaxonList::from_dumps(&args.names, &args.nodes)
         .context("Failed to parse TaxonList from dumps")?;
-    taxon_list.invalidate().context("Failed to validate TaxonList")?;
-    taxon_list.write_taxons(&args.taxa)
+    taxon_list
+        .invalidate()
+        .context("Failed to validate TaxonList")?;
+    taxon_list
+        .write_taxons(&args.taxa)
         .context("Failed to write TaxonList")?;
-    taxon_list.write_lineages(&args.lineages)
+    taxon_list
+        .write_lineages(&args.lineages)
         .context("Failed to write lineages")?;
 
     Ok(())
@@ -35,5 +39,5 @@ struct Cli {
 
     /// Path to the output lineages file
     #[clap(long)]
-    lineages: PathBuf
+    lineages: PathBuf,
 }

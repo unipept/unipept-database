@@ -3,34 +3,32 @@ use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::path::PathBuf;
 
+use crate::models::{Entry, calculate_entry_digest};
+use crate::taxon_list::parse_taxon_file_basic;
 use anyhow::{Context, Result};
 use bit_vec::BitVec;
 use utils::open_write;
-use crate::models::{calculate_entry_digest, Entry};
-use crate::taxon_list::parse_taxon_file_basic;
 
 pub struct EntryTableWriter {
     taxa: BitVec,
     wrong_ids: HashSet<i32>,
     uniprot_entries: BufWriter<File>,
-    uniprot_count: i64
+    uniprot_count: i64,
 }
 
 impl EntryTableWriter {
-    pub fn new(
-        taxa: &PathBuf,
-        uniprot_entries: &PathBuf
-    ) -> Result<Self> {
+    pub fn new(taxa: &PathBuf, uniprot_entries: &PathBuf) -> Result<Self> {
         Ok(Self {
             taxa: parse_taxon_file_basic(taxa).context("Unable to parse taxonomy file")?,
             wrong_ids: HashSet::new(),
             uniprot_entries: open_write(uniprot_entries).context("Unable to open output file")?,
-            uniprot_count: 0
+            uniprot_count: 0,
         })
     }
 
     pub fn write(&mut self, entry: Entry) -> Result<()> {
-        self.write_uniprot_entry(&entry).context("Failed to write entry")?;
+        self.write_uniprot_entry(&entry)
+            .context("Failed to write entry")?;
         Ok(())
     }
 
@@ -77,7 +75,7 @@ impl EntryTableWriter {
                 "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
                 self.uniprot_count, accession_number, version, taxon_id, type_, name, sequence, fa
             )
-                .context("Error writing to TSV")?;
+            .context("Error writing to TSV")?;
 
             return Ok(self.uniprot_count);
         } else if !self.wrong_ids.contains(&entry.taxon_id) {
@@ -92,20 +90,16 @@ pub struct PeptideTableWriter {
     peptides: BufWriter<File>,
     peptide_count: i64,
     min_length: usize,
-    max_length: usize
+    max_length: usize,
 }
 
 impl PeptideTableWriter {
-    pub fn new(
-        peptides: &PathBuf,
-        min_length: usize,
-        max_length: usize
-    ) -> Result<Self> {
+    pub fn new(peptides: &PathBuf, min_length: usize, max_length: usize) -> Result<Self> {
         Ok(Self {
             peptides: open_write(peptides).context("Unable to open output file")?,
             peptide_count: 0,
             min_length,
-            max_length
+            max_length,
         })
     }
 
@@ -128,11 +122,7 @@ impl PeptideTableWriter {
             .collect::<Vec<String>>()
             .join(";");
 
-        for sequence in calculate_entry_digest(
-            &entry.sequence,
-            self.min_length,
-            self.max_length,
-        ) {
+        for sequence in calculate_entry_digest(&entry.sequence, self.min_length, self.max_length) {
             let equated_sequence = sequence
                 .iter()
                 .map(|&x| if x == b'I' { b'L' } else { x })
@@ -149,7 +139,8 @@ impl PeptideTableWriter {
                 entry_id,
                 &summary,
                 entry.taxon_id
-            ).context("Error writing to TSV")?;
+            )
+            .context("Error writing to TSV")?;
         }
 
         Ok(())

@@ -1,7 +1,7 @@
-use std::path::PathBuf;
 use anyhow::{Context, Result};
 use clap::Parser;
 use dat_parser::uniprot_dat_parser;
+use std::path::PathBuf;
 use tables_generator::models::Entry;
 use tables_generator::table_writer::{EntryTableWriter, PeptideTableWriter};
 use utils::open_sin;
@@ -10,15 +10,11 @@ fn main() -> Result<()> {
     let args = Cli::parse();
 
     let reader = open_sin();
-    let mut entry_writer = EntryTableWriter::new(
-        &args.taxa,
-        &args.uniprot_entries,
-    ).context("Unable to instantiate TableWriter")?;
-    let mut peptide_writer = PeptideTableWriter::new(
-        &args.peptides,
-        args.peptide_min,
-        args.peptide_max,
-    ).context("Unable to instantiate TableWriter")?;
+    let mut entry_writer = EntryTableWriter::new(&args.taxa, &args.uniprot_entries)
+        .context("Unable to instantiate TableWriter")?;
+    let mut peptide_writer =
+        PeptideTableWriter::new(&args.peptides, args.peptide_min, args.peptide_max)
+            .context("Unable to instantiate TableWriter")?;
 
     //write_header();
     let parser = uniprot_dat_parser(reader, args.threads);

@@ -1,18 +1,16 @@
-use std::path::PathBuf;
 use anyhow::{Context, Result};
 use clap::Parser;
 use dat_parser::uniprot_dat_parser;
-use tables_generator::table_writer::{EntryTableWriter};
+use std::path::PathBuf;
+use tables_generator::table_writer::EntryTableWriter;
 use utils::open_sin;
 
 fn main() -> Result<()> {
     let args = Cli::parse();
 
     let reader = open_sin();
-    let mut writer = EntryTableWriter::new(
-        &args.taxa,
-        &args.uniprot_entries,
-    ).context("Unable to instantiate TableWriter")?;
+    let mut writer = EntryTableWriter::new(&args.taxa, &args.uniprot_entries)
+        .context("Unable to instantiate TableWriter")?;
 
     //write_header();
     let parser = uniprot_dat_parser(reader, args.threads);

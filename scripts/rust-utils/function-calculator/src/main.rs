@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use std::collections::HashMap;
-use std::io::{BufRead};
+use std::io::BufRead;
 use std::path::PathBuf;
 
 use clap::Parser;
@@ -114,12 +114,14 @@ fn write_entry(
         .collect::<Vec<String>>()
         .join(",");
 
-    println!("{current_peptide}\t{{\"num\":{{\"all\":{num_prot},\"EC\":{num_ec},\"GO\":{num_go},\"IPR\":{num_ip}}},\"data\":{{{data}}}}}\n");
+    println!(
+        "{current_peptide}\t{{\"num\":{{\"all\":{num_prot},\"EC\":{num_ec},\"GO\":{num_go},\"IPR\":{num_ip}}},\"data\":{{{data}}}}}\n"
+    );
 }
 
 #[derive(Parser, Debug)]
 struct Cli {
     /// TODO
     #[clap(long)]
-    input_file: PathBuf
+    input_file: PathBuf,
 }

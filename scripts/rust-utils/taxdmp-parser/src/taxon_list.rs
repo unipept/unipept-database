@@ -3,9 +3,9 @@ use std::path::PathBuf;
 use std::str::FromStr;
 
 use anyhow::{Context, Error, Result};
+use ncbi::{Rank, Taxon};
 use regex::Regex;
 use strum::IntoEnumIterator;
-use ncbi::{Rank, Taxon};
 use utils::{open_read, open_write};
 
 pub struct TaxonList {

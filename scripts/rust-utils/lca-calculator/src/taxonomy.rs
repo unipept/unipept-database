@@ -3,7 +3,7 @@ use std::io::BufRead;
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
-use ncbi::{Rank, RANKS};
+use ncbi::{RANKS, Rank};
 use utils::{now_str, open_read, open_sin};
 
 const NULL_STRING: &str = "\\N";

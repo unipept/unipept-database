@@ -1,11 +1,11 @@
 use std::io::BufRead;
 
-use anyhow::Result;
-use crossbeam_channel::{bounded, Receiver};
-use lazy_static::lazy_static;
 use crate::consumer::Consumer;
 use crate::entry::UniProtDATEntry;
 use crate::producer::Producer;
+use anyhow::Result;
+use crossbeam_channel::{Receiver, bounded};
+use lazy_static::lazy_static;
 
 /// A multi-threaded DAT parser
 /// This parser uses one thread to parse chunks of bytes from the `reader` input stream,

@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Context};
+use anyhow::{Context, anyhow};
 use std::collections::HashSet;
 use tables_generator::models::Entry;
 
@@ -6,7 +6,8 @@ use tables_generator::models::Entry;
 const COMMON_PREFIX_LEN: usize = "ID   ".len();
 const DATE_LENGTH: usize = "DD-MMM-YYYY".len();
 
-const DT_PREFIX_INTEGRATED_LENGTH: usize = COMMON_PREFIX_LEN + DATE_LENGTH + ", integrated into ".len();
+const DT_PREFIX_INTEGRATED_LENGTH: usize =
+    COMMON_PREFIX_LEN + DATE_LENGTH + ", integrated into ".len();
 const DT_PREFIX_VERSION_LENGTH: usize = COMMON_PREFIX_LEN + DATE_LENGTH + ", entry version ".len();
 
 const DE_PREFIX_NAME_LENGTH: usize = "RecName: Full=".len();
@@ -85,7 +86,9 @@ impl UniProtDATEntry {
         // Parse the DR (database cross-reference) fields
         let db_references = if db_references_found {
             parse_db_references(data, &mut data_cursor)
-        } else { DatabaseReferences::default() };
+        } else {
+            DatabaseReferences::default()
+        };
 
         // Skip the PE (protein existence), KW (keywords) and FT (feature table data) fields
         skip_until_field(data, &mut data_cursor, "SQ");
@@ -156,7 +159,10 @@ fn skip_until_optional_field(data: &[String], data_cursor: &mut usize, field: &s
 }
 
 /// Find the first AC number
-fn parse_accession_number_field(data: &[String], data_cursor: &mut usize) -> anyhow::Result<String> {
+fn parse_accession_number_field(
+    data: &[String],
+    data_cursor: &mut usize,
+) -> anyhow::Result<String> {
     // Parse the string of accession numbers. Skip the AC prefix
     let accession_numbers = &data[*data_cursor][COMMON_PREFIX_LEN..];
     let (first_accession, _) = accession_numbers
@@ -176,7 +182,7 @@ fn parse_date_fields(data: &[String], data_cursor: &mut usize) -> anyhow::Result
     let database_type: String = match first_line {
         "UniProtKB/Swiss-Prot." => Ok("swissprot".to_string()),
         "UniProtKB/TrEMBL." => Ok("trembl".to_string()),
-        _ => Err(anyhow!("Error: Unknown database type".to_string()))
+        _ => Err(anyhow!("Error: Unknown database type".to_string())),
     }?;
 
     // Get entry version on the third line (has prefix of constant length and ends with a dot)
@@ -234,7 +240,11 @@ fn parse_description_field(data: &[String], data_cursor: &mut usize) -> (String,
 
         // Keep track of the last recommended or submitted name
         if line.starts_with("RecName: Full=") || line.starts_with("SubName: Full=") {
-            let index = match (line.starts_with("RecName: Full="), inside_domain, inside_component) {
+            let index = match (
+                line.starts_with("RecName: Full="),
+                inside_domain,
+                inside_component,
+            ) {
                 (true, true, _) => LAST_DOMAIN_RECOMMENDED_IDX,
                 (true, _, true) => LAST_COMPONENT_RECOMMENDED_IDX,
                 (true, _, _) => LAST_PROTEIN_RECOMMENDED_IDX,
@@ -244,7 +254,6 @@ fn parse_description_field(data: &[String], data_cursor: &mut usize) -> (String,
             };
             name_indices[index] = *data_cursor;
         }
-
         // Find EC numbers
         else if line.starts_with("EC=") {
             let ec_target = read_until_metadata(&line[DE_PREFIX_EC_LENGTH..]);
@@ -536,8 +545,17 @@ mod tests {
         assert_eq!(got.version, "44");
         assert_eq!(got.taxon_id, "654924");
         assert_eq!(got.ec_references.len(), 0);
-        assert_eq!(got.go_references, vec![String::from("GO:0046782"), String::from("GO:0016743")]);
-        assert_eq!(got.ip_references, vec![String::from("IPR007031"), String::from("IPR000308")]);
-        assert_eq!(got.sequence, "MAFSAEDVLKEYDRRRRMEALLLSLYYPNDRKLLDYKEWSPPRVQVECPKAPVEWNNPPSEKGLIVGHFSGIKYKGEKAQASEVDVNKMCCWVSKFKDAMRRYQGIQTCKIPGKVLSDLD")
+        assert_eq!(
+            got.go_references,
+            vec![String::from("GO:0046782"), String::from("GO:0016743")]
+        );
+        assert_eq!(
+            got.ip_references,
+            vec![String::from("IPR007031"), String::from("IPR000308")]
+        );
+        assert_eq!(
+            got.sequence,
+            "MAFSAEDVLKEYDRRRRMEALLLSLYYPNDRKLLDYKEWSPPRVQVECPKAPVEWNNPPSEKGLIVGHFSGIKYKGEKAQASEVDVNKMCCWVSKFKDAMRRYQGIQTCKIPGKVLSDLD"
+        )
     }
 }

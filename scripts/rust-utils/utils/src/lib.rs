@@ -1,9 +1,9 @@
 use anyhow::{Context, Result};
+use chrono::{DateTime, Utc};
 use std::fs::{File, OpenOptions};
-use std::io::{stdin, BufReader, BufWriter, Stdin};
+use std::io::{BufReader, BufWriter, Stdin, stdin};
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
-use chrono::{DateTime, Utc};
 
 /// Create a BufReader that reads from StdIn
 pub fn open_sin() -> BufReader<Stdin> {

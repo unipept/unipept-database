@@ -1,8 +1,8 @@
+use crate::entry::UniProtDATEntry;
 use anyhow::{Context, Result};
 use crossbeam_channel::{Receiver, Sender};
 use std::thread;
 use std::thread::JoinHandle;
-use crate::entry::UniProtDATEntry;
 
 /// A Consumer runs in a thread and constantly listens to a Receiver channel for raw data,
 /// publishing parsed `UniProtDatEntry`s to a Sender channel
