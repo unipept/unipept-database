@@ -192,7 +192,7 @@ checkdep lz4
 checkdep pigz
 
 parse_arguments "$@"
-build_binaries
+build_binaries "taxdmp-parser" "uniprot-parser"
 create_taxon_tables "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT" "$OUTPUT_DIR"
 download_and_process_uniprot "$DB_TYPES" "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT" "$OUTPUT_DIR"
 fetch_ec_numbers "$OUTPUT_DIR"

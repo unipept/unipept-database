@@ -351,7 +351,7 @@ log() { echo "$(date +'[%s (%F %T)]')" "$@"; }
 ################################################################################
 # build_binaries                                                               #
 #                                                                              #
-# Builds the release binaries for the rust-utils project and copies            #
+# Builds the release binaries for the rust-utils project                       #
 # This function ensures that all the required binaries are available for the   #
 # database building process.                                                   #
 #                                                                              #
@@ -368,9 +368,10 @@ log() { echo "$(date +'[%s (%F %T)]')" "$@"; }
 #   None                                                                       #
 ################################################################################
 build_binaries() {
+  packages=$(echo "$@" | sed 's/[^ ]*/-p &/g')
   log "Started building Rust utilities"
   cd "$CURRENT_LOCATION"/rust-utils
-  cargo build --release --quiet
+  cargo build --release --quiet $packages
   cd - > /dev/null
   log "Finished building Rust utilities"
 }

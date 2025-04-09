@@ -799,13 +799,13 @@ checkdep umgap "umgap crate (for umgap buildindex)"
 
 if [[ "$MODE" == "kmer" ]]; then
   parse_kmer_arguments "$@"
-  build_binaries
+  build_binaries "taxdmp-parser" "uniprot-parser"
   create_taxon_tables "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT" "$OUTPUT_DIR"
   download_and_process_uniprot "$DB_TYPES" "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT" "$OUTPUT_DIR"
   create_kmer_index "$OUTPUT_DIR" "$KMER_LENGTH"
 elif [[ "$MODE" == "tryptic" ]]; then
   parse_tryptic_arguments "$@"
-  build_binaries
+  build_binaries "taxdmp-parser" "uniprot-parser-tryptic" "function-calculator" "lca-calculator"
   create_taxon_tables "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT" "$OUTPUT_DIR"
   download_and_process_uniprot_tryptic "$DB_TYPES" "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT" "$OUTPUT_DIR" "$PEPTIDE_MIN_LENGTH" "$PEPTIDE_MAX_LENGTH"
   number_sequences "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT"
