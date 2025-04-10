@@ -169,14 +169,14 @@ init_indices() {
 #   None                                                                       #
 ################################################################################
 convert_uniprot_entries_to_json() {
-    jq -c -R 'split("\t") | {
+    jq -c -R '{index: { _index: "uniprot_entries" }}, (split("\t") | {
             uniprot_accession_number: .[1],
             version: (.[2] | tonumber),
             taxon_id: (.[3] | tonumber),
             type: .[4],
             name: .[5],
             protein: .[6]
-    }'
+    })'
 }
 
 ################################################################################
@@ -203,43 +203,45 @@ convert_uniprot_entries_to_json() {
 upload_uniprot_entries() {
     log "Started uploading UniProt entries."
 
-    local counter=0
-    local batch=""
-    local start_time=$(date +%s)
+#    local counter=0
+#    local batch=""
+#    local start_time=$(date +%s)
 
-    upload_batch() {
-        local batch_content=$1
-        local processed_counter=$2
-        local start_time=$3
+#    upload_batch() {
+#        local batch_content=$1
+#        local processed_counter=$2
+#        local start_time=$3
+#
+#        # Upload the batch to the OpenSearch instance
+#        curl -s -X POST "${OPENSEARCH_URL}/_bulk" -H "Content-Type: application/json" --data-binary @<(echo "$batch_content") > /dev/null || { echo "Failed to upload batch"; exit 1; }
+#
+#        local current_time=$(date +%s)
+#        local elapsed_time=$((current_time - start_time))
+#        local upload_rate=$((processed_counter / (elapsed_time > 0 ? elapsed_time : 1)))
+#
+#        echo -ne "Uploaded $processed_counter proteins... [$upload_rate proteins/sec, elapsed time: ${elapsed_time}s]\r"
+#    }
 
-        # Upload the batch to the OpenSearch instance
-        curl -s -X POST "${OPENSEARCH_URL}/_bulk" -H "Content-Type: application/json" --data-binary @<(echo "$batch_content") > /dev/null || { echo "Failed to upload batch"; exit 1; }
+#    while IFS= read -r line; do
+#        # Add line to the current batch and increment counter
+#        batch+=$'{"index": { "_index": "uniprot_entries" }}\n'"${line}"$'\n'
+#        counter="$((counter+1))"
+#
+#        # If the batch size reaches the UPLOAD_BATCH_SIZE, process it
+#        if ((counter % UPLOAD_BATCH_SIZE == 0)); then
+#            upload_batch "$batch" "$counter" "$start_time"
+#            batch=""
+#        fi
+#    done < <(lz4cat "$UNIPROT_ENTRIES_FILE" | convert_uniprot_entries_to_json)
+    
+    pv "$UNIPROT_ENTRIES_FILE" | lz4cat | convert_uniprot_entries_to_json | xargs -L "$UPLOAD_BATCH_SIZE" | curl -s -X POST "${OPENSEARCH_URL}/_bulk" --json --data-binary @-
 
-        local current_time=$(date +%s)
-        local elapsed_time=$((current_time - start_time))
-        local upload_rate=$((processed_counter / (elapsed_time > 0 ? elapsed_time : 1)))
+#    # Upload any remaining records in the final batch
+#    if [[ -n "$batch" ]]; then
+#        upload_batch "$batch" "$counter" "$start_time"
+#    fi
 
-        echo -ne "Uploaded $processed_counter proteins... [$upload_rate proteins/sec, elapsed time: ${elapsed_time}s]\r"
-    }
-
-    while IFS= read -r line; do
-        # Add line to the current batch and increment counter
-        batch+=$'{"index": { "_index": "uniprot_entries" }}\n'"${line}"$'\n'
-        counter="$((counter+1))"
-
-        # If the batch size reaches the UPLOAD_BATCH_SIZE, process it
-        if ((counter % UPLOAD_BATCH_SIZE == 0)); then
-            upload_batch "$batch" "$counter" "$start_time"
-            batch=""
-        fi
-    done < <(lz4cat "$UNIPROT_ENTRIES_FILE" | convert_uniprot_entries_to_json)
-
-    # Upload any remaining records in the final batch
-    if [[ -n "$batch" ]]; then
-        upload_batch "$batch" "$counter" "$start_time"
-    fi
-
-    echo -e "\nUpload complete. Total proteins uploaded: $counter."
+#    echo -e "\nUpload complete. Total proteins uploaded: $counter."
 
     log "Finished uploading UniProt entries."
 }
