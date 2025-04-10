@@ -33,7 +33,20 @@ UPLOAD_BATCH_SIZE=1000
 #                               Main functions                                 #
 ################################################################################
 
-# Clear old indices in the OpenSearch instance, and create the new indices according to the current requirements.
+################################################################################
+# init_indices                                                                 #
+#                                                                              #
+# Clears old indices in the OpenSearch instance and recreates them using the   #
+# latest index definitions to ensure they are up-to-date. It fetches a list of #
+# the current indices, deletes them, and recreates the "uniprot_entries" index #
+# using its JSON definition file.                                              #
+#                                                                              #
+# Arguments:                                                                   #
+#   None                                                                       #
+#                                                                              #
+# Returns:                                                                     #
+#   None                                                                       #
+################################################################################
 init_indices() {
     log "Started dropping existing indices."
 
@@ -65,8 +78,27 @@ init_indices() {
     log "Finished creating new indices."
 }
 
-# This function reads in a list of UniProt-entries from stdin that are formatted as tsv and converts these to JSON
-# objects (one object per line). These are compatible with the uniprot_entries index in OpenSearch.
+################################################################################
+# convert_uniprot_entries_to_json                                              #
+#                                                                              #
+# Reads a list of UniProt entries formatted as TSV from stdin and converts     #
+# each line into a JSON object (one object per line). These JSON objects are   #
+# compatible with the "uniprot_entries" index in OpenSearch.                   #
+#                                                                              #
+# Input:                                                                       #
+#   - TSV-formatted data from stdin where columns follow the structure:        #
+#     <column 1> <uniprot_accession_number> <version> <taxon_id> <type> <name> #
+#     <protein>.                                                               #
+#                                                                              #
+# Output:                                                                      #
+#   - JSON objects (one per line) emitted to stdout.                           #
+#                                                                              #
+# Arguments:                                                                   #
+#   None                                                                       #
+#                                                                              #
+# Returns:                                                                     #
+#   None                                                                       #
+################################################################################
 convert_uniprot_entries_to_json() {
     while IFS=$'\t' read -r _ uniprot_accession_number version taxon_id type name protein; do
         # Create a JSON object for the current line using jq
@@ -88,8 +120,27 @@ convert_uniprot_entries_to_json() {
     done
 }
 
-# Read the uniprot_entries file that was provided to the script, convert each line from the tsv to a valid JSON-object
-# and upload them in bulk to the OpenSearch instance.
+################################################################################
+# upload_uniprot_entries                                                       #
+#                                                                              #
+# Reads the UniProt entries file provided to the script in TSV format,         #
+# converts each line to JSON, and uploads them to the OpenSearch instance in   #
+# bulk. The function uploads the data in batches and provides real-time        #
+# progress updates.                                                            #
+#                                                                              #
+# Input:                                                                       #
+#   - TSV-formatted file specified by the UNIPROT_ENTRIES_FILE variable.       #
+#   - Uses the UPLOAD_BATCH_SIZE variable to determine batch size.             #
+#                                                                              #
+# Output:                                                                      #
+#   - Progress updates during the upload process printed to stdout.            #
+#                                                                              #
+# Arguments:                                                                   #
+#   None                                                                       #
+#                                                                              #
+# Returns:                                                                     #
+#   None                                                                       #
+################################################################################
 upload_uniprot_entries() {
     log "Started uploading UniProt entries."
 
@@ -134,5 +185,84 @@ upload_uniprot_entries() {
     log "Finished uploading UniProt entries."
 }
 
+################################################################################
+# parse_arguments                                                              #
+#                                                                              #
+# Parses command-line arguments provided to the script and sets options and    #
+# variables accordingly. Ensures required parameters are set and prints the    #
+# help message if invalid or missing arguments are provided.                   #
+#                                                                              #
+# Arguments:                                                                   #
+#   --opensearch-url      (optional) URL of the OpenSearch instance. Defaults  #
+#                         to 'http://localhost:9200'.                         #
+#   --uniprot-entries     (required) Path to the UniProt TSV file for upload.  #
+#   --help                Prints the help message and exits.                   #
+#                                                                              #
+# Returns:                                                                     #
+#   None                                                                       #
+################################################################################
+parse_arguments() {
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --opensearch-url)
+                OPENSEARCH_URL="$2"
+                shift 2
+                ;;
+            --uniprot-entries)
+                UNIPROT_ENTRIES_FILE="$2"
+                shift 2
+                ;;
+            --help)
+                print_help
+                exit 0
+                ;;
+            *)
+                echo "Unknown parameter: $1"
+                print_help
+                exit 1
+                ;;
+        esac
+    done
+
+    # Ensure the required parameter --uniprot-entries is set
+    if [[ -z $UNIPROT_ENTRIES_FILE ]]; then
+        echo "Error: --uniprot-entries is required."
+        print_help
+        exit 1
+    fi
+}
+
+################################################################################
+# print_help                                                                   #
+#                                                                              #
+# Displays a help message that describes the script usage, parameters, and     #
+# examples of how to execute it. This message is printed when the '--help'     #
+# flag is passed or when invalid arguments are provided to the script.         #
+#                                                                              #
+# Arguments:                                                                   #
+#   None                                                                       #
+#                                                                              #
+# Returns:                                                                     #
+#   None                                                                       #
+################################################################################
+print_help() {
+    echo "Usage: $0 [OPTIONS]"
+    echo ""
+    echo "Options:"
+    echo "  --uniprot-entries   Path to the 'uniprot_entries.tsv.lz4' file to be uploaded (required)."
+    echo "  --opensearch-url    URL to communicate with the running OpenSearch instance (optional, default: 'http://localhost:9200')."
+    echo "  --help              Prints this help message."
+    echo ""
+    echo "Examples:"
+    echo "  $0 --uniprot-entries /path/to/uniprot_entries.tsv.lz4"
+    echo "  $0 --opensearch-url http://localhost:9200 --uniprot-entries /path/to/uniprot_entries.tsv.lz4"
+    echo ""
+}
+
+# Check if all required dependencies are installed
 checkdep "jq"
 checkdep "lz4"
+
+parse_arguments "$@"
+init_indices
+upload_uniprot_entries
