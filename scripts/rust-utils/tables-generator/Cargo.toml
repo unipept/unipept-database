@@ -1,0 +1,9 @@
+[package]
+name = "tables-generator"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0.97"
+utils = { path = "../utils" }
+bit-vec = "0.8.0"

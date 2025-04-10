@@ -19,7 +19,7 @@ jobs:
         id: cache
         with:
           shared-key: ${{ env.CACHE_KEY }}
-      - run: cd scripts/helper_scripts/unipept-database-rs && cargo fetch
+      - run: cd scripts/rust-utils && cargo fetch
         if: ${{ !steps.cache.outputs.cache-hit }}
 
   build:
@@ -32,7 +32,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: ${{ env.CACHE_KEY }}
-      - run: cd scripts/helper_scripts/unipept-database-rs && cargo build --release
+      - run: cd scripts/rust-utils && cargo build --release
 
   format:
     name: Check formatting
@@ -46,7 +46,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: ${{ env.CACHE_KEY }}
-      - run: cd scripts/helper_scripts/unipept-database-rs && cargo fmt --all --check
+      - run: cd scripts/rust-utils && cargo fmt --all --check
 
   lint:
     name: Linting
@@ -66,7 +66,7 @@ jobs:
           reporter: 'github-pr-check'
           fail_on_error: true
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          workdir: scripts/helper_scripts/unipept-database-rs
+          workdir: scripts/rust-utils
 
   test:
     name: Run tests
@@ -78,4 +78,4 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: ${{ env.CACHE_KEY }}
-      - run: cd scripts/helper_scripts/unipept-database-rs && cargo test
+      - run: cd scripts/rust-utils && cargo test
