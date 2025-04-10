@@ -222,7 +222,7 @@ def upload_batch(batch_lines, upload_url):
 buffer = []
 for line_number, line in enumerate(sys.stdin, start=1):
     buffer.append(line)
-    if line_number % UPLOAD_BATCH_SIZE == 0:
+    if line_number % 1000 == 0:
         upload_batch("".join(buffer), OPENSEARCH_URL + "/_bulk")
         buffer = []
 
