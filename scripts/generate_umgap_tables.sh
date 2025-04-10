@@ -62,7 +62,7 @@ trap clean EXIT
 ################################################################################
 
 ################################################################################
-# download_and_process_uniprot                                                 #
+# download_and_process_uniprot_kmer                                            #
 #                                                                              #
 # Downloads and parses UniProtKB databases specified as a comma-separated list #
 # in the first argument ($1). The function supports "swissprot" and "trembl".  #
@@ -86,7 +86,7 @@ trap clean EXIT
 # Returns:                                                                     #
 #   None                                                                       #
 ################################################################################
-download_and_process_uniprot() {
+download_and_process_uniprot_kmer() {
   local db_types="$1"
   local temp_dir="$2"
   local temp_constant="$3"
@@ -105,7 +105,7 @@ download_and_process_uniprot() {
 }
 
 ################################################################################
-# download_and_process_uniprot                                                 #
+# download_and_process_uniprot_tryptic                                         #
 #                                                                              #
 # Downloads and parses UniProtKB databases specified as a comma-separated list #
 # in the first argument ($1). The function supports "swissprot" and "trembl".  #
@@ -801,7 +801,7 @@ if [[ "$MODE" == "kmer" ]]; then
   parse_kmer_arguments "$@"
   build_binaries "taxdmp-parser" "uniprot-parser"
   create_taxon_tables "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT" "$OUTPUT_DIR"
-  download_and_process_uniprot "$DB_TYPES" "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT" "$OUTPUT_DIR"
+  download_and_process_uniprot_kmer "$DB_TYPES" "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT" "$OUTPUT_DIR"
   create_kmer_index "$OUTPUT_DIR" "$KMER_LENGTH"
 elif [[ "$MODE" == "tryptic" ]]; then
   parse_tryptic_arguments "$@"
