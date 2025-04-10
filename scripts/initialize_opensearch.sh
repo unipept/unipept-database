@@ -169,24 +169,16 @@ init_indices() {
 #   None                                                                       #
 ################################################################################
 convert_uniprot_entries_to_json() {
-    while IFS=$'\t' read -r _ uniprot_accession_number version taxon_id type name protein _; do
-        # Create a JSON object for the current line using jq
-        jq -c -n \
-            --arg uniprot_accession_number "$uniprot_accession_number" \
-            --argjson version "$version" \
-            --argjson taxon_id "$taxon_id" \
-            --arg type "$type" \
-            --arg name "$name" \
-            --arg protein "$protein" \
-            '{
-                uniprot_accession_number: $uniprot_accession_number,
-                version: $version,
-                taxon_id: $taxon_id,
-                type: $type,
-                name: $name,
-                protein: $protein
-            }'
-    done
+    jq -c -R -s 'split("\n")[:-1] | map(
+        split("\t") | {
+            uniprot_accession_number: .[1],
+            version: (.[2] | tonumber),
+            taxon_id: (.[3] | tonumber),
+            type: .[4],
+            name: .[5],
+            protein: .[6]
+        }
+    )' 
 }
 
 ################################################################################
