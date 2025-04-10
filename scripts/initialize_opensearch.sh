@@ -125,7 +125,7 @@ init_indices() {
     # Iterate through each index and delete it
     for index in $indices; do
         echo "Deleting index: $index"
-        curl -s -X DELETE "${OPENSEARCH_URL}/${index}" || { echo "Failed to delete index: $index"; exit 1; }
+        curl -s -X DELETE "${OPENSEARCH_URL}/${index}" > /dev/null || { echo "Failed to delete index: $index"; exit 1; }
     done
 
     echo "Finished dropping existing indices."
@@ -137,7 +137,7 @@ init_indices() {
 
     # Use the JSON file pointed to by the variable to create the new index
     if [[ -f "${uniprot_entries_index_file}" ]]; then
-        curl -s -X PUT "${OPENSEARCH_URL}/uniprot_entries" -H 'Content-Type: application/json' -d @"${uniprot_entries_index_file}" || { echo "Failed to create uniprot_entries index"; exit 1; }
+        curl -s -X PUT "${OPENSEARCH_URL}/uniprot_entries" -H 'Content-Type: application/json' -d @"${uniprot_entries_index_file}" > /dev/null || { echo "Failed to create uniprot_entries index"; exit 1; }
         echo "Successfully created uniprot_entries index."
     else
         echo "Index file ${uniprot_entries_index_file} does not exist."
@@ -169,16 +169,14 @@ init_indices() {
 #   None                                                                       #
 ################################################################################
 convert_uniprot_entries_to_json() {
-    jq -c -R -s 'split("\n")[:-1] | map(
-        split("\t") | {
+    jq -c -R 'split("\t") | {
             uniprot_accession_number: .[1],
             version: (.[2] | tonumber),
             taxon_id: (.[3] | tonumber),
             type: .[4],
             name: .[5],
             protein: .[6]
-        }
-    )' 
+    }'
 }
 
 ################################################################################
