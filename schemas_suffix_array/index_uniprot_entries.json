@@ -13,7 +13,10 @@
       "taxon_id": { "type": "integer" },
       "type": { "type": "keyword" },
       "name": { "type": "text" },
-      "protein": { "type": "null" }
+      "protein": {
+        "type": "text",
+        "index": false
+      }
     }
   }
 }
