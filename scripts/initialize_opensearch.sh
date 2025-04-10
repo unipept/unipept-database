@@ -30,6 +30,75 @@ UNIPROT_ENTRIES_FILE=""
 UPLOAD_BATCH_SIZE=1000
 
 ################################################################################
+#                            Helper Functions                                  #
+################################################################################
+
+################################################################################
+# terminateAndExit                                                             #
+#                                                                              #
+# Stops the script and removes all temporary files that are created by this    #
+# script. Prints an error message to stderr and exits with status code 1.      #
+#                                                                              #
+# Globals:                                                                     #
+#   None                                                                       #
+#                                                                              #
+# Arguments:                                                                   #
+#   None                                                                       #
+#                                                                              #
+# Outputs:                                                                     #
+#   Error message to stderr                                                   #
+#                                                                              #
+# Returns:                                                                     #
+#   None                                                                       #
+################################################################################
+terminateAndExit() {
+	echo "Error: execution of the script was cancelled by the user." 1>&2
+	echo ""
+	exit 1
+}
+
+################################################################################
+# errorAndExit                                                                 #
+#                                                                              #
+# Can be called when an error has occurred during the execution of the script. #
+# This function will inform the user of what error occurred, where it occurred,#
+# and what command was being executed when it happened. It will then properly  #
+# exit the script, cleaning up any temporary files first.                      #
+#                                                                              #
+# Globals:                                                                     #
+#   None                                                                       #
+#                                                                              #
+# Arguments:                                                                   #
+#   $1 (optional)     - Additional error message to display                    #
+#                                                                              #
+# Outputs:                                                                     #
+#   Error details to stderr                                                    #
+#                                                                              #
+# Returns:                                                                     #
+#   Exits with status code 2                                                  #
+################################################################################
+errorAndExit() {
+    local exit_status="$?"        # Capture the exit status of the last command
+    local line_no=${BASH_LINENO[0]}  # Get the line number where the error occurred
+    local command="${BASH_COMMAND}"  # Get the command that was executed
+
+    echo "Error: the script experienced an error while trying to build the requested database." 1>&2
+    echo "Error details:" 1>&2
+    echo "Command '$command' failed with exit status $exit_status at line $line_no." 1>&2
+
+    if [[ -n "$1" ]]
+    then
+        echo "$1" 1>&2
+    fi
+
+    echo "" 1>&2
+    exit 2
+}
+
+trap terminateAndExit SIGINT
+trap errorAndExit ERR
+
+################################################################################
 #                               Main functions                                 #
 ################################################################################
 
@@ -100,7 +169,7 @@ init_indices() {
 #   None                                                                       #
 ################################################################################
 convert_uniprot_entries_to_json() {
-    while IFS=$'\t' read -r _ uniprot_accession_number version taxon_id type name protein; do
+    while IFS=$'\t' read -r _ uniprot_accession_number version taxon_id type name protein _; do
         # Create a JSON object for the current line using jq
         jq -c -n \
             --arg uniprot_accession_number "$uniprot_accession_number" \
@@ -166,7 +235,7 @@ upload_uniprot_entries() {
     while IFS= read -r line; do
         # Add line to the current batch and increment counter
         batch+=$'{"index": { "_index": "uniprot_entries" }}\n'"${line}"$'\n'
-        ((counter++))
+        counter="$((counter+1))"
 
         # If the batch size reaches the UPLOAD_BATCH_SIZE, process it
         if ((counter % UPLOAD_BATCH_SIZE == 0)); then
