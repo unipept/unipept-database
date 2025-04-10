@@ -351,8 +351,7 @@ log() { echo "$(date +'[%s (%F %T)]')" "$@"; }
 ################################################################################
 # build_binaries                                                               #
 #                                                                              #
-# Builds the release binaries for the unipept-database-rs project and copies   #
-# the generated executable files to the /helper_scripts folder for further use.#
+# Builds the release binaries for the rust-utils project                       #
 # This function ensures that all the required binaries are available for the   #
 # database building process.                                                   #
 #                                                                              #
@@ -363,18 +362,17 @@ log() { echo "$(date +'[%s (%F %T)]')" "$@"; }
 #   None                                                                       #
 #                                                                              #
 # Outputs:                                                                     #
-#   Copies built binaries to the /helper_scripts folder                        #
+#   None                                                                       #
 #                                                                              #
 # Returns:                                                                     #
 #   None                                                                       #
 ################################################################################
 build_binaries() {
+  packages=$(echo "$@" | sed 's/[^ ]*/-p &/g')
   log "Started building Rust utilities"
-  # Build binaries and copy them to the /helper_scripts folder
-  cd "$CURRENT_LOCATION"/helper_scripts/unipept-database-rs
-  cargo build --release --quiet
+  cd "$CURRENT_LOCATION"/rust-utils
+  cargo build --release --quiet $packages
   cd - > /dev/null
-  find "$CURRENT_LOCATION"/helper_scripts/unipept-database-rs/target/release -maxdepth 1 -type f -executable -exec cp {} "$CURRENT_LOCATION"/helper_scripts/ \;
   log "Finished building Rust utilities"
 }
 
@@ -424,6 +422,63 @@ extract_uniprot_version() {
   # Write the formatted version to the .version file
   echo "$formatted_version" > "$output_dir/.version"
   echo "Version $formatted_version written to .version file."
+}
+
+################################################################################
+# download_uniprot                                                             #
+#                                                                              #
+# Downloads UniProtKB databases specified as a comma-separated list in the     #
+# first argument ($1). The function supports "swissprot" and "trembl". For     #
+# each database type, it attempts to download and decompress the UniProtKB     #
+# files and writes them to stdout                                              #
+#                                                                              #
+# Globals:                                                                     #
+#   CURRENT_LOCATION   - Current script directory                              #
+#                                                                              #
+# Arguments:                                                                   #
+#   $1 - Comma-separated list of database sources to download. Supported       #
+#                                                                              #
+# Outputs:                                                                     #
+#   None                                                                       #
+#                                                                              #
+# Returns:                                                                     #
+#   stream of decompressed UniProtKB entries (stdout)                          #
+################################################################################
+download_uniprot() {
+  local old_ifs="$IFS"
+  IFS=","
+  local db_types_array=($1)
+  IFS="$old_ifs"
+
+  local idx=0
+
+  while [[ "$idx" -ne "${#db_types_array}" ]] && [[ -n $(echo "${db_types_array[$idx]}" | sed "s/\s//g") ]]
+  do
+    local db_type=${db_types_array[$idx]}
+    local db_source=${SOURCE_URLS["$db_type"]}
+
+    log "Started downloading UniProtKB - $db_type."
+
+    # Where should we store the index of this converted database.
+    local db_output_dir="${temp_dir:?}/${temp_constant}/$db_type"
+
+    # Remove previous database (if it exist) and continue building the new database.
+    rm -rf "$db_output_dir"
+    mkdir -p "$db_output_dir"
+
+    # Extract the total size of the database that's being downloaded. This is required for pv to know which percentage
+    # of the total download has been processed.
+    local size="$(curl -I "$db_source" -s | grep -i content-length | tr -cd '[0-9]')"
+
+    # Effectively download the database and convert to a tabular format
+    curl --continue-at - --create-dirs "$db_source" --silent \
+    | pv -i 5 -n -s "$size" 2> >(reportProgress - "Downloading database for $db_type" >&2) \
+    | pigz -dc
+
+    log "Finished downloading UniProtKB - $db_type."
+
+    idx=$((idx + 1))
+  done
 }
 
 ################################################################################
@@ -521,9 +576,10 @@ create_taxon_tables() {
 
   log "Parsing names.dmp and nodes.dmp files"
   mkdir -p "$output_dir"
-  "$CURRENT_LOCATION"/helper_scripts/taxons-lineages \
-    --names "$temp_dir/$temp_constant/names.dmp" --nodes "$temp_dir/$temp_constant/nodes.dmp" \
-    --taxons "$(lz "$output_dir/taxons.tsv.lz4")" \
+  "$CURRENT_LOCATION"/rust-utils/target/release/taxdmp-parser \
+    --names "$temp_dir/$temp_constant/names.dmp" \
+    --nodes "$temp_dir/$temp_constant/nodes.dmp" \
+    --taxa "$(lz "$output_dir/taxons.tsv.lz4")" \
     --lineages "$(lz "$output_dir/lineages.tsv.lz4")"
 
   rm "$temp_dir/$temp_constant/names.dmp" "$temp_dir/$temp_constant/nodes.dmp"

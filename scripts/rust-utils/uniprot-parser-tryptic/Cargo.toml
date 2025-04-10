@@ -1,0 +1,11 @@
+[package]
+name = "uniprot-parser-tryptic"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+dat-parser = { path = "../dat-parser" }
+clap = { version = "4.5.35", features = ["derive"] }
+anyhow = "1.0.97"
+utils = { path = "../utils" }
+tables-generator = { path = "../tables-generator" }

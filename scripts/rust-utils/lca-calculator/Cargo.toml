@@ -1,0 +1,10 @@
+[package]
+name = "lca-calculator"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0.97"
+utils = { path = "../utils" }
+ncbi = { path = "../ncbi" }
+clap = { version = "4.5.35", features = ["derive"] }
