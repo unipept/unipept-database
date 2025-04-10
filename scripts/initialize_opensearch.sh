@@ -202,9 +202,9 @@ convert_uniprot_entries_to_json() {
 ################################################################################
 upload_uniprot_entries() {
     log "Started uploading UniProt entries."
-    
-    upload_batch() {
-python3 - <<'EOF'
+
+    batch_upload() {
+        python3 - <<'EOF'
 import sys
 import requests
 
@@ -230,7 +230,9 @@ for line_number, line in enumerate(sys.stdin, start=1):
 if buffer:
     upload_batch("".join(buffer), OPENSEARCH_URL + "/_bulk")
 EOF
-    done < <(pv "$UNIPROT_ENTRIES_FILE" | lz4cat | convert_uniprot_entries_to_json)
+    }
+
+    pv "$UNIPROT_ENTRIES_FILE" | lz4cat | convert_uniprot_entries_to_json | batch_upload
 
     log "Finished uploading UniProt entries."
 }
