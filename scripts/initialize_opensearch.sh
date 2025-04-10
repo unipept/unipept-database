@@ -234,7 +234,7 @@ upload_uniprot_entries() {
 #        fi
 #    done < <(lz4cat "$UNIPROT_ENTRIES_FILE" | convert_uniprot_entries_to_json)
     
-    pv "$UNIPROT_ENTRIES_FILE" | lz4cat | convert_uniprot_entries_to_json | split - -l "$UPLOAD_BATCH_SIZE" --filter="curl -s -X POST ${OPENSEARCH_URL}/_bulk -H 'Content-Type: application/json' --data-binary @-"
+    pv "$UNIPROT_ENTRIES_FILE" | lz4cat | convert_uniprot_entries_to_json | xargs -d '\n' -L $UPLOAD_BATCH_SIZE -I '{}' "curl -s -X POST ${OPENSEARCH_URL}/_bulk -H 'Content-Type: application/json' --data-binary @{}"
 
 #    # Upload any remaining records in the final batch
 #    if [[ -n "$batch" ]]; then
