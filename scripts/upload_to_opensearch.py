@@ -65,7 +65,7 @@ def main():
 
     index_name = args.index_name
     fields = args.fields.split(",")
-    id_field = args.index_field
+    id_field = args.id_field
     batch_size = args.batch_size
     opensearch_url = args.opensearch_url
 
