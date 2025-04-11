@@ -16,16 +16,15 @@ jobs:
         id: cache
         with:
           shared-key: ${{ env.CACHE_KEY }}
-      - run: cd scripts/helper_scripts/unipept-database-rs && cargo fetch
+      - run: cd scripts/rust-utils && cargo fetch
         if: ${{ !steps.cache.outputs.cache-hit }}
-      - run: ./scripts/build_binaries.sh
       - name: Get current date
         id: date
         run: echo "date=$(date +'%Y-%m-%d')" >> $GITHUB_ENV
       - name: Install required utilities
         run: |
           sudo apt-get update
-          sudo apt-get -y install git curl unzip gawk sqlite3 libsqlite3-dev pv nodejs wget uuid-runtime pigz lz4 parallel libxml2-utils
+          sudo apt-get -y install git curl unzip gawk pv wget uuid-runtime pigz lz4 parallel libxml2-utils
       - name: Prepare temporary directories
         run: sudo mkdir -p "output" "unipept-temp"
       - name: Generate tsv.gz files
