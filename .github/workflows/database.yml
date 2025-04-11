@@ -21,7 +21,7 @@ jobs:
           sudo apt-get update
           sudo apt-get -y install git curl unzip gawk pv wget uuid-runtime pigz lz4 parallel libxml2-utils
       - name: Prepare temporary directories
-        run: sudo mkdir -p "output" "unipept-temp"
+        run: mkdir -p "output" "unipept-temp"
       - name: Generate tsv.gz files
         shell: bash
         run: ./scripts/generate_sa_tables.sh --database-sources "swissprot" --output-dir "output" --temp-dir "unipept-temp"
