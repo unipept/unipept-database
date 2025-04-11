@@ -148,38 +148,6 @@ init_indices() {
 }
 
 ################################################################################
-# convert_uniprot_entries_to_json                                              #
-#                                                                              #
-# Reads a list of UniProt entries formatted as TSV from stdin and converts     #
-# each line into a JSON object (one object per line). These JSON objects are   #
-# compatible with the "uniprot_entries" index in OpenSearch.                   #
-#                                                                              #
-# Input:                                                                       #
-#   - TSV-formatted data from stdin where columns follow the structure:        #
-#     <column 1> <uniprot_accession_number> <version> <taxon_id> <type> <name> #
-#     <protein>.                                                               #
-#                                                                              #
-# Output:                                                                      #
-#   - JSON objects (one per line) emitted to stdout.                           #
-#                                                                              #
-# Arguments:                                                                   #
-#   None                                                                       #
-#                                                                              #
-# Returns:                                                                     #
-#   None                                                                       #
-################################################################################
-convert_uniprot_entries_to_json() {
-    jq -c -R '{index: { _index: "uniprot_entries" }}, (split("\t") | {
-            uniprot_accession_number: .[1],
-            version: (.[2] | tonumber),
-            taxon_id: (.[3] | tonumber),
-            type: .[4],
-            name: .[5],
-            protein: .[6]
-    })'
-}
-
-################################################################################
 # upload_uniprot_entries                                                       #
 #                                                                              #
 # Reads the UniProt entries file provided to the script in TSV format,         #
@@ -203,36 +171,7 @@ convert_uniprot_entries_to_json() {
 upload_uniprot_entries() {
     log "Started uploading UniProt entries."
 
-    batch_upload() {
-        python3 - <<'EOF'
-import sys
-import requests
-
-def upload_batch(batch_lines, upload_url):
-    """
-    Sends a batch of JSON objects to OpenSearch in bulk.
-    """
-    headers = {"Content-Type": "application/x-ndjson"}
-    response = requests.post(upload_url, data=batch_lines, headers=headers)
-    if response.status_code != 200:
-        print(f"Failed to upload batch: {response.status_code}, {response.text}", file=sys.stderr)
-        sys.exit(1)
-
-# Read lines from stdin and process them in batches
-buffer = []
-for line_number, line in enumerate(sys.stdin, start=1):
-    buffer.append(line)
-    if line_number % 1000 == 0:
-        upload_batch("".join(buffer), OPENSEARCH_URL + "/_bulk")
-        buffer = []
-
-# Handle any remaining lines in the buffer
-if buffer:
-    upload_batch("".join(buffer), OPENSEARCH_URL + "/_bulk")
-EOF
-    }
-
-    pv "$UNIPROT_ENTRIES_FILE" | lz4cat | convert_uniprot_entries_to_json | batch_upload
+    pv "$UNIPROT_ENTRIES_FILE" | cut -f 2-7 | lz4cat | python3 "${CURRENT_LOCATION}/upload_to_opensearch.py" --index-name "uniprot_entries" --fields "uniprot_accession_number,version,taxon_id,type,name,sequence"
 
     log "Finished uploading UniProt entries."
 }
