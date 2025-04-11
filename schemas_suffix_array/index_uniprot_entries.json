@@ -16,6 +16,10 @@
       "sequence": {
         "type": "text",
         "index": false
+      },
+      "fa": {
+        "type": "text",
+        "index": false
       }
     }
   }
