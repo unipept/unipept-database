@@ -5,7 +5,7 @@ import requests
 import argparse
 
 
-def convert_to_json(rows, fields, index_name):
+def convert_to_json(rows, fields, index_name, id_field):
     """
     Convert a list of TSV-rows to JSON objects. The fields array should correspond to the columns of the TSV (in the
     same order!).
@@ -15,13 +15,15 @@ def convert_to_json(rows, fields, index_name):
     :return:
     """
     objects = []
-    action = json.dumps({"index": {"_index": index_name}})
+    id_field_idx = fields.index(id_field)
+    
     for row in rows:
         object = {}
         splitted_row = row.split("\t")
         for (idx, field) in enumerate(fields):
             object[field] = splitted_row[idx]
-        objects.append(action)
+        action = {"index": {"_index": index_name, "_id": splitted_row[id_field_idx]}}
+        objects.append(json.dumps(action))
         objects.append(json.dumps(object))
     return objects
 
@@ -53,6 +55,8 @@ def main():
     parser.add_argument("--index-name", required=True, type=str, help="The index name to upload data to in OpenSearch")
     parser.add_argument("--fields", required=True, type=str,
                         help="Comma-delimited list of field names for the TSV columns")
+    parser.add_argument("--id-field", required=True, type=str,
+                        help="The field to use as the document ID in the OpenSearch index")
     parser.add_argument("--batch-size", type=int, default=1000, help="Number of objects in each batch upload")
     parser.add_argument("--opensearch-url", type=str, default="http://localhost:9200",
                         help="URL of the OpenSearch instance")
@@ -61,6 +65,7 @@ def main():
 
     index_name = args.index_name
     fields = args.fields.split(",")
+    id_field = args.index_field
     batch_size = args.batch_size
     opensearch_url = args.opensearch_url
 
@@ -69,12 +74,12 @@ def main():
         lines.append(line.rstrip())
 
         if len(lines) == batch_size:
-            converted_lines = convert_to_json(lines, fields, index_name)
+            converted_lines = convert_to_json(lines, fields, index_name, id_field)
             upload_bulk(converted_lines, opensearch_url)
             lines = []
 
     if len(lines) > 0:
-        converted_lines = convert_to_json(lines, fields, index_name)
+        converted_lines = convert_to_json(lines, fields, index_name, id_field)
         upload_bulk(converted_lines, opensearch_url)
 
 if __name__ == "__main__":

@@ -171,7 +171,7 @@ init_indices() {
 upload_uniprot_entries() {
     log "Started uploading UniProt entries."
 
-    pv "$UNIPROT_ENTRIES_FILE" | lz4cat | cut -f 2-8 | python3 "${CURRENT_LOCATION}/upload_to_opensearch.py" --index-name "uniprot_entries" --fields "uniprot_accession_number,version,taxon_id,type,name,sequence,fa"
+    pv "$UNIPROT_ENTRIES_FILE" | lz4cat | cut -f 2-8 | python3 "${CURRENT_LOCATION}/upload_to_opensearch.py" --index-name "uniprot_entries" --fields "uniprot_accession_number,version,taxon_id,type,name,sequence,fa" --id-field "uniprot_accession_number"
 
     log "Finished uploading UniProt entries."
 }
