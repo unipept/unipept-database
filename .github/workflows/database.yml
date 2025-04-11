@@ -24,7 +24,7 @@ jobs:
         run: sudo mkdir -p "output" "unipept-temp"
       - name: Generate tsv.gz files
         shell: bash
-        run: sudo ./scripts/generate_sa_tables.sh --database-sources "swissprot" --output-dir "output" --temp-dir "unipept-temp"
+        run: ./scripts/generate_sa_tables.sh --database-sources "swissprot" --output-dir "output" --temp-dir "unipept-temp"
       - name: Zip all tsv.gz files
         shell: bash
         run: cd output && zip -r "../suffix_array.zip" * && zip -u "../suffix_array.zip" ".version"
