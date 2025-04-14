@@ -2,12 +2,7 @@
   "mappings": {
     "properties": {
       "uniprot_accession_number": {
-        "type": "wildcard",
-        "fields": {
-          "exact": {
-            "type": "keyword"
-          }
-        }
+        "type": "keyword"
       },
       "version": { "type": "integer" },
       "taxon_id": { "type": "integer" },

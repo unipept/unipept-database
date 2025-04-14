@@ -27,7 +27,7 @@ OPENSEARCH_URL="http://localhost:9200"
 UNIPROT_ENTRIES_FILE=""
 
 # The amount of documents that are uploaded at once to the OpenSearch instance
-UPLOAD_BATCH_SIZE=1000
+UPLOAD_BATCH_SIZE=2500
 
 ################################################################################
 #                            Helper Functions                                  #
@@ -251,7 +251,6 @@ print_help() {
 }
 
 # Check if all required dependencies are installed
-checkdep "jq"
 checkdep "lz4"
 
 parse_arguments "$@"

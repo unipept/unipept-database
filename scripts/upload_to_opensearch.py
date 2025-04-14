@@ -1,9 +1,7 @@
 import sys
-import csv
 import json
 import requests
 import argparse
-
 
 def convert_to_json(rows, fields, index_name, id_field):
     """
@@ -57,7 +55,7 @@ def main():
                         help="Comma-delimited list of field names for the TSV columns")
     parser.add_argument("--id-field", required=True, type=str,
                         help="The field to use as the document ID in the OpenSearch index")
-    parser.add_argument("--batch-size", type=int, default=1000, help="Number of objects in each batch upload")
+    parser.add_argument("--batch-size", type=int, default=2500, help="Number of objects in each batch upload")
     parser.add_argument("--opensearch-url", type=str, default="http://localhost:9200",
                         help="URL of the OpenSearch instance")
 
