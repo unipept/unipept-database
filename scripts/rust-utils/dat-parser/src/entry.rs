@@ -19,6 +19,7 @@ const OX_PREFIX_NCBI_LENGTH: usize = "OX   NCBI_TaxID=".len();
 pub struct DatabaseReferences {
     go_references: Vec<String>,
     ipr_references: Vec<String>,
+    proteome_references: Vec<String>
 }
 
 /// The minimal data we want from an entry out of the UniProtKB datasets
@@ -32,6 +33,7 @@ pub struct UniProtDATEntry {
     ec_references: Vec<String>,
     go_references: Vec<String>,
     ip_references: Vec<String>,
+    proteome_references: Vec<String>,
     taxon_id: String,
 }
 
@@ -47,6 +49,7 @@ impl From<UniProtDATEntry> for Entry {
             entry.ec_references,
             entry.go_references,
             entry.ip_references,
+            entry.proteome_references
         )
         .unwrap()
     }
@@ -105,6 +108,7 @@ impl UniProtDATEntry {
             ec_references: ec_references.into_iter().collect(),
             go_references: db_references.go_references,
             ip_references: db_references.ipr_references,
+            proteome_references: db_references.proteome_references,
             taxon_id,
         })
     }
@@ -292,12 +296,13 @@ fn parse_taxonomy_reference(data: &[String], data_cursor: &mut usize) -> String 
 fn parse_db_references(data: &[String], data_cursor: &mut usize) -> DatabaseReferences {
     let mut go_references = Vec::new();
     let mut ipr_references = Vec::new();
+    let mut proteome_references = Vec::new();
 
     // Parse all references
     while data[*data_cursor].starts_with("DR") {
         let line = &data[*data_cursor][COMMON_PREFIX_LEN..];
 
-        parse_db_reference(line, &mut go_references, &mut ipr_references);
+        parse_db_reference(line, &mut go_references, &mut ipr_references, &mut proteome_references);
 
         *data_cursor += 1;
     }
@@ -305,6 +310,7 @@ fn parse_db_references(data: &[String], data_cursor: &mut usize) -> DatabaseRefe
     DatabaseReferences {
         go_references,
         ipr_references,
+        proteome_references
     }
 }
 
@@ -313,11 +319,14 @@ fn parse_db_reference(
     line: &str,
     go_references: &mut Vec<String>,
     ipr_references: &mut Vec<String>,
+    proteome_references: &mut Vec<String>
 ) {
     if line.starts_with("GO;") {
         go_references.push(line[4..14].to_string());
     } else if line.starts_with("InterPro;") {
         ipr_references.push(line[10..19].to_string());
+    } else if line.starts_with("Proteomes;") {
+        proteome_references.push(line[11..22].to_string());
     }
 }
 
@@ -467,11 +476,13 @@ mod tests {
     fn test_parse_db_references() {
         let want_go = vec![String::from("GO:0046782"), String::from("GO:0016743")];
         let want_ipr = vec![String::from("IPR007031"), String::from("IPR000308")];
+        let want_proteome = vec![String::from("UP000008770")];
         let mut lines = get_example_entry();
         let got_references = parse_db_references(&mut lines, &mut 27);
 
         assert_eq!(got_references.go_references, want_go);
         assert_eq!(got_references.ipr_references, want_ipr);
+        assert_eq!(got_references.proteome_references, want_proteome);
     }
 
     #[test]
@@ -481,10 +492,12 @@ mod tests {
             String::from("GO; GO:0046782; P:regulation of viral transcription; IEA:InterPro.");
         let mut target = Vec::new();
         let mut _dummy = Vec::new();
-        parse_db_reference(&mut line, &mut target, &mut _dummy);
+        let mut _dummy2 = Vec::new();
+        parse_db_reference(&mut line, &mut target, &mut _dummy, &mut _dummy2);
 
         assert_eq!(target, want);
         assert!(_dummy.is_empty());
+        assert!(_dummy2.is_empty());
     }
 
     #[test]
@@ -493,10 +506,26 @@ mod tests {
         let mut line = String::from("InterPro; IPR007031; Poxvirus_VLTF3.");
         let mut target = Vec::new();
         let mut _dummy = Vec::new();
-        parse_db_reference(&mut line, &mut _dummy, &mut target);
+        let mut _dummy2 = Vec::new();
+        parse_db_reference(&mut line, &mut _dummy, &mut target, &mut _dummy2);
 
         assert_eq!(target, want);
         assert!(_dummy.is_empty());
+        assert!(_dummy2.is_empty());
+    }
+
+    #[test]
+    fn test_parse_db_reference_proteome() {
+        let want = vec![String::from("UP000008770")];
+        let mut line = String::from("Proteomes; UP000008770; Segment.");
+        let mut target = Vec::new();
+        let mut _dummy = Vec::new();
+        let mut _dummy2 = Vec::new();
+        parse_db_reference(&mut line, &mut _dummy, &mut _dummy2, &mut target);
+
+        assert_eq!(target, want);
+        assert!(_dummy.is_empty());
+        assert!(_dummy2.is_empty());
     }
 
     #[test]

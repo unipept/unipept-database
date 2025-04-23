@@ -70,10 +70,12 @@ impl EntryTableWriter {
             fa.push(';');
             fa.push_str(&ip);
 
+            let proteomes = entry.proteome_references.join(";");
+
             writeln!(
                 &mut self.uniprot_entries,
-                "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
-                self.uniprot_count, accession_number, version, taxon_id, type_, name, sequence, fa
+                "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+                self.uniprot_count, accession_number, version, taxon_id, type_, name, sequence, fa, proteomes
             )
             .context("Error writing to TSV")?;
 

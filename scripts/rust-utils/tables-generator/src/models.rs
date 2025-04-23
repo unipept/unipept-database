@@ -14,6 +14,7 @@ pub struct Entry {
     pub ec_references: Vec<String>,
     pub go_references: Vec<String>,
     pub ip_references: Vec<String>,
+    pub proteome_references: Vec<String>
 }
 
 impl Entry {
@@ -28,6 +29,7 @@ impl Entry {
         ec_references: Vec<String>,
         go_references: Vec<String>,
         ip_references: Vec<String>,
+        proteome_references: Vec<String>
     ) -> Result<Self> {
         let parsed_id = taxon_id
             .parse()
@@ -44,6 +46,7 @@ impl Entry {
             ec_references,
             go_references,
             ip_references,
+            proteome_references
         })
     }
 }
