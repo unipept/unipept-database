@@ -1,0 +1,21 @@
+{
+  "mappings": {
+    "properties": {
+      "uniprot_accession_number": {
+        "type": "keyword"
+      },
+      "version": { "type": "integer" },
+      "taxon_id": { "type": "integer" },
+      "type": { "type": "keyword" },
+      "name": { "type": "text" },
+      "sequence": {
+        "type": "text",
+        "index": false
+      },
+      "fa": {
+        "type": "text",
+        "index": false
+      }
+    }
+  }
+}
