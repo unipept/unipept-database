@@ -146,3 +146,28 @@ impl PeptideTableWriter {
         Ok(())
     }
 }
+
+pub struct ProteomeTableWriter {
+    proteomes: BufWriter<File>,
+}
+
+impl ProteomeTableWriter {
+    pub fn new(proteomes: &PathBuf) -> Result<Self> {
+        Ok(Self {
+            proteomes: open_write(proteomes).context("Unable to open output file")?,
+        })
+    }
+
+    pub fn write_proteomes(&mut self, entry: &Entry) -> Result<()> {
+        for proteome in &entry.proteome_references {
+            writeln!(
+                &mut self.proteomes,
+                "{}\t{}",
+                proteome, entry.accession_number,
+            )
+            .context("Error writing to TSV")?;
+        }
+
+        Ok(())
+    }
+}

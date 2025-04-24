@@ -42,13 +42,13 @@ struct Cli {
     #[clap(long)]
     taxa: PathBuf,
 
-    /// Path to the peptides output file
-    #[clap(long)]
-    peptides: PathBuf,
-
     /// Path to the UniProt output file
     #[clap(long)]
     uniprot_entries: PathBuf,
+
+    /// Path to the peptides output file
+    #[clap(long)]
+    peptides: PathBuf,
 
     /// Minimum length of the peptide
     #[clap(long)]
