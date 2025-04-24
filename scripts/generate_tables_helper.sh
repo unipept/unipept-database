@@ -8,6 +8,12 @@
 CURRENT_LOCATION="${BASH_SOURCE%/*}"
 
 ################################################################################
+#                                    Imports                                   #
+################################################################################
+
+source "${CURRENT_LOCATION}/general_helpers.sh"
+
+################################################################################
 #                            Variables and options                             #
 ################################################################################
 
@@ -90,9 +96,7 @@ terminateAndExit() {
 # exit the script, cleaning up any temporary files first.                      #
 #                                                                              #
 # Globals:                                                                     #
-#   TEMP_DIR          - Directory used to store temporary files                #
-#   UNIPEPT_TEMP_CONSTANT - The constant used to create temporary file paths   #
-#   OLD_TMPDIR        - Original TMPDIR value to restore                       #
+#   None                                                                       #
 #                                                                              #
 # Arguments:                                                                   #
 #   $1 (optional)     - Additional error message to display                    #
