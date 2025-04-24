@@ -86,6 +86,27 @@ download_and_process_uniprot() {
   log "Finished generating the uniprot_entries file."
 }
 
+################################################################################
+# compute_reference_proteomes                                                  #
+#                                                                              #
+# Processes and computes reference proteomes by joining proteome data with     #
+# reference proteome data. The resulting data is sorted, formatted, and        #
+# compressed into a file named proteomes.tsv.lz4 in the output directory.      #
+#                                                                              #
+# Globals:                                                                     #
+#   CMD_LZ4CAT - Command or path to the lz4cat binary                          #
+#                                                                              #
+# Arguments:                                                                   #
+#   $1 - Temporary directory used to store intermediate files                  #
+#   $2 - Temporary constant to identify this script's files in the temp dir    #
+#   $3 - Output directory where the resulting files will be created            #
+#                                                                              #
+# Outputs:                                                                     #
+#   proteomes.tsv.lz4 - Processed and compressed reference proteomes file      #
+#                                                                              #
+# Returns:                                                                     #
+#   None                                                                       #
+################################################################################
 compute_reference_proteomes() {
   local temp_dir="$1"
   local temp_constant="$2"
@@ -209,6 +230,7 @@ checkdep lz4
 checkdep pigz
 
 parse_arguments "$@"
+checkDirectoryAndCreate "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT"
 build_binaries "taxdmp-parser" "uniprot-parser"
 create_taxon_tables "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT" "$OUTPUT_DIR"
 download_and_process_uniprot "$DB_TYPES" "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT" "$OUTPUT_DIR"
