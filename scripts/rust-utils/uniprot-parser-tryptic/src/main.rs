@@ -3,7 +3,7 @@ use clap::Parser;
 use dat_parser::uniprot_dat_parser;
 use std::path::PathBuf;
 use tables_generator::models::Entry;
-use tables_generator::table_writer::{EntryTableWriter, PeptideTableWriter, ProteomeTableWriter};
+use tables_generator::table_writer::{EntryTableWriter, PeptideTableWriter};
 use utils::open_sin;
 
 fn main() -> Result<()> {
@@ -15,8 +15,6 @@ fn main() -> Result<()> {
     let mut peptide_writer =
         PeptideTableWriter::new(&args.peptides, args.peptide_min, args.peptide_max)
             .context("Unable to instantiate TableWriter")?;
-    let mut proteome_writer = ProteomeTableWriter::new(&args.proteomes)
-        .context("Unable to instantiate ProteomeTableWriter")?;
 
     //write_header();
     let parser = uniprot_dat_parser(reader, args.threads);
@@ -29,10 +27,6 @@ fn main() -> Result<()> {
             .context("Failed to store entry")?;
 
         if entry_id != -1 {
-            proteome_writer
-                .write_proteomes(&parsed_entry)
-                .context("Failed to store proteome references")?;
-
             peptide_writer
                 .write(entry_id, parsed_entry)
                 .context("Failed to store peptide")?;
@@ -55,10 +49,6 @@ struct Cli {
     /// Path to the peptides output file
     #[clap(long)]
     peptides: PathBuf,
-
-    /// Path to the proteomes output file
-    #[clap(long)]
-    proteomes: PathBuf,
 
     /// Minimum length of the peptide
     #[clap(long)]
