@@ -19,7 +19,7 @@ const OX_PREFIX_NCBI_LENGTH: usize = "OX   NCBI_TaxID=".len();
 pub struct DatabaseReferences {
     go_references: Vec<String>,
     ipr_references: Vec<String>,
-    proteome_references: Vec<String>
+    proteome_references: Vec<String>,
 }
 
 /// The minimal data we want from an entry out of the UniProtKB datasets
@@ -49,7 +49,7 @@ impl From<UniProtDATEntry> for Entry {
             entry.ec_references,
             entry.go_references,
             entry.ip_references,
-            entry.proteome_references
+            entry.proteome_references,
         )
         .unwrap()
     }
@@ -302,7 +302,12 @@ fn parse_db_references(data: &[String], data_cursor: &mut usize) -> DatabaseRefe
     while data[*data_cursor].starts_with("DR") {
         let line = &data[*data_cursor][COMMON_PREFIX_LEN..];
 
-        parse_db_reference(line, &mut go_references, &mut ipr_references, &mut proteome_references);
+        parse_db_reference(
+            line,
+            &mut go_references,
+            &mut ipr_references,
+            &mut proteome_references,
+        );
 
         *data_cursor += 1;
     }
@@ -310,7 +315,7 @@ fn parse_db_references(data: &[String], data_cursor: &mut usize) -> DatabaseRefe
     DatabaseReferences {
         go_references,
         ipr_references,
-        proteome_references
+        proteome_references,
     }
 }
 
@@ -319,7 +324,7 @@ fn parse_db_reference(
     line: &str,
     go_references: &mut Vec<String>,
     ipr_references: &mut Vec<String>,
-    proteome_references: &mut Vec<String>
+    proteome_references: &mut Vec<String>,
 ) {
     if line.starts_with("GO;") {
         go_references.push(line[4..14].to_string());
