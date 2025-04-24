@@ -80,9 +80,26 @@ download_and_process_uniprot() {
   download_uniprot "$db_types" \
   | "$CURRENT_LOCATION"/rust-utils/target/release/uniprot-parser \
       --taxa "$(luz "$output_dir/taxons.tsv.lz4")" \
+      --proteomes "$(lz "$temp_dir/$temp_constant/proteomes.tsv.lz4")" \
       --uniprot-entries "$(lz "$output_dir/uniprot_entries.tsv.lz4")"
 
   log "Finished generating the uniprot_entries file."
+}
+
+compute_reference_proteomes() {
+  local temp_dir="$1"
+  local temp_constant="$2"
+  local output_dir="$3"
+
+  have "$temp_dir/$temp_constant/proteomes.tsv.lz4" || return
+  have "$temp_dir/$temp_constant/reference_proteomes.tsv.lz4" || return
+
+  $CMD_LZ4CAT "$temp_dir/$temp_constant/proteomes.tsv.lz4" | sort | collapse \
+    | join --nocheck-order -a2 -e '' -t $'\t' -o "2.1 2.2 2.3 1.2" - "$(luz "$temp_dir/$temp_constant/reference_proteomes.tsv.lz4")" \
+    | cat -n \
+    | sed "s/^ *//" \
+    | $CMD_LZ4 \
+    > "$output_dir/proteomes.tsv.lz4"
 }
 
 ################################################################################
@@ -198,5 +215,6 @@ download_and_process_uniprot "$DB_TYPES" "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT" "$
 fetch_ec_numbers "$OUTPUT_DIR"
 fetch_go_terms "$OUTPUT_DIR"
 fetch_interpro_entries "$OUTPUT_DIR"
-fetch_reference_proteomes "$OUTPUT_DIR"
+fetch_reference_proteomes "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT"
+compute_reference_proteomes "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT" "$OUTPUT_DIR"
 extract_uniprot_version "$OUTPUT_DIR"

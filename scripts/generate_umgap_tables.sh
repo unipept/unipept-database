@@ -156,6 +156,7 @@ download_and_process_uniprot_tryptic() {
   		--peptide-max "$peptide_max_length" \
       --taxa "$(luz "$output_dir/taxons.tsv.lz4")" \
       --peptides "$(lz "$temp_dir/$temp_constant/peptides-out.tsv.lz4")" \
+      --proteomes "$(lz "$temp_dir/$temp_constant/proteomes.tsv.lz4")" \
       --uniprot-entries "$(lz "$output_dir/uniprot_entries.tsv.lz4")"
 
   log "Finished generating the uniprot_entries file."

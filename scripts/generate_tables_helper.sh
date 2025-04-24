@@ -349,6 +349,44 @@ checkdep() {
 log() { echo "$(date +'[%s (%F %T)]')" "$@"; }
 
 ################################################################################
+# collapse                                                                     #
+#                                                                              #
+# Read from stdin. Each input line consists of two tab-separated columns       #
+# (key, value). This function takes the key and collapses all values together  #
+# using a semicolon (;)                                                        #
+#                                                                              #
+# Globals:                                                                     #
+#   None                                                                       #
+#                                                                              #
+# Arguments:                                                                   #
+#   None                                                                       #
+#                                                                              #
+# Outputs:                                                                     #
+#   Collapsed pairs (key, [value])                                             #
+#                                                                              #
+# Returns:                                                                     #
+#   None                                                                       #
+################################################################################
+collapse() {
+# shellcheck disable=SC2016
+$CMD_AWK '
+  BEGIN { FS = "\t" }
+  {
+   if ($1 == prev) {
+     out = out ";" $2
+   } else {
+     if (NR > 1) print prev "\t" out
+     prev = $1
+     out = $2
+   }
+  }
+  END {
+   if (NR > 0) print prev "\t" out
+  }
+'
+}
+
+################################################################################
 # build_binaries                                                               #
 #                                                                              #
 # Builds the release binaries for the rust-utils project                       #
@@ -744,6 +782,6 @@ fetch_reference_proteomes() {
   local reference_proteome_url="https://rest.uniprot.org/proteomes/stream?fields=upid,organism_id,protein_count&format=tsv&query=(*)+AND+(proteome_type:1)"
 
   mkdir -p "$output_dir"
-  curl -s "$reference_proteome_url" | tail -n +2 | cat -n | sed 's/^ *//' | $CMD_LZ4 - > "$output_dir/reference_proteomes.tsv.lz4"
+  curl -s "$reference_proteome_url" | tail -n +2 | sort | $CMD_LZ4 - > "$output_dir/reference_proteomes.tsv.lz4"
   log "Finished creating UniProt Reference Proteomes."
 }

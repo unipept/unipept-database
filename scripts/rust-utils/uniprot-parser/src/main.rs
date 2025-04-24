@@ -2,23 +2,31 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use dat_parser::uniprot_dat_parser;
 use std::path::PathBuf;
-use tables_generator::table_writer::EntryTableWriter;
+use tables_generator::models::Entry;
+use tables_generator::table_writer::{EntryTableWriter, ProteomeTableWriter};
 use utils::open_sin;
 
 fn main() -> Result<()> {
     let args = Cli::parse();
 
     let reader = open_sin();
-    let mut writer = EntryTableWriter::new(&args.taxa, &args.uniprot_entries)
-        .context("Unable to instantiate TableWriter")?;
+    let mut entries_writer = EntryTableWriter::new(&args.taxa, &args.uniprot_entries)
+        .context("Unable to instantiate EntryTableWriter")?;
+    let mut proteome_writer = ProteomeTableWriter::new(&args.proteomes)
+        .context("Unable to instantiate ProteomeTableWriter")?;
 
     //write_header();
     let parser = uniprot_dat_parser(reader, args.threads);
 
     for entry in parser {
-        let parsed_entry = entry.context("Failed to parse entry")?;
-        writer
-            .write(parsed_entry.into())
+        let parsed_entry: Entry = entry.context("Failed to parse entry")?.into();
+
+        proteome_writer
+            .write_proteomes(&parsed_entry)
+            .context("Failed to store proteome references")?;
+
+        entries_writer
+            .write(parsed_entry)
             .context("Failed to store entry")?;
     }
 
@@ -34,6 +42,10 @@ struct Cli {
     /// Path to the UniProt output file
     #[clap(long)]
     uniprot_entries: PathBuf,
+
+    /// Path to the proteomes output file
+    #[clap(long)]
+    proteomes: PathBuf,
 
     /// Amount of threads to use for parsing
     #[clap(long, default_value_t = 0)]

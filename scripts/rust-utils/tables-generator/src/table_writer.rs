@@ -70,12 +70,10 @@ impl EntryTableWriter {
             fa.push(';');
             fa.push_str(&ip);
 
-            let proteomes = entry.proteome_references.join(";");
-
             writeln!(
                 &mut self.uniprot_entries,
-                "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
-                self.uniprot_count, accession_number, version, taxon_id, type_, name, sequence, fa, proteomes
+                "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+                self.uniprot_count, accession_number, version, taxon_id, type_, name, sequence, fa
             )
             .context("Error writing to TSV")?;
 
@@ -141,6 +139,32 @@ impl PeptideTableWriter {
                 entry_id,
                 &summary,
                 entry.taxon_id
+            )
+            .context("Error writing to TSV")?;
+        }
+
+        Ok(())
+    }
+}
+
+pub struct ProteomeTableWriter {
+    proteomes: BufWriter<File>
+}
+
+impl ProteomeTableWriter {
+    pub fn new(proteomes: &PathBuf) -> Result<Self> {
+        Ok(Self {
+            proteomes: open_write(proteomes).context("Unable to open output file")?
+        })
+    }
+
+    pub fn write_proteomes(&mut self, entry: &Entry) -> Result<()> {
+        for proteome in &entry.proteome_references {
+            writeln!(
+                &mut self.proteomes,
+                "{}\t{}",
+                proteome,
+                entry.accession_number,
             )
             .context("Error writing to TSV")?;
         }
