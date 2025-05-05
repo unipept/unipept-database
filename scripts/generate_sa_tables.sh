@@ -115,12 +115,16 @@ compute_reference_proteomes() {
   have "$temp_dir/$temp_constant/proteomes.tsv.lz4" || return
   have "$temp_dir/$temp_constant/reference_proteomes.tsv.lz4" || return
 
+  log "Started computing reference proteomes."
+
   $CMD_LZ4CAT "$temp_dir/$temp_constant/proteomes.tsv.lz4" | sort | collapse \
     | join --nocheck-order -a2 -e '' -t $'\t' -o "2.1 2.2 2.3 1.2" - "$(luz "$temp_dir/$temp_constant/reference_proteomes.tsv.lz4")" \
     | cat -n \
     | sed "s/^ *//" \
     | $CMD_LZ4 \
     > "$output_dir/proteomes.tsv.lz4"
+
+    log "Finished computing reference proteomes."
 }
 
 ################################################################################
