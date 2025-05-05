@@ -232,6 +232,7 @@ checkdep uuidgen
 checkdep pv
 checkdep lz4
 checkdep pigz
+checkdep xmllint "libxml2-utils"
 
 parse_arguments "$@"
 checkDirectoryAndCreate "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT"
