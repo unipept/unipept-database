@@ -117,14 +117,36 @@ compute_reference_proteomes() {
 
   log "Started computing reference proteomes."
 
-  $CMD_LZ4CAT "$temp_dir/$temp_constant/proteomes.tsv.lz4" | sort | collapse \
-    | join --nocheck-order -a2 -e '' -t $'\t' -o "2.1 2.2 2.3 1.2" - "$(luz "$temp_dir/$temp_constant/reference_proteomes.tsv.lz4")" \
-    | cat -n \
-    | sed "s/^ *//" \
-    | $CMD_LZ4 \
-    > "$output_dir/proteomes.tsv.lz4"
+  local work_dir="$temp_dir/$temp_constant"
+  local input_file="$work_dir/proteomes.tsv.lz4"
+  local reference_file="$work_dir/reference_proteomes.tsv.lz4"
 
-    log "Finished computing reference proteomes."
+  # Create temp files in the specified directory
+  local temp1 temp2 temp3 temp4
+  temp1=$(mktemp --tmpdir="$work_dir")
+  temp2=$(mktemp --tmpdir="$work_dir")
+  temp3=$(mktemp --tmpdir="$work_dir")
+  temp4=$(mktemp --tmpdir="$work_dir")
+
+  # Step 1: Decompress and sort input
+  lz4cat "$input_file" | sort > "$temp1"
+
+  # Step 2: Collapse
+  collapse < "$temp1" > "$temp2"
+
+  # Step 3: Decompress reference proteomes
+  $CMD_LZ4CAT "$reference_file" > "$temp3"
+
+  # Step 4: Join
+  join --nocheck-order -a2 -e '' -t $'\t' -o "2.1 2.2 2.3 1.2" - "$temp3" < "$temp2" > "$temp4"
+
+  # Step 5: Number lines, clean format, compress output
+  cat -n "$temp4" | sed "s/^ *//" | $CMD_LZ4 > "$output_dir/proteomes.tsv.lz4"
+
+  # Cleanup
+  rm -f "$temp1" "$temp2" "$temp3" "$temp4"
+  
+  log "Finished computing reference proteomes."
 }
 
 ################################################################################
