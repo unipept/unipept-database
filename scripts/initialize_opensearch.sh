@@ -119,6 +119,25 @@ trap errorAndExit ERR
 init_indices() {
     log "Started dropping existing indices."
 
+    # Check if OpenSearch is up
+    if ! curl -s -f "${OPENSEARCH_URL}/_cluster/health" > /dev/null; then
+        echo "OpenSearch is not reachable. Attempting to start it via systemctl..."
+
+        sudo systemctl start opensearch
+
+        # Wait a few seconds for OpenSearch to start
+        sleep 20
+
+        if ! curl -s -f "${OPENSEARCH_URL}/_cluster/health" > /dev/null; then
+            echo "Failed to connect to OpenSearch after attempting to start it."
+            exit 1
+        else
+            echo "OpenSearch successfully started."
+        fi
+    else
+        echo "OpenSearch is already running."
+    fi
+
     # Fetch the list of all current indices from the OpenSearch instance
     local indices
     indices=$(curl -s -X GET "${OPENSEARCH_URL}/_cat/indices?h=index")
