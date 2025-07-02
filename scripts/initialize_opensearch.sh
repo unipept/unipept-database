@@ -120,13 +120,26 @@ init_indices() {
     log "Started dropping existing indices."
 
     # Fetch the list of all current indices from the OpenSearch instance
-    local indices=$(curl -s -X GET "${OPENSEARCH_URL}/_cat/indices?h=index" || { echo "Failed to fetch indices"; exit 1; })
+    local indices
+    indices=$(curl -s -X GET "${OPENSEARCH_URL}/_cat/indices?h=index")
+    local curl_exit=$?
+
+    if [[ $curl_exit -ne 0 ]]; then
+        echo "Failed to fetch indices"
+        exit 1
+    fi
 
     # Iterate through each index and delete it
-    for index in $indices; do
-        echo "Deleting index: $index"
-        curl -s -X DELETE "${OPENSEARCH_URL}/${index}" > /dev/null || { echo "Failed to delete index: $index"; exit 1; }
-    done
+    # Check if any indices were returned
+    if [[ -n "$indices" ]]; then
+        # Iterate through each index and delete it
+        for index in $indices; do
+            echo "Deleting index: $index"
+            curl -s -X DELETE "${OPENSEARCH_URL}/${index}" > /dev/null || { echo "Failed to delete index: $index"; exit 1; }
+        done
+    else
+        echo "No indices found to delete."
+    fi
 
     echo "Finished dropping existing indices."
 
