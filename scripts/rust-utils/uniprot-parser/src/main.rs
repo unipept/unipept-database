@@ -21,6 +21,10 @@ fn main() -> Result<()> {
     for entry in parser {
         let parsed_entry: Entry = entry.context("Failed to parse entry")?.into();
 
+        if args.proteomes_only && parsed_entry.proteome_references.is_empty() {
+            continue;
+        }
+
         proteome_writer
             .write_proteomes(&parsed_entry)
             .context("Failed to store proteome references")?;
@@ -46,6 +50,10 @@ struct Cli {
     /// Path to the proteomes output file
     #[clap(long)]
     proteomes: PathBuf,
+
+    /// Whether to only parse proteome entries
+    #[clap(long, default_value_t = false)]
+    proteomes_only: bool,
 
     /// Amount of threads to use for parsing
     #[clap(long, default_value_t = 0)]
