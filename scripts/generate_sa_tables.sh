@@ -129,7 +129,7 @@ compute_reference_proteomes() {
   temp4=$(mktemp --tmpdir="$work_dir")
 
   # Step 1: Decompress and sort input
-  lz4cat "$input_file" | sort > "$temp1"
+  lz4cat "$input_file" | sort --temporary-directory "$work_dir" > "$temp1"
 
   # Step 2: Collapse
   collapse < "$temp1" > "$temp2"
