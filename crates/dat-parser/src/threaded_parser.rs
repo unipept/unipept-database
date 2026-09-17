@@ -1,11 +1,10 @@
 use std::io::BufRead;
 
-use crate::consumer::Consumer;
-use crate::entry::UniProtDATEntry;
-use crate::producer::Producer;
 use anyhow::Result;
 use crossbeam_channel::{Receiver, bounded};
 use lazy_static::lazy_static;
+
+use crate::{consumer::Consumer, entry::UniProtDATEntry, producer::Producer};
 
 /// A multi-threaded DAT parser
 /// This parser uses one thread to parse chunks of bytes from the `reader` input stream,
@@ -15,7 +14,7 @@ pub struct ThreadedDATParser<B: BufRead + Send + 'static> {
     consumers: Vec<Consumer>,
     threads: usize,
     r_parsed: Option<Receiver<Result<UniProtDATEntry>>>,
-    started: bool,
+    started: bool
 }
 
 impl<B: BufRead + Send + 'static> ThreadedDATParser<B> {
@@ -36,13 +35,7 @@ impl<B: BufRead + Send + 'static> ThreadedDATParser<B> {
             consumers.push(Consumer::new());
         }
 
-        Self {
-            producer,
-            consumers,
-            threads,
-            r_parsed: None,
-            started: false,
-        }
+        Self { producer, consumers, threads, r_parsed: None, started: false }
     }
 
     /// Create communication channels for the producer and consumers,
@@ -91,7 +84,7 @@ impl<B: BufRead + Send + 'static> Iterator for ThreadedDATParser<B> {
                 }
             }
             // We never started (unreachable case in practice)
-            None => None,
+            None => None
         }
     }
 }

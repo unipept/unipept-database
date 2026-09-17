@@ -1,8 +1,6 @@
-use anyhow::{Context, Result};
-use std::collections::HashMap;
-use std::io::BufRead;
-use std::path::PathBuf;
+use std::{collections::HashMap, io::BufRead, path::PathBuf};
 
+use anyhow::{Context, Result};
 use clap::Parser;
 use utils::{now_str, open_read};
 
@@ -26,14 +24,7 @@ fn main() -> Result<()> {
         let row: Vec<&str> = line.split('\t').collect();
         if row[0] != current_pept {
             if !current_pept.is_empty() && !m.is_empty() {
-                write_entry(
-                    current_pept,
-                    num_prot,
-                    num_annotated_go,
-                    num_annotated_ec,
-                    num_annotated_ip,
-                    &m,
-                );
+                write_entry(current_pept, num_prot, num_annotated_go, num_annotated_ec, num_annotated_ip, &m);
             }
 
             m.clear();
@@ -87,14 +78,7 @@ fn main() -> Result<()> {
     }
 
     if !m.is_empty() {
-        write_entry(
-            current_pept,
-            num_prot,
-            num_annotated_go,
-            num_annotated_ec,
-            num_annotated_ip,
-            &m,
-        );
+        write_entry(current_pept, num_prot, num_annotated_go, num_annotated_ec, num_annotated_ip, &m);
     }
 
     Ok(())
@@ -106,13 +90,9 @@ fn write_entry(
     num_go: u32,
     num_ec: u32,
     num_ip: u32,
-    m: &HashMap<String, u32>,
+    m: &HashMap<String, u32>
 ) {
-    let data = m
-        .iter()
-        .map(|(key, value)| format!(r#""{key}":{value}"#))
-        .collect::<Vec<String>>()
-        .join(",");
+    let data = m.iter().map(|(key, value)| format!(r#""{key}":{value}"#)).collect::<Vec<String>>().join(",");
 
     println!(
         "{current_peptide}\t{{\"num\":{{\"all\":{num_prot},\"EC\":{num_ec},\"GO\":{num_go},\"IPR\":{num_ip}}},\"data\":{{{data}}}}}\n"
@@ -123,5 +103,5 @@ fn write_entry(
 struct Cli {
     /// TODO
     #[clap(long)]
-    input_file: PathBuf,
+    input_file: PathBuf
 }

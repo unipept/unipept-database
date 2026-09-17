@@ -1,6 +1,8 @@
-use std::io::{BufRead, Read, Write};
-use std::path::PathBuf;
-use std::str::FromStr;
+use std::{
+    io::{BufRead, Read, Write},
+    path::PathBuf,
+    str::FromStr
+};
 
 use anyhow::{Context, Error, Result};
 use ncbi::{Rank, Taxon};
@@ -10,7 +12,7 @@ use utils::{open_read, open_write};
 
 pub struct TaxonList {
     entries: Vec<Option<Taxon>>,
-    validation_regex: Regex,
+    validation_regex: Regex
 }
 
 impl TaxonList {
@@ -31,8 +33,8 @@ impl TaxonList {
             let taxon_id = parse_id(node_row[0])?;
             let parent_id = parse_id(node_row[1])?;
 
-            let rank = Rank::from_str(node_row[2].trim())
-                .context("Unable to parse Taxon Rank".to_owned() + node_row[2])?;
+            let rank =
+                Rank::from_str(node_row[2].trim()).context("Unable to parse Taxon Rank".to_owned() + node_row[2])?;
 
             let mut name = String::new();
             let mut clas = String::new();
@@ -57,16 +59,13 @@ impl TaxonList {
 
                 entries[taxon_id] = Some(Taxon::new(name, rank, parent_id, true));
             } else {
-                return Err(Error::msg(format!(
-                    "Taxon {} did not have a scientific name",
-                    taxon_id
-                )));
+                return Err(Error::msg(format!("Taxon {} did not have a scientific name", taxon_id)));
             }
         }
 
         Ok(TaxonList {
             entries,
-            validation_regex: Regex::new(r".*\d.*").context("Failed to initialize regex")?,
+            validation_regex: Regex::new(r".*\d.*").context("Failed to initialize regex")?
         })
     }
 
@@ -79,19 +78,15 @@ impl TaxonList {
     }
 
     fn validate(&mut self, id: usize) -> Result<bool> {
-        let taxon = self
-            .entries
-            .get_mut(id)
-            .with_context(|| format!("Missing Taxon with id {}", id))?;
+        let taxon = self.entries.get_mut(id).with_context(|| format!("Missing Taxon with id {}", id))?;
         let taxon = match taxon {
             Some(t) => t,
-            None => return Ok(false),
+            None => return Ok(false)
         };
 
         if !taxon.valid
             || (taxon.rank == Rank::Species
-                && ((self.validation_regex.is_match(taxon.name.as_str())
-                    && !taxon.name.contains("virus"))
+                && ((self.validation_regex.is_match(taxon.name.as_str()) && !taxon.name.contains("virus"))
                     || taxon.name.ends_with(" sp.")
                     || taxon.name.ends_with(" genomosp.")
                     || taxon.name.contains(" bacterium")))
@@ -122,13 +117,10 @@ impl TaxonList {
         // I don't like this duplication but we have to do it because of the borrow checker
         // Otherwise, the recursive call above ^ will cause two mutable references at the same time
         // And we need one to mark the taxon as invalid
-        let taxon = self
-            .entries
-            .get_mut(id)
-            .with_context(|| format!("Missing taxon with id {}", id))?;
+        let taxon = self.entries.get_mut(id).with_context(|| format!("Missing taxon with id {}", id))?;
         let taxon = match taxon {
             Some(t) => t,
-            None => return Ok(false),
+            None => return Ok(false)
         };
 
         if !parent_valid {
@@ -150,12 +142,8 @@ impl TaxonList {
 
             let valid = if taxon.valid { '\u{0001}' } else { '\u{0000}' };
 
-            writeln!(
-                &mut writer,
-                "{}\t{}\t{}\t{}\t{}",
-                id, taxon.name, taxon.rank, taxon.parent, valid
-            )
-            .context("Error writing to taxon TSV file")?;
+            writeln!(&mut writer, "{}\t{}\t{}\t{}\t{}", id, taxon.name, taxon.rank, taxon.parent, valid)
+                .context("Error writing to taxon TSV file")?;
         }
 
         Ok(())
@@ -179,11 +167,7 @@ impl TaxonList {
 
             for j in (1..=(n_ranks - 1)).rev() {
                 if j > taxon.rank.index() {
-                    lineage[j] = if valid {
-                        "\\N".to_string()
-                    } else {
-                        "-1".to_string()
-                    };
+                    lineage[j] = if valid { "\\N".to_string() } else { "-1".to_string() };
                 } else {
                     valid = taxon.valid;
                     lineage[j] = (if valid { 1 } else { -1 } * (tid as i32)).to_string();
@@ -192,8 +176,7 @@ impl TaxonList {
                 }
             }
 
-            writeln!(&mut writer, "{}", lineage.join("\t"))
-                .context("Error writing to lineage TSV file")?;
+            writeln!(&mut writer, "{}", lineage.join("\t")).context("Error writing to lineage TSV file")?;
         }
 
         Ok(())
@@ -218,24 +201,16 @@ impl TaxonList {
     }
 
     fn get_taxon(&self, id: usize) -> Result<&Option<Taxon>> {
-        self.entries
-            .get(id)
-            .with_context(|| format!("Invalid taxon id {}", id))
+        self.entries.get(id).with_context(|| format!("Invalid taxon id {}", id))
     }
 
     /// Similar to get_taxon, but unwraps the Option and gives a reference to the Taxon inside of it
     /// This will throw an error if the Taxon is None
     fn get_taxon_some(&self, id: usize) -> Result<&Taxon> {
-        if let Some(t) = self.get_taxon(id)? {
-            Ok(t)
-        } else {
-            Err(Error::msg(format!("Missing taxon with id {}", id)))
-        }
+        if let Some(t) = self.get_taxon(id)? { Ok(t) } else { Err(Error::msg(format!("Missing taxon with id {}", id))) }
     }
 }
 
 fn parse_id(v: &str) -> Result<usize> {
-    v.trim()
-        .parse::<usize>()
-        .with_context(|| format!("Unable to parse {} as usize", v))
+    v.trim().parse::<usize>().with_context(|| format!("Unable to parse {} as usize", v))
 }

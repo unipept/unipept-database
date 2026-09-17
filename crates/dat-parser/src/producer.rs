@@ -1,20 +1,16 @@
+use std::{io::BufRead, thread, thread::JoinHandle};
+
 use crossbeam_channel::Sender;
-use std::io::BufRead;
-use std::thread;
-use std::thread::JoinHandle;
 
 /// Struct that divides input data from `reader` up into separate chunks and sends them to worker threads
 pub struct Producer<B: BufRead + Send + 'static> {
     reader: Option<B>,
-    handle: Option<JoinHandle<()>>,
+    handle: Option<JoinHandle<()>>
 }
 
 impl<B: BufRead + Send + 'static> Producer<B> {
     pub fn new(reader: B) -> Self {
-        Self {
-            reader: Some(reader),
-            handle: None,
-        }
+        Self { reader: Some(reader), handle: None }
     }
 
     #[allow(clippy::comparison_chain)]
@@ -46,11 +42,7 @@ impl<B: BufRead + Send + 'static> Producer<B> {
 
                         // A slash is never in the beginning of the file, so we can safely look into the backup buffer
                         // and assume it is not empty: if i == 0, then something must be in the backup buffer
-                        let previous_char = if i > 0 {
-                            buffer[i - 1]
-                        } else {
-                            backup_buffer[backup_buffer_size - 1]
-                        };
+                        let previous_char = if i > 0 { buffer[i - 1] } else { backup_buffer[backup_buffer_size - 1] };
 
                         let second_previous_char = if i > 1 {
                             buffer[i - 2]
@@ -63,9 +55,7 @@ impl<B: BufRead + Send + 'static> Producer<B> {
                         // Found a separator for a chunk!
                         // Send it to the receivers
                         if previous_char == b'/' && second_previous_char == b'\n' {
-                            let mut data = Vec::<u8>::with_capacity(
-                                backup_buffer_size + (i + 1 - start_index),
-                            );
+                            let mut data = Vec::<u8>::with_capacity(backup_buffer_size + (i + 1 - start_index));
 
                             // Start out with backup buffer contents if they exist
                             if backup_buffer_size != 0 {

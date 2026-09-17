@@ -1,9 +1,12 @@
+use std::{
+    fs::{File, OpenOptions},
+    io::{BufReader, BufWriter, Stdin, stdin},
+    path::PathBuf,
+    time::{SystemTime, UNIX_EPOCH}
+};
+
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
-use std::fs::{File, OpenOptions};
-use std::io::{BufReader, BufWriter, Stdin, stdin};
-use std::path::PathBuf;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Create a BufReader that reads from StdIn
 pub fn open_sin() -> BufReader<Stdin> {
@@ -29,10 +32,7 @@ pub fn open_write(pb: &PathBuf) -> Result<BufWriter<File>> {
 }
 
 pub fn now() -> u128 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("Error getting system time")
-        .as_millis()
+    SystemTime::now().duration_since(UNIX_EPOCH).expect("Error getting system time").as_millis()
 }
 
 pub fn now_str() -> String {

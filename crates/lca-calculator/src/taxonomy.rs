@@ -1,6 +1,4 @@
-use std::collections::HashMap;
-use std::io::BufRead;
-use std::path::PathBuf;
+use std::{collections::HashMap, io::BufRead, path::PathBuf};
 
 use anyhow::{Context, Result};
 use ncbi::{RANKS, Rank};
@@ -10,7 +8,7 @@ const NULL_STRING: &str = "\\N";
 const SEPARATOR: &str = "\t";
 
 pub struct Taxonomy {
-    taxonomy: Vec<Vec<i32>>,
+    taxonomy: Vec<Vec<i32>>
 }
 
 impl Taxonomy {
@@ -21,14 +19,10 @@ impl Taxonomy {
         let mut max = i32::MIN;
 
         for line in reader.lines() {
-            let line = line.with_context(|| {
-                format!("Error reading line from input file {}", infile.display())
-            })?;
+            let line = line.with_context(|| format!("Error reading line from input file {}", infile.display()))?;
 
             let mut elements = line.splitn(RANKS, SEPARATOR).map(parse_int);
-            let key = elements
-                .next()
-                .context("Unable to access key at first index of line")??;
+            let key = elements.next().context("Unable to access key at first index of line")??;
 
             // Note on the collect::<> here: "?" can't be used inside of map() as it is a closure
             // Collecting into a Result<Vec<_>> will stop instantly when it receives one Error
@@ -64,12 +58,8 @@ impl Taxonomy {
 
             let line = line.context("error reading line from stdin")?;
 
-            let (sequence, taxon_id) =
-                line.split_once(SEPARATOR).context("error splitting line")?;
-            let taxon_id: i32 = taxon_id
-                .trim_end()
-                .parse()
-                .context("error parsing taxon id to int")?;
+            let (sequence, taxon_id) = line.split_once(SEPARATOR).context("error splitting line")?;
+            let taxon_id: i32 = taxon_id.trim_end().parse().context("error parsing taxon id to int")?;
 
             if current_sequence.is_empty() || current_sequence != sequence {
                 if !current_sequence.is_empty() {
@@ -93,11 +83,8 @@ impl Taxonomy {
         let genus_rank_idx = Rank::Genus.index() - 1;
         let species_rank_idx = Rank::Species.index() - 1;
 
-        let lineages: Vec<&Vec<i32>> = taxa
-            .iter()
-            .map(|x| &self.taxonomy[*x as usize])
-            .filter(|x| !x.is_empty())
-            .collect();
+        let lineages: Vec<&Vec<i32>> =
+            taxa.iter().map(|x| &self.taxonomy[*x as usize]).filter(|x| !x.is_empty()).collect();
 
         // Iterate until RANKS - 1 since the root rank is not present in the lineage array
         // (Each array should implicitly start with 1, but this is handled by the default lca value
@@ -107,11 +94,7 @@ impl Taxonomy {
             let mut value = -1;
 
             let iterator = lineages.iter().map(|&x| x[final_rank]).filter(|&x| {
-                if final_rank == genus_rank_idx || final_rank == species_rank_idx {
-                    x > 0
-                } else {
-                    x >= 0
-                }
+                if final_rank == genus_rank_idx || final_rank == species_rank_idx { x > 0 } else { x >= 0 }
             });
 
             // Check if all elements in the iterator are the same
@@ -144,6 +127,5 @@ fn parse_int(s: &str) -> Result<i32> {
         return Ok(0);
     }
 
-    s.parse::<i32>()
-        .with_context(|| format!("Error parsing {} as an integer", s))
+    s.parse::<i32>().with_context(|| format!("Error parsing {} as an integer", s))
 }

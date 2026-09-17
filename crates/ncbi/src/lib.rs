@@ -47,16 +47,11 @@ pub struct Taxon {
     pub name: String,
     pub rank: Rank,
     pub parent: usize,
-    pub valid: bool,
+    pub valid: bool
 }
 
 impl Taxon {
     pub fn new(name: String, rank: Rank, parent: usize, valid: bool) -> Self {
-        Taxon {
-            name,
-            rank,
-            parent,
-            valid,
-        }
+        Taxon { name, rank, parent, valid }
     }
 }
