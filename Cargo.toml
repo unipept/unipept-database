@@ -1,3 +1,22 @@
 [workspace]
-resolver = "2"
+# Explicit: a virtual root infers no resolver from its members' editions and falls back to 1.
+resolver = "3"
 members = ["crates/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+# Matches unipept-api and unipept-index, so one toolchain builds all three.
+rust-version = "1.88"
+
+[workspace.dependencies]
+anyhow = "1.0.97"
+bit-vec = "0.8.0"
+chrono = "0.4.40"
+clap = { version = "4.5.35", features = ["derive"] }
+crossbeam-channel = "0.5.15"
+lazy_static = "1.4.0"
+num_cpus = "1.16.0"
+regex = "1.10.2"
+strum = "0.27.1"
+strum_macros = "0.27.1"

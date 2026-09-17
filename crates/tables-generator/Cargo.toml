@@ -1,9 +1,10 @@
 [package]
 name = "tables-generator"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
 
 [dependencies]
-anyhow = "1.0.97"
+anyhow.workspace = true
+bit-vec.workspace = true
 utils = { path = "../utils" }
-bit-vec = "0.8.0"
