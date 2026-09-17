@@ -493,7 +493,7 @@ $CMD_AWK '
 ################################################################################
 # build_binaries                                                               #
 #                                                                              #
-# Builds the release binaries for the rust-utils project                       #
+# Builds the release binaries of the Cargo workspace                           #
 # This function ensures that all the required binaries are available for the   #
 # database building process.                                                   #
 #                                                                              #
@@ -512,7 +512,7 @@ $CMD_AWK '
 build_binaries() {
   packages=$(echo "$@" | sed 's/[^ ]*/-p &/g')
   log "Started building Rust utilities"
-  cd "$CURRENT_LOCATION"/rust-utils
+  cd "$CURRENT_LOCATION"/..
   cargo build --release --quiet $packages
   cd - > /dev/null
   log "Finished building Rust utilities"
@@ -718,7 +718,7 @@ create_taxon_tables() {
 
   log "Parsing names.dmp and nodes.dmp files"
   mkdir -p "$output_dir"
-  "$CURRENT_LOCATION"/rust-utils/target/release/taxdmp-parser \
+  "$CURRENT_LOCATION"/../target/release/taxdmp-parser \
     --names "$temp_dir/$temp_constant/names.dmp" \
     --nodes "$temp_dir/$temp_constant/nodes.dmp" \
     --taxa "$(lz "$output_dir/taxons.tsv.lz4")" \

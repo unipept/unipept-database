@@ -78,7 +78,7 @@ download_and_process_uniprot() {
   log "Started generating the uniprot_entries file."
 
   download_uniprot "$db_types" \
-  | "$CURRENT_LOCATION"/rust-utils/target/release/uniprot-parser \
+  | "$CURRENT_LOCATION"/../target/release/uniprot-parser \
       --taxa "$(luz "$output_dir/taxons.tsv.lz4")" \
       --proteomes "$(lz "$temp_dir/$temp_constant/proteomes.tsv.lz4")" \
       --uniprot-entries "$(lz "$output_dir/uniprot_entries.tsv.lz4")"
