@@ -29,6 +29,13 @@ UNIPROT_ENTRIES_FILE=""
 # The amount of documents that are uploaded at once to the OpenSearch instance
 UPLOAD_BATCH_SIZE=2500
 
+# The index this script drops, creates and fills. Nothing else on the instance is touched.
+INDEX_NAME="uniprot_entries"
+
+# Rows to pass over, to continue an upload that stopped part way. Above zero the index is kept as
+# it is, because dropping it would discard the rows being skipped.
+SKIP_ROWS=0
+
 ################################################################################
 #                            Helper Functions                                  #
 ################################################################################
@@ -117,66 +124,50 @@ trap errorAndExit ERR
 #   None                                                                       #
 ################################################################################
 init_indices() {
-    log "Started dropping existing indices."
+    if ! curl -s -f "${OPENSEARCH_URL}/_cluster/health" > /dev/null
+    then
+        echo "Error: OpenSearch is not reachable at ${OPENSEARCH_URL}. Start it and run this script again." 1>&2
+        exit 1
+    fi
 
-    # Check if OpenSearch is up
-    if ! curl -s -f "${OPENSEARCH_URL}/_cluster/health" > /dev/null; then
-        echo "OpenSearch is not reachable. Attempting to start it via systemctl..."
+    log "Started dropping the ${INDEX_NAME} index."
 
-        sudo systemctl start opensearch
+    # Only this index. The instance is allowed to hold indices that belong to something else.
+    # 404 is a success: on a first run there is nothing to drop.
+    local status
+    status=$(curl -s -o /dev/null -w '%{http_code}' -X DELETE "${OPENSEARCH_URL}/${INDEX_NAME}")
 
-        # Wait a few seconds for OpenSearch to start
-        sleep 20
-
-        if ! curl -s -f "${OPENSEARCH_URL}/_cluster/health" > /dev/null; then
-            echo "Failed to connect to OpenSearch after attempting to start it."
+    case "$status" in
+        200 | 404)
+            ;;
+        *)
+            echo "Error: dropping the ${INDEX_NAME} index answered ${status}." 1>&2
             exit 1
-        else
-            echo "OpenSearch successfully started."
-        fi
-    else
-        echo "OpenSearch is already running."
-    fi
+            ;;
+    esac
 
-    # Fetch the list of all current indices from the OpenSearch instance
-    local indices
-    indices=$(curl -s -X GET "${OPENSEARCH_URL}/_cat/indices?h=index")
-    local curl_exit=$?
+    log "Finished dropping the ${INDEX_NAME} index."
 
-    if [[ $curl_exit -ne 0 ]]; then
-        echo "Failed to fetch indices"
+    log "Started creating the ${INDEX_NAME} index."
+
+    local index_file="${CURRENT_LOCATION}/../schemas_suffix_array/index_${INDEX_NAME}.json"
+
+    if [[ ! -f "${index_file}" ]]
+    then
+        echo "Error: the index definition ${index_file} does not exist." 1>&2
         exit 1
     fi
 
-    # Iterate through each index and delete it
-    # Check if any indices were returned
-    if [[ -n "$indices" ]]; then
-        # Iterate through each index and delete it
-        for index in $indices; do
-            echo "Deleting index: $index"
-            curl -s -X DELETE "${OPENSEARCH_URL}/${index}" > /dev/null || { echo "Failed to delete index: $index"; exit 1; }
-        done
-    else
-        echo "No indices found to delete."
-    fi
+    status=$(curl -s -o /dev/null -w '%{http_code}' -X PUT "${OPENSEARCH_URL}/${INDEX_NAME}" \
+        -H 'Content-Type: application/json' -d @"${index_file}")
 
-    echo "Finished dropping existing indices."
-
-    log "Started creating new indices."
-
-    # All indexes are defined in separate JSON-files
-    local uniprot_entries_index_file="${CURRENT_LOCATION}/../schemas_suffix_array/index_uniprot_entries.json"
-
-    # Use the JSON file pointed to by the variable to create the new index
-    if [[ -f "${uniprot_entries_index_file}" ]]; then
-        curl -s -X PUT "${OPENSEARCH_URL}/uniprot_entries" -H 'Content-Type: application/json' -d @"${uniprot_entries_index_file}" > /dev/null || { echo "Failed to create uniprot_entries index"; exit 1; }
-        echo "Successfully created uniprot_entries index."
-    else
-        echo "Index file ${uniprot_entries_index_file} does not exist."
+    if [[ "$status" != "200" ]]
+    then
+        echo "Error: creating the ${INDEX_NAME} index answered ${status}." 1>&2
         exit 1
     fi
 
-    log "Finished creating new indices."
+    log "Finished creating the ${INDEX_NAME} index."
 }
 
 ################################################################################
@@ -203,7 +194,13 @@ init_indices() {
 upload_uniprot_entries() {
     log "Started uploading UniProt entries."
 
-    pv "$UNIPROT_ENTRIES_FILE" | lz4cat | cut -f 2-8 | python3 "${CURRENT_LOCATION}/upload_to_opensearch.py" --index-name "uniprot_entries" --fields "uniprot_accession_number,version,taxon_id,type,name,sequence,fa" --id-field "uniprot_accession_number"
+    pv "$UNIPROT_ENTRIES_FILE" | lz4cat | cut -f 2-8 | python3 "${CURRENT_LOCATION}/upload_to_opensearch.py" \
+        --opensearch-url "$OPENSEARCH_URL" \
+        --index-name "$INDEX_NAME" \
+        --fields "uniprot_accession_number,version,taxon_id,type,name,sequence,fa" \
+        --id-field "uniprot_accession_number" \
+        --batch-size "$UPLOAD_BATCH_SIZE" \
+        --skip "$SKIP_ROWS"
 
     log "Finished uploading UniProt entries."
 }
@@ -233,6 +230,15 @@ parse_arguments() {
                 ;;
             --uniprot-entries)
                 UNIPROT_ENTRIES_FILE="$2"
+                shift 2
+                ;;
+            --skip)
+                SKIP_ROWS="$2"
+                if ! [[ "$SKIP_ROWS" =~ ^[0-9]+$ ]]; then
+                    echo "Error: --skip takes a number of rows."
+                    print_help
+                    exit 1
+                fi
                 shift 2
                 ;;
             --help)
@@ -274,6 +280,7 @@ print_help() {
     echo "Options:"
     echo "  --uniprot-entries   Path to the 'uniprot_entries.tsv.lz4' file to be uploaded (required)."
     echo "  --opensearch-url    URL to communicate with the running OpenSearch instance (optional, default: 'http://localhost:9200')."
+    echo "  --skip              Rows to pass over, to continue an upload that stopped part way. The index is kept."
     echo "  --help              Prints this help message."
     echo ""
     echo "Examples:"
@@ -284,7 +291,21 @@ print_help() {
 
 # Check if all required dependencies are installed
 checkdep "lz4"
-
 parse_arguments "$@"
-init_indices
+
+checkdep "python3"
+
+if ! python3 -c "import requests" > /dev/null 2>&1
+then
+    echo "This script requires the requests package: pip install -r ${CURRENT_LOCATION}/requirements.txt" >&2
+    exit 6
+fi
+
+if [[ "$SKIP_ROWS" -eq 0 ]]
+then
+    init_indices
+else
+    log "Continuing at row ${SKIP_ROWS}. The ${INDEX_NAME} index is kept as it is."
+fi
+
 upload_uniprot_entries
