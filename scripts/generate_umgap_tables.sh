@@ -97,7 +97,7 @@ download_and_process_uniprot_kmer() {
   log "Started generating the uniprot_entries file."
 
   download_uniprot "$db_types" \
-  | "$CURRENT_LOCATION"/rust-utils/target/release/uniprot-parser \
+  | "$CURRENT_LOCATION"/../target/release/uniprot-parser \
       --taxa "$(luz "$output_dir/taxons.tsv.lz4")" \
       --uniprot-entries "$(lz "$output_dir/uniprot_entries.tsv.lz4")"
 
@@ -151,7 +151,7 @@ download_and_process_uniprot_tryptic() {
   log "Started generating the uniprot_entries file."
 
   download_uniprot "$db_types" \
-  | "$CURRENT_LOCATION"/rust-utils/target/release/uniprot-parser-tryptic \
+  | "$CURRENT_LOCATION"/../target/release/uniprot-parser-tryptic \
       --peptide-min "$peptide_min_length" \
   		--peptide-max "$peptide_max_length" \
       --taxa "$(luz "$output_dir/taxons.tsv.lz4")" \
@@ -304,7 +304,7 @@ calculate_equalized_lcas() {
 
 	log "Started the calculation of equalized LCA's."
 	$CMD_LZ4CAT "$temp_dir/$temp_constant/peptides_by_equalized.tsv.lz4" | cut -f 2,6 \
-		| $CURRENT_LOCATION/rust-utils/target/release/lca-calculator --input-file "$(luz "$output_dir/lineages.tsv.lz4")" \
+		| $CURRENT_LOCATION/../target/release/lca-calculator --input-file "$(luz "$output_dir/lineages.tsv.lz4")" \
 		| $CMD_LZ4 - > "$temp_dir/$temp_constant/LCAs_equalized.tsv.lz4"
 	log "Finished the calculation of equalized LCA's (after substituting AA's by ID's) with status $?."
 }
@@ -345,7 +345,7 @@ calculate_original_lcas() {
 	log "Started the calculation of original LCA's"
 
 	$CMD_LZ4CAT "$temp_dir/$temp_constant/peptides_by_original.tsv.lz4" | cut -f 3,6 \
-		| $CURRENT_LOCATION/rust-utils/target/release/lca-calculator --input-file "$(luz "$output_dir/lineages.tsv.lz4")" \
+		| $CURRENT_LOCATION/../target/release/lca-calculator --input-file "$(luz "$output_dir/lineages.tsv.lz4")" \
 		| $CMD_LZ4 - > "$temp_dir/$temp_constant/LCAs_original.tsv.lz4"
 	log "Finished the calculation of original LCA's (after substituting AA's by ID's) with status $?."
 }
@@ -385,7 +385,7 @@ calculate_equalized_fas() {
 	rm -f "peptides_eq"
 	mkfifo "peptides_eq"
 	$CMD_LZ4CAT "$temp_dir/$temp_constant/peptides_by_equalized.tsv.lz4" | cut -f2,5 > "peptides_eq" &
-	$CURRENT_LOCATION/rust-utils/target/release/function-calculator --input-file "peptides_eq" > "$(lz "$temp_dir/$temp_constant/FAs_equalized.tsv.lz4")"
+	$CURRENT_LOCATION/../target/release/function-calculator --input-file "peptides_eq" > "$(lz "$temp_dir/$temp_constant/FAs_equalized.tsv.lz4")"
 	rm "peptides_eq"
 	log "Finished the calculation of equalized FA's with status $?."
 }
@@ -425,7 +425,7 @@ calculate_original_fas() {
 	rm -f "peptides_orig"
 	mkfifo "peptides_orig"
 	$CMD_LZ4CAT "$temp_dir/$temp_constant/peptides_by_original.tsv.lz4" | cut -f3,5 > "peptides_orig" &
-	$CURRENT_LOCATION/rust-utils/target/release/function-calculator --input-file "peptides_orig" > "$(lz "$temp_dir/$temp_constant/FAs_original.tsv.lz4")"
+	$CURRENT_LOCATION/../target/release/function-calculator --input-file "peptides_orig" > "$(lz "$temp_dir/$temp_constant/FAs_original.tsv.lz4")"
 	rm "peptides_orig"
 	log "Finished the calculation of original FA's."
 }
