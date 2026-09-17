@@ -18,6 +18,9 @@ UNIPEPT_TEMP_CONSTANT="unipept_temp"
 # shellcheck source=../../scripts/generate_tables_helper.sh
 source "${REPO}/scripts/generate_tables_helper.sh"
 
+# The same traps generate_sa_tables.sh installs, so the driver fails the way the pipeline does.
+trap errorAndExit ERR
+
 mkdir -p "${TEMP_DIR}/${UNIPEPT_TEMP_CONSTANT}"
 
 producer() {
@@ -28,3 +31,5 @@ producer() {
 }
 
 producer > "$(lz "$OUTPUT_FILE")"
+
+wait_for_writers

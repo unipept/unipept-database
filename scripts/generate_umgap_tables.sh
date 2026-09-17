@@ -797,26 +797,37 @@ checkdep pigz
 checkdep pv
 checkdep umgap "umgap crate (for umgap buildindex)"
 
+# wait_for_writers follows every step that writes a table, because the compression runs in the
+# background: without it the next step reads a file that is still being written.
 if [[ "$MODE" == "kmer" ]]; then
   parse_kmer_arguments "$@"
   checkDirectoryAndCreate "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT"
   build_binaries "taxdmp-parser" "uniprot-parser"
   create_taxon_tables "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT" "$OUTPUT_DIR"
+  wait_for_writers
   download_and_process_uniprot_kmer "$DB_TYPES" "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT" "$OUTPUT_DIR"
+  wait_for_writers
   create_kmer_index "$OUTPUT_DIR" "$KMER_LENGTH"
 elif [[ "$MODE" == "tryptic" ]]; then
   parse_tryptic_arguments "$@"
   checkDirectoryAndCreate "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT"
   build_binaries "taxdmp-parser" "uniprot-parser-tryptic" "function-calculator" "lca-calculator"
   create_taxon_tables "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT" "$OUTPUT_DIR"
+  wait_for_writers
   download_and_process_uniprot_tryptic "$DB_TYPES" "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT" "$OUTPUT_DIR" "$PEPTIDE_MIN_LENGTH" "$PEPTIDE_MAX_LENGTH"
+  wait_for_writers
   number_sequences "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT"
   substitute_aas "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT"
   calculate_equalized_lcas "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT" "$OUTPUT_DIR"
+  wait_for_writers
   calculate_original_lcas "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT" "$OUTPUT_DIR"
+  wait_for_writers
   calculate_equalized_fas "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT"
+  wait_for_writers
   calculate_original_fas "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT"
+  wait_for_writers
   create_sequence_table "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT" "$OUTPUT_DIR"
+  wait_for_writers
   create_tryptic_index "$OUTPUT_DIR"
 else
   echo "Error: Invalid mode '$MODE'. Supported modes are 'kmer' and 'tryptic'."

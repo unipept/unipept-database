@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 ################################################################################
 # This file contains a collection of variables and helper functions shared     #
 # between the `generate_sa_tables.sh` and `generate_umgap_tables.sh` scripts.  #
@@ -30,6 +31,9 @@ declare -A SOURCE_URLS=(
 CMD_LZ4="lz4 -c" # Which pipe compression command should I use for .lz4 files?
 CMD_LZ4CAT="lz4 -dc" # Which decompression command should I use for .lz4 files?
 CMD_AWK="gawk"
+
+# Seconds a background writer may take to finish after its producer has closed the pipe.
+WRITER_TIMEOUT=3600
 
 ################################################################################
 #                            Helper Functions                                  #
@@ -120,6 +124,9 @@ errorAndExit() {
 	then
 	  echo "$1" 1>&2
   fi
+
+  report_failed_writers || true
+
 	echo "" 1>&2
 	clean
 	exit 2
@@ -184,6 +191,109 @@ checkDirectoryAndCreate() {
 }
 
 ################################################################################
+# register_writer                                                              #
+#                                                                              #
+# Records that a background writer has started and returns the path prefix of  #
+# its marker file. The writer renames the marker to .ok or .fail when it ends. #
+#                                                                              #
+# A marker rather than a process id, because lz and luz are called inside a    #
+# command substitution: a pid collected there never reaches the shell that has #
+# to check it.                                                                 #
+#                                                                              #
+# Globals:                                                                     #
+#   TEMP_DIR, UNIPEPT_TEMP_CONSTANT                                            #
+#                                                                              #
+# Arguments:                                                                   #
+#   $1 - Name of the FIFO, used to keep the marker unique                      #
+#   $2 - What the writer is doing, reported if it fails                        #
+#                                                                              #
+# Outputs:                                                                     #
+#   The marker path without its suffix                                         #
+################################################################################
+register_writer() {
+	local dir="$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/.writers"
+	mkdir -p "$dir"
+	echo "$2" > "$dir/$1.running"
+	echo "$dir/$1"
+}
+
+################################################################################
+# wait_for_writers                                                             #
+#                                                                              #
+# Waits until every background writer started so far has ended, then reports   #
+# the ones that failed. Call it between pipeline steps: a step that reads what #
+# the step before it wrote needs that file to be complete.                     #
+#                                                                              #
+# Globals:                                                                     #
+#   TEMP_DIR, UNIPEPT_TEMP_CONSTANT, WRITER_TIMEOUT                            #
+#                                                                              #
+# Arguments:                                                                   #
+#   None                                                                       #
+#                                                                              #
+# Outputs:                                                                     #
+#   One error message per failed writer to stderr                              #
+#                                                                              #
+# Returns:                                                                     #
+#   0 if every writer succeeded, 1 otherwise                                   #
+################################################################################
+wait_for_writers() {
+	local dir="$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/.writers"
+	local waited=0
+
+	[[ -d "$dir" ]] || return 0
+
+	while compgen -G "$dir/*.running" > /dev/null
+	do
+		sleep 1
+		waited=$((waited + 1))
+		if [[ "$waited" -ge "$WRITER_TIMEOUT" ]]
+		then
+			echo "Error: a background writer did not finish within $WRITER_TIMEOUT seconds." 1>&2
+			return 1
+		fi
+	done
+
+	report_failed_writers
+}
+
+################################################################################
+# report_failed_writers                                                        #
+#                                                                              #
+# Reports every background writer that has already failed, without waiting for #
+# the ones still running. Used on the error path, where the script is stopping #
+# anyway and the operator needs to know which table is bad.                    #
+#                                                                              #
+# Globals:                                                                     #
+#   TEMP_DIR, UNIPEPT_TEMP_CONSTANT                                            #
+#                                                                              #
+# Arguments:                                                                   #
+#   None                                                                       #
+#                                                                              #
+# Outputs:                                                                     #
+#   One error message per failed writer to stderr                              #
+#                                                                              #
+# Returns:                                                                     #
+#   0 if no writer failed, 1 otherwise                                         #
+################################################################################
+report_failed_writers() {
+	local dir="$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/.writers"
+	local marker
+	local status=0
+
+	[[ -d "$dir" ]] || return 0
+
+	for marker in "$dir"/*.fail
+	do
+		[[ -e "$marker" ]] || continue
+		echo "Error: $(cat "$marker") failed." 1>&2
+		status=1
+	done
+
+	rm -f "$dir"/*.ok "$dir"/*.fail
+	return "$status"
+}
+
+################################################################################
 # lz                                                                           #
 #                                                                              #
 # Creates a named pipe (FIFO) for the provided file and prepares it to receive #
@@ -205,12 +315,24 @@ checkDirectoryAndCreate() {
 #   None                                                                       #
 ################################################################################
 lz() {
-	fifo="$(uuidgen)-$(basename "$1")"
-	rm -f "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/$fifo"
-	mkfifo "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/$fifo"
-	echo "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/$fifo"
+	local pipe
+	local marker
+	pipe="$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/$(uuidgen)-$(basename "$1")"
+	marker="$(register_writer "$(basename "$pipe")" "writing $1")"
+	rm -f "$pipe"
+	mkfifo "$pipe"
+	echo "$pipe"
 	mkdir -p "$(dirname "$1")"
-	{ $CMD_LZ4 - < "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/$fifo" > "$1" && rm "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/$fifo" || kill "$self"; } > /dev/null &
+	{
+		if $CMD_LZ4 - < "$pipe" > "$1"
+		then
+			mv "$marker.running" "$marker.ok"
+		else
+			rm -f "$1"
+			mv "$marker.running" "$marker.fail"
+		fi
+		rm -f "$pipe"
+	} > /dev/null &
 }
 
 ################################################################################
@@ -235,11 +357,22 @@ lz() {
 #   None                                                                       #
 ################################################################################
 luz() {
-	fifo="$(uuidgen)-$(basename "$1")"
-	rm -f "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/$fifo"
-	mkfifo "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/$fifo"
-	echo "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/$fifo"
-	{ $CMD_LZ4CAT "$1" > "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/$fifo" && rm "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/$fifo" || kill "$self"; } > /dev/null &
+	local pipe
+	local marker
+	pipe="$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/$(uuidgen)-$(basename "$1")"
+	marker="$(register_writer "$(basename "$pipe")" "reading $1")"
+	rm -f "$pipe"
+	mkfifo "$pipe"
+	echo "$pipe"
+	{
+		if $CMD_LZ4CAT "$1" > "$pipe"
+		then
+			mv "$marker.running" "$marker.ok"
+		else
+			mv "$marker.running" "$marker.fail"
+		fi
+		rm -f "$pipe"
+	} > /dev/null &
 }
 
 ################################################################################
