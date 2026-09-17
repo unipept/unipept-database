@@ -1,19 +1,24 @@
-use std::collections::HashSet;
-use std::fs::File;
-use std::io::{BufWriter, Write};
-use std::path::PathBuf;
+use std::{
+    collections::HashSet,
+    fs::File,
+    io::{BufWriter, Write},
+    path::PathBuf
+};
 
-use crate::models::{Entry, calculate_entry_digest};
-use crate::taxon_list::parse_taxon_file_basic;
 use anyhow::{Context, Result};
 use bit_vec::BitVec;
 use utils::open_write;
+
+use crate::{
+    models::{Entry, calculate_entry_digest},
+    taxon_list::parse_taxon_file_basic
+};
 
 pub struct EntryTableWriter {
     taxa: BitVec,
     wrong_ids: HashSet<i32>,
     uniprot_entries: BufWriter<File>,
-    uniprot_count: i64,
+    uniprot_count: i64
 }
 
 impl EntryTableWriter {
@@ -22,20 +27,17 @@ impl EntryTableWriter {
             taxa: parse_taxon_file_basic(taxa).context("Unable to parse taxonomy file")?,
             wrong_ids: HashSet::new(),
             uniprot_entries: open_write(uniprot_entries).context("Unable to open output file")?,
-            uniprot_count: 0,
+            uniprot_count: 0
         })
     }
 
     pub fn write(&mut self, entry: Entry) -> Result<()> {
-        self.write_uniprot_entry(&entry)
-            .context("Failed to write entry")?;
+        self.write_uniprot_entry(&entry).context("Failed to write entry")?;
         Ok(())
     }
 
     pub fn write_uniprot_entry(&mut self, entry: &Entry) -> Result<i64> {
-        if 0 <= entry.taxon_id
-            && entry.taxon_id < self.taxa.len() as i32
-            && self.taxa[entry.taxon_id as usize]
+        if 0 <= entry.taxon_id && entry.taxon_id < self.taxa.len() as i32 && self.taxa[entry.taxon_id as usize]
         // This indexing is safe due to the line above
         {
             self.uniprot_count += 1;
@@ -90,7 +92,7 @@ pub struct PeptideTableWriter {
     peptides: BufWriter<File>,
     peptide_count: i64,
     min_length: usize,
-    max_length: usize,
+    max_length: usize
 }
 
 impl PeptideTableWriter {
@@ -99,34 +101,19 @@ impl PeptideTableWriter {
             peptides: open_write(peptides).context("Unable to open output file")?,
             peptide_count: 0,
             min_length,
-            max_length,
+            max_length
         })
     }
 
     pub fn write(&mut self, entry_id: i64, entry: Entry) -> Result<()> {
         let go_ids = entry.go_references.into_iter();
-        let ec_ids = entry
-            .ec_references
-            .iter()
-            .filter(|x| !x.is_empty())
-            .map(|x| format!("EC:{}", x));
-        let ip_ids = entry
-            .ip_references
-            .iter()
-            .filter(|x| !x.is_empty())
-            .map(|x| format!("IPR:{}", x));
+        let ec_ids = entry.ec_references.iter().filter(|x| !x.is_empty()).map(|x| format!("EC:{}", x));
+        let ip_ids = entry.ip_references.iter().filter(|x| !x.is_empty()).map(|x| format!("IPR:{}", x));
 
-        let summary = go_ids
-            .chain(ec_ids)
-            .chain(ip_ids)
-            .collect::<Vec<String>>()
-            .join(";");
+        let summary = go_ids.chain(ec_ids).chain(ip_ids).collect::<Vec<String>>().join(";");
 
         for sequence in calculate_entry_digest(&entry.sequence, self.min_length, self.max_length) {
-            let equated_sequence = sequence
-                .iter()
-                .map(|&x| if x == b'I' { b'L' } else { x })
-                .collect::<Vec<u8>>();
+            let equated_sequence = sequence.iter().map(|&x| if x == b'I' { b'L' } else { x }).collect::<Vec<u8>>();
 
             self.peptide_count += 1;
 
@@ -148,24 +135,20 @@ impl PeptideTableWriter {
 }
 
 pub struct ProteomeTableWriter {
-    proteomes: BufWriter<File>,
+    proteomes: BufWriter<File>
 }
 
 impl ProteomeTableWriter {
     pub fn new(proteomes: &PathBuf) -> Result<Self> {
         Ok(Self {
-            proteomes: open_write(proteomes).context("Unable to open output file")?,
+            proteomes: open_write(proteomes).context("Unable to open output file")?
         })
     }
 
     pub fn write_proteomes(&mut self, entry: &Entry) -> Result<()> {
         for proteome in &entry.proteome_references {
-            writeln!(
-                &mut self.proteomes,
-                "{}\t{}",
-                proteome, entry.accession_number,
-            )
-            .context("Error writing to TSV")?;
+            writeln!(&mut self.proteomes, "{}\t{}", proteome, entry.accession_number,)
+                .context("Error writing to TSV")?;
         }
 
         Ok(())

@@ -1,20 +1,18 @@
 use std::io::{BufRead, Lines};
 
-use crate::entry::UniProtDATEntry;
 use anyhow::{Error, Result};
+
+use crate::entry::UniProtDATEntry;
 
 /// A simple single-threaded DAT parser
 pub struct SequentialDATParser<B: BufRead> {
     lines: Lines<B>,
-    data: Vec<String>,
+    data: Vec<String>
 }
 
 impl<B: BufRead> SequentialDATParser<B> {
     pub fn new(reader: B) -> Self {
-        Self {
-            lines: reader.lines(),
-            data: Vec::new(),
-        }
+        Self { lines: reader.lines(), data: Vec::new() }
     }
 }
 
@@ -33,7 +31,7 @@ impl<B: BufRead> Iterator for SequentialDATParser<B> {
                     self.data.clear();
                     return Some(entry);
                 }
-                Some(Ok(line)) => self.data.push(line),
+                Some(Ok(line)) => self.data.push(line)
             }
         }
     }

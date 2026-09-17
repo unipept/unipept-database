@@ -1,5 +1,4 @@
-use std::io::BufRead;
-use std::path::PathBuf;
+use std::{io::BufRead, path::PathBuf};
 
 use anyhow::{Context, Result};
 use bit_vec::BitVec;
@@ -13,13 +12,8 @@ pub fn parse_taxon_file_basic(pb: &PathBuf) -> Result<BitVec> {
 
     for line in reader.lines() {
         let line = line.context("Error reading line from taxon file")?;
-        let spl = line
-            .split_once('\t')
-            .context("Unable to split taxon file on tabs")?;
-        let id: usize = spl
-            .0
-            .parse()
-            .with_context(|| format!("Unable to parse {} as usize", spl.0))?;
+        let spl = line.split_once('\t').context("Unable to split taxon file on tabs")?;
+        let id: usize = spl.0.parse().with_context(|| format!("Unable to parse {} as usize", spl.0))?;
 
         if entries.len() <= id {
             entries.grow(id - entries.len() + 1, false)

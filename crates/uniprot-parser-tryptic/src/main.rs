@@ -1,35 +1,33 @@
+use std::path::PathBuf;
+
 use anyhow::{Context, Result};
 use clap::Parser;
 use dat_parser::uniprot_dat_parser;
-use std::path::PathBuf;
-use tables_generator::models::Entry;
-use tables_generator::table_writer::{EntryTableWriter, PeptideTableWriter};
+use tables_generator::{
+    models::Entry,
+    table_writer::{EntryTableWriter, PeptideTableWriter}
+};
 use utils::open_sin;
 
 fn main() -> Result<()> {
     let args = Cli::parse();
 
     let reader = open_sin();
-    let mut entry_writer = EntryTableWriter::new(&args.taxa, &args.uniprot_entries)
+    let mut entry_writer =
+        EntryTableWriter::new(&args.taxa, &args.uniprot_entries).context("Unable to instantiate TableWriter")?;
+    let mut peptide_writer = PeptideTableWriter::new(&args.peptides, args.peptide_min, args.peptide_max)
         .context("Unable to instantiate TableWriter")?;
-    let mut peptide_writer =
-        PeptideTableWriter::new(&args.peptides, args.peptide_min, args.peptide_max)
-            .context("Unable to instantiate TableWriter")?;
 
-    //write_header();
+    // write_header();
     let parser = uniprot_dat_parser(reader, args.threads);
 
     for entry in parser {
         let parsed_entry: Entry = entry.context("Failed to parse entry")?.into();
 
-        let entry_id = entry_writer
-            .write_uniprot_entry(&parsed_entry)
-            .context("Failed to store entry")?;
+        let entry_id = entry_writer.write_uniprot_entry(&parsed_entry).context("Failed to store entry")?;
 
         if entry_id != -1 {
-            peptide_writer
-                .write(entry_id, parsed_entry)
-                .context("Failed to store peptide")?;
+            peptide_writer.write(entry_id, parsed_entry).context("Failed to store peptide")?;
         }
     }
 
@@ -60,5 +58,5 @@ struct Cli {
 
     /// Amount of threads to use for parsing
     #[clap(long, default_value_t = 0)]
-    threads: usize,
+    threads: usize
 }

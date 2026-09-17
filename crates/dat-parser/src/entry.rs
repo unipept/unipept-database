@@ -1,13 +1,13 @@
-use anyhow::{Context, anyhow};
 use std::collections::HashSet;
+
+use anyhow::{Context, anyhow};
 use tables_generator::models::Entry;
 
 // Constants to aid in parsing
 const COMMON_PREFIX_LEN: usize = "ID   ".len();
 const DATE_LENGTH: usize = "DD-MMM-YYYY".len();
 
-const DT_PREFIX_INTEGRATED_LENGTH: usize =
-    COMMON_PREFIX_LEN + DATE_LENGTH + ", integrated into ".len();
+const DT_PREFIX_INTEGRATED_LENGTH: usize = COMMON_PREFIX_LEN + DATE_LENGTH + ", integrated into ".len();
 const DT_PREFIX_VERSION_LENGTH: usize = COMMON_PREFIX_LEN + DATE_LENGTH + ", entry version ".len();
 
 const DE_PREFIX_NAME_LENGTH: usize = "RecName: Full=".len();
@@ -19,7 +19,7 @@ const OX_PREFIX_NCBI_LENGTH: usize = "OX   NCBI_TaxID=".len();
 pub struct DatabaseReferences {
     go_references: Vec<String>,
     ipr_references: Vec<String>,
-    proteome_references: Vec<String>,
+    proteome_references: Vec<String>
 }
 
 /// The minimal data we want from an entry out of the UniProtKB datasets
@@ -34,7 +34,7 @@ pub struct UniProtDATEntry {
     go_references: Vec<String>,
     ip_references: Vec<String>,
     proteome_references: Vec<String>,
-    taxon_id: String,
+    taxon_id: String
 }
 
 impl From<UniProtDATEntry> for Entry {
@@ -49,7 +49,7 @@ impl From<UniProtDATEntry> for Entry {
             entry.ec_references,
             entry.go_references,
             entry.ip_references,
-            entry.proteome_references,
+            entry.proteome_references
         )
         .unwrap()
     }
@@ -64,15 +64,15 @@ impl UniProtDATEntry {
         skip_until_field(data, &mut data_cursor, "AC");
 
         // Parse the AC (accession number) field
-        let accession_number = parse_accession_number_field(data, &mut data_cursor)
-            .context("Error parsing the accession number")?;
+        let accession_number =
+            parse_accession_number_field(data, &mut data_cursor).context("Error parsing the accession number")?;
 
         // Skip other AC fields. We only store the first (newest) accession number
         skip_until_field(data, &mut data_cursor, "DT");
 
         // Parse the DT (date) fields
-        let (database_type, version) = parse_date_fields(data, &mut data_cursor)
-            .context("Error parsing the date information")?;
+        let (database_type, version) =
+            parse_date_fields(data, &mut data_cursor).context("Error parsing the date information")?;
 
         // Parse the DE (description) fields
         let (name, ec_references) = parse_description_field(data, &mut data_cursor);
@@ -109,17 +109,14 @@ impl UniProtDATEntry {
             go_references: db_references.go_references,
             ip_references: db_references.ipr_references,
             proteome_references: db_references.proteome_references,
-            taxon_id,
+            taxon_id
         })
     }
 
     /// Write an entry to stdout
     pub fn write(&self) {
         if self.name.is_empty() {
-            eprintln!(
-                "Could not find a name for entry AC-{}",
-                self.accession_number
-            );
+            eprintln!("Could not find a name for entry AC-{}", self.accession_number);
         }
 
         println!(
@@ -163,10 +160,7 @@ fn skip_until_optional_field(data: &[String], data_cursor: &mut usize, field: &s
 }
 
 /// Find the first AC number
-fn parse_accession_number_field(
-    data: &[String],
-    data_cursor: &mut usize,
-) -> anyhow::Result<String> {
+fn parse_accession_number_field(data: &[String], data_cursor: &mut usize) -> anyhow::Result<String> {
     // Parse the string of accession numbers. Skip the AC prefix
     let accession_numbers = &data[*data_cursor][COMMON_PREFIX_LEN..];
     let (first_accession, _) = accession_numbers
@@ -186,7 +180,7 @@ fn parse_date_fields(data: &[String], data_cursor: &mut usize) -> anyhow::Result
     let database_type: String = match first_line {
         "UniProtKB/Swiss-Prot." => Ok("swissprot".to_string()),
         "UniProtKB/TrEMBL." => Ok("trembl".to_string()),
-        _ => Err(anyhow!("Error: Unknown database type".to_string())),
+        _ => Err(anyhow!("Error: Unknown database type".to_string()))
     }?;
 
     // Get entry version on the third line (has prefix of constant length and ends with a dot)
@@ -244,17 +238,13 @@ fn parse_description_field(data: &[String], data_cursor: &mut usize) -> (String,
 
         // Keep track of the last recommended or submitted name
         if line.starts_with("RecName: Full=") || line.starts_with("SubName: Full=") {
-            let index = match (
-                line.starts_with("RecName: Full="),
-                inside_domain,
-                inside_component,
-            ) {
+            let index = match (line.starts_with("RecName: Full="), inside_domain, inside_component) {
                 (true, true, _) => LAST_DOMAIN_RECOMMENDED_IDX,
                 (true, _, true) => LAST_COMPONENT_RECOMMENDED_IDX,
                 (true, _, _) => LAST_PROTEIN_RECOMMENDED_IDX,
                 (false, true, _) => LAST_DOMAIN_SUBMITTED_IDX,
                 (false, _, true) => LAST_COMPONENT_SUBMITTED_IDX,
-                (false, _, _) => LAST_PROTEIN_SUBMITTED_IDX,
+                (false, _, _) => LAST_PROTEIN_SUBMITTED_IDX
             };
             name_indices[index] = *data_cursor;
         }
@@ -302,21 +292,12 @@ fn parse_db_references(data: &[String], data_cursor: &mut usize) -> DatabaseRefe
     while data[*data_cursor].starts_with("DR") {
         let line = &data[*data_cursor][COMMON_PREFIX_LEN..];
 
-        parse_db_reference(
-            line,
-            &mut go_references,
-            &mut ipr_references,
-            &mut proteome_references,
-        );
+        parse_db_reference(line, &mut go_references, &mut ipr_references, &mut proteome_references);
 
         *data_cursor += 1;
     }
 
-    DatabaseReferences {
-        go_references,
-        ipr_references,
-        proteome_references,
-    }
+    DatabaseReferences { go_references, ipr_references, proteome_references }
 }
 
 /// Parse a single GO or InterPro DB reference
@@ -324,7 +305,7 @@ fn parse_db_reference(
     line: &str,
     go_references: &mut Vec<String>,
     ipr_references: &mut Vec<String>,
-    proteome_references: &mut Vec<String>,
+    proteome_references: &mut Vec<String>
 ) {
     if line.starts_with("GO;") {
         go_references.push(line[4..14].to_string());
@@ -493,8 +474,7 @@ mod tests {
     #[test]
     fn test_parse_db_reference_go() {
         let want = vec![String::from("GO:0046782")];
-        let mut line =
-            String::from("GO; GO:0046782; P:regulation of viral transcription; IEA:InterPro.");
+        let mut line = String::from("GO; GO:0046782; P:regulation of viral transcription; IEA:InterPro.");
         let mut target = Vec::new();
         let mut _dummy = Vec::new();
         let mut _dummy2 = Vec::new();
@@ -579,14 +559,8 @@ mod tests {
         assert_eq!(got.version, "44");
         assert_eq!(got.taxon_id, "654924");
         assert_eq!(got.ec_references.len(), 0);
-        assert_eq!(
-            got.go_references,
-            vec![String::from("GO:0046782"), String::from("GO:0016743")]
-        );
-        assert_eq!(
-            got.ip_references,
-            vec![String::from("IPR007031"), String::from("IPR000308")]
-        );
+        assert_eq!(got.go_references, vec![String::from("GO:0046782"), String::from("GO:0016743")]);
+        assert_eq!(got.ip_references, vec![String::from("IPR007031"), String::from("IPR000308")]);
         assert_eq!(
             got.sequence,
             "MAFSAEDVLKEYDRRRRMEALLLSLYYPNDRKLLDYKEWSPPRVQVECPKAPVEWNNPPSEKGLIVGHFSGIKYKGEKAQASEVDVNKMCCWVSKFKDAMRRYQGIQTCKIPGKVLSDLD"

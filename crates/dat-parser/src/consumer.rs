@@ -1,13 +1,14 @@
-use crate::entry::UniProtDATEntry;
+use std::{thread, thread::JoinHandle};
+
 use anyhow::{Context, Result};
 use crossbeam_channel::{Receiver, Sender};
-use std::thread;
-use std::thread::JoinHandle;
+
+use crate::entry::UniProtDATEntry;
 
 /// A Consumer runs in a thread and constantly listens to a Receiver channel for raw data,
 /// publishing parsed `UniProtDatEntry`s to a Sender channel
 pub struct Consumer {
-    handle: Option<JoinHandle<()>>,
+    handle: Option<JoinHandle<()>>
 }
 
 impl Consumer {
@@ -20,16 +21,11 @@ impl Consumer {
             for data in receiver {
                 // Cut out the \n// at the end
                 let data_slice = &data[..data.len() - 3];
-                let lines: Vec<String> = String::from_utf8_lossy(data_slice)
-                    .split('\n')
-                    .map(|x| x.to_string())
-                    .collect();
+                let lines: Vec<String> =
+                    String::from_utf8_lossy(data_slice).split('\n').map(|x| x.to_string()).collect();
 
                 let entry = UniProtDATEntry::from_lines(&lines).context("Error parsing DAT entry");
-                sender
-                    .send(entry)
-                    .context("Error sending parsed DAT entry to receiver channel")
-                    .unwrap();
+                sender.send(entry).context("Error sending parsed DAT entry to receiver channel").unwrap();
             }
         }));
     }

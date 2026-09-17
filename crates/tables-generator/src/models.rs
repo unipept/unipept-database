@@ -14,7 +14,7 @@ pub struct Entry {
     pub ec_references: Vec<String>,
     pub go_references: Vec<String>,
     pub ip_references: Vec<String>,
-    pub proteome_references: Vec<String>,
+    pub proteome_references: Vec<String>
 }
 
 impl Entry {
@@ -29,11 +29,9 @@ impl Entry {
         ec_references: Vec<String>,
         go_references: Vec<String>,
         ip_references: Vec<String>,
-        proteome_references: Vec<String>,
+        proteome_references: Vec<String>
     ) -> Result<Self> {
-        let parsed_id = taxon_id
-            .parse()
-            .with_context(|| format!("Failed to parse {} to i32", taxon_id))?;
+        let parsed_id = taxon_id.parse().with_context(|| format!("Failed to parse {} to i32", taxon_id))?;
 
         Ok(Entry {
             accession_number,
@@ -46,16 +44,12 @@ impl Entry {
             ec_references,
             go_references,
             ip_references,
-            proteome_references,
+            proteome_references
         })
     }
 }
 
-pub fn calculate_entry_digest(
-    sequence: &String,
-    min_length: usize,
-    max_length: usize,
-) -> Vec<&[u8]> {
+pub fn calculate_entry_digest(sequence: &String, min_length: usize, max_length: usize) -> Vec<&[u8]> {
     let mut result = Vec::new();
 
     let mut start: usize = 0;
