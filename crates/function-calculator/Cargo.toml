@@ -1,9 +1,10 @@
 [package]
 name = "function-calculator"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
 
 [dependencies]
-clap = { version = "4.4.6", features = ["derive"] }
-anyhow = "1.0.97"
+anyhow.workspace = true
+clap.workspace = true
 utils = { path = "../utils" }

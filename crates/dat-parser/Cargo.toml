@@ -1,11 +1,12 @@
 [package]
 name = "dat-parser"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
 
 [dependencies]
-anyhow = "1.0.75"
-crossbeam-channel = "0.5.11"
-lazy_static = "1.4.0"
-num_cpus = "1.16.0"
+anyhow.workspace = true
+crossbeam-channel.workspace = true
+lazy_static.workspace = true
+num_cpus.workspace = true
 tables-generator = { path = "../tables-generator" }
