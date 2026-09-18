@@ -121,9 +121,16 @@ trap errorAndExit ERR
 opensearch_request() {
     local what=$1 accepted=$2 method=$3 path=$4
     local status
+    local curl_status=0
     shift 4
 
-    status=$(curl -s -o /dev/null -w '%{http_code}' -X "$method" "${OPENSEARCH_URL}/${path}" "$@")
+    status=$(curl -s -o /dev/null -w '%{http_code}' -X "$method" "${OPENSEARCH_URL}/${path}" "$@") || curl_status=$?
+
+    if [[ "$curl_status" -ne 0 ]]
+    then
+        echo "Error: ${what} failed: curl exited with ${curl_status}." 1>&2
+        exit 1
+    fi
 
     if [[ " ${accepted} " != *" ${status} "* ]]
     then
