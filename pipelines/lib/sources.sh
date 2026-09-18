@@ -383,7 +383,7 @@ fetch_reference_proteomes() {
 
   log "Started creating UniProt Reference Proteomes."
 
-  local reference_proteome_url="https://rest.uniprot.org/proteomes/stream?fields=upid,organism_id,protein_count&format=tsv&query=(*)+AND+(proteome_type:1)"
+  local reference_proteome_url="https://rest.uniprot.org/proteomes/stream?fields=upid,organism_id,protein_count&format=tsv&query=reference:true"
 
   mkdir -p "$output_dir"
   curl -s "$reference_proteome_url" | tail -n +2 | sort -k1,1 | $CMD_LZ4 - > "$output_dir/reference_proteomes.tsv.lz4"
