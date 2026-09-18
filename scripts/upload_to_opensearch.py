@@ -44,11 +44,12 @@ def convert_to_json(rows, fields, index_name, id_field, first_line):
     return objects
 
 
-def upload_bulk(objects, opensearch_url):
+def upload_bulk(objects, session, opensearch_url):
     """
     Upload the given set of objects to an OpenSearch instance running at the given URL.
 
     :param objects:
+    :param session: the requests.Session that keeps the connection open between batches
     :param opensearch_url:
     :return:
     """
@@ -57,7 +58,7 @@ def upload_bulk(objects, opensearch_url):
 
     for attempt in range(1, MAX_ATTEMPTS + 1):
         try:
-            response = requests.post(
+            response = session.post(
                 f"{opensearch_url}/_bulk",
                 headers={"Content-Type": "application/x-ndjson"},
                 data=payload,
@@ -102,6 +103,7 @@ def main():
     batch_size = args.batch_size
     opensearch_url = args.opensearch_url
 
+    session = requests.Session()
     uploaded = args.skip
     lines = []
     batch_starts_at = args.skip + 1
@@ -116,13 +118,13 @@ def main():
             lines.append(line.rstrip("\n"))
 
             if len(lines) == batch_size:
-                upload_bulk(convert_to_json(lines, fields, index_name, id_field, batch_starts_at), opensearch_url)
+                upload_bulk(convert_to_json(lines, fields, index_name, id_field, batch_starts_at), session, opensearch_url)
                 uploaded += len(lines)
                 batch_starts_at = uploaded + 1
                 lines = []
 
         if len(lines) > 0:
-            upload_bulk(convert_to_json(lines, fields, index_name, id_field, batch_starts_at), opensearch_url)
+            upload_bulk(convert_to_json(lines, fields, index_name, id_field, batch_starts_at), session, opensearch_url)
             uploaded += len(lines)
     except (ValueError, RuntimeError) as error:
         print(f"Error: {error}", file=sys.stderr)
