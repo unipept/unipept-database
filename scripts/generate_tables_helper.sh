@@ -191,6 +191,18 @@ checkDirectoryAndCreate() {
 }
 
 ################################################################################
+# writers_dir                                                                  #
+#                                                                              #
+# Prints the directory that holds the marker files of the background writers. #
+#                                                                              #
+# Globals:                                                                     #
+#   TEMP_DIR, UNIPEPT_TEMP_CONSTANT                                            #
+################################################################################
+writers_dir() {
+	echo "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/.writers"
+}
+
+################################################################################
 # register_writer                                                              #
 #                                                                              #
 # Records that a background writer has started and returns the path prefix of  #
@@ -211,7 +223,8 @@ checkDirectoryAndCreate() {
 #   The marker path without its suffix                                         #
 ################################################################################
 register_writer() {
-	local dir="$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/.writers"
+	local dir
+	dir="$(writers_dir)"
 	mkdir -p "$dir"
 	echo "$2" > "$dir/$1.running"
 	echo "$dir/$1"
@@ -237,7 +250,8 @@ register_writer() {
 #   0 if every writer succeeded, 1 otherwise                                   #
 ################################################################################
 wait_for_writers() {
-	local dir="$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/.writers"
+	local dir
+	dir="$(writers_dir)"
 	local waited=0
 
 	[[ -d "$dir" ]] || return 0
@@ -296,7 +310,8 @@ run_step() {
 #   0 if no writer failed, 1 otherwise                                         #
 ################################################################################
 report_failed_writers() {
-	local dir="$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/.writers"
+	local dir
+	dir="$(writers_dir)"
 	local marker
 	local status=0
 
