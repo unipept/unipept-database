@@ -106,6 +106,33 @@ trap terminateAndExit SIGINT
 trap errorAndExit ERR
 
 ################################################################################
+# opensearch_request                                                           #
+#                                                                              #
+# Sends one request to OpenSearch. Exits with an error if the HTTP status is   #
+# not one of the accepted codes.                                               #
+#                                                                              #
+# Arguments:                                                                   #
+#   $1 - What the request does, used in the error message                      #
+#   $2 - The accepted status codes, separated by spaces                        #
+#   $3 - The HTTP method                                                       #
+#   $4 - The path after the OpenSearch URL                                     #
+#   $@ - Further curl arguments                                                #
+################################################################################
+opensearch_request() {
+    local what=$1 accepted=$2 method=$3 path=$4
+    local status
+    shift 4
+
+    status=$(curl -s -o /dev/null -w '%{http_code}' -X "$method" "${OPENSEARCH_URL}/${path}" "$@")
+
+    if [[ " ${accepted} " != *" ${status} "* ]]
+    then
+        echo "Error: ${what} answered ${status}." 1>&2
+        exit 1
+    fi
+}
+
+################################################################################
 #                               Main functions                                 #
 ################################################################################
 
@@ -134,17 +161,7 @@ init_indices() {
 
     # Only this index. The instance is allowed to hold indices that belong to something else.
     # 404 is a success: on a first run there is nothing to drop.
-    local status
-    status=$(curl -s -o /dev/null -w '%{http_code}' -X DELETE "${OPENSEARCH_URL}/${INDEX_NAME}")
-
-    case "$status" in
-        200 | 404)
-            ;;
-        *)
-            echo "Error: dropping the ${INDEX_NAME} index answered ${status}." 1>&2
-            exit 1
-            ;;
-    esac
+    opensearch_request "dropping the ${INDEX_NAME} index" "200 404" DELETE "${INDEX_NAME}"
 
     log "Finished dropping the ${INDEX_NAME} index."
 
@@ -158,14 +175,8 @@ init_indices() {
         exit 1
     fi
 
-    status=$(curl -s -o /dev/null -w '%{http_code}' -X PUT "${OPENSEARCH_URL}/${INDEX_NAME}" \
-        -H 'Content-Type: application/json' -d @"${index_file}")
-
-    if [[ "$status" != "200" ]]
-    then
-        echo "Error: creating the ${INDEX_NAME} index answered ${status}." 1>&2
-        exit 1
-    fi
+    opensearch_request "creating the ${INDEX_NAME} index" "200" PUT "${INDEX_NAME}" \
+        -H 'Content-Type: application/json' -d @"${index_file}"
 
     log "Finished creating the ${INDEX_NAME} index."
 }
