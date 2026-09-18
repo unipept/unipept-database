@@ -15,7 +15,7 @@ CURRENT_LOCATION="${BASH_SOURCE%/*}"
 # Globals imported:
 #   - SOURCE_URLS: Associative array mapping database types to download URLs
 #   - CMD_LZ4: Command or path to the lz4 binary
-source "${CURRENT_LOCATION}/generate_tables_helper.sh"
+source "${CURRENT_LOCATION}/../lib/common.sh"
 
 ################################################################################
 #                            Variables and options                             #

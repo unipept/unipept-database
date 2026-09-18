@@ -10,8 +10,8 @@ set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# shellcheck source=../scripts/general_helpers.sh
-source "${HERE}/../scripts/general_helpers.sh"
+# shellcheck source=../pipelines/lib/general_helpers.sh
+source "${HERE}/../pipelines/lib/general_helpers.sh"
 
 heading() { printf '\n\033[1m%s\033[0m\n' "$*"; }
 

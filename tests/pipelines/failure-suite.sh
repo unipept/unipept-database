@@ -4,7 +4,7 @@
 # suite covers what happens when that compressor fails or is slow, which is the one path the
 # pipeline never exercises on a good run.
 #
-# The cases run against the real lz() in scripts/generate_tables_helper.sh with a stand-in lz4
+# The cases run against the real lz() in pipelines/lib/common.sh with a stand-in lz4
 # on PATH, so they need no compression tool and no network.
 
 set -uo pipefail

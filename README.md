@@ -5,7 +5,7 @@ This collection of scripts is provided to download and process that database (or
 
 ## Most important scripts
 
-### scripts/generate_sa_tables.sh
+### pipelines/suffix-array/build.sh
 
 This script is responsible for parsing the UniProtKB database and generating several `.tsv.lz4` files that are essential for the Unipept pipeline that generates a suffix array (see [unipept-index](https://github.com/unipept/unipept-index)). 
 These files contain structured information extracted from the database in a compressed format for efficient storage and processing. 
@@ -21,7 +21,7 @@ Below is an overview of the generated files and what they represent:
 
 See [our wiki](https://github.com/unipept/unipept-database/wiki/Building-tables-for-the-suffix-array) for more information on how to run this script.
 
-### scripts/generate_umgap_tables.sh
+### pipelines/umgap/build.sh
 
 This script is responsible for parsing datasets to generate files required by the Unipept metagenomics pipeline, which constructs a metagenomics index. 
 The script supports two distinct modes—`kmer` and `tryptic`—to create two different types of metagenomics indices optimized for different analytical purposes.
