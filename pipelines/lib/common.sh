@@ -15,7 +15,7 @@ RUST_BIN_DIR="$LIB_DIR/../../target/release"
 ################################################################################
 
 # Required to reset the temporary directory after running the script
-OLD_TMPDIR="$TMPDIR"
+OLD_TMPDIR="${TMPDIR:-}"
 
 # Some default values for the utilities used by this script
 CMD_LZ4="lz4 -c" # Which pipe compression command should I use for .lz4 files?
