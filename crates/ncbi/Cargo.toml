@@ -6,4 +6,3 @@ rust-version.workspace = true
 
 [dependencies]
 strum.workspace = true
-strum_macros.workspace = true

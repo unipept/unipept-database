@@ -1,4 +1,4 @@
-use strum_macros::{Display, EnumCount, EnumIter, EnumString};
+use strum::{Display, EnumCount, EnumIter, EnumString};
 
 pub const RANKS: usize = 29;
 
