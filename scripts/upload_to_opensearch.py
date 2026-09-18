@@ -5,9 +5,9 @@ import argparse
 
 import requests
 
-# A load runs for hours, so one slow or failed request must not end it. Only a transport error,
-# a 5xx and a 429 are retried; a 4xx and a document OpenSearch rejects are the payload itself,
-# which another attempt cannot change.
+# A load runs for hours, so one slow or failed request must not end it. A transport error, a 5xx,
+# a 429, and a batch whose rejected documents all have status 429 are retried. Any other 4xx or
+# rejected document is caused by the payload, which another attempt cannot change.
 REQUEST_TIMEOUT = 120
 MAX_ATTEMPTS = 5
 BACKOFF_SECONDS = 2
@@ -71,10 +71,12 @@ def upload_bulk(objects, session, opensearch_url):
                 last_error = f"OpenSearch answered {response.status_code}: {response.text}"
             elif response.status_code >= 300:
                 raise RuntimeError(f"OpenSearch refused the batch with {response.status_code}: {response.text}")
-            elif response.json().get("errors"):
-                raise RuntimeError(f"OpenSearch rejected documents in the batch: {response.text}")
-            else:
+            elif not response.json().get("errors"):
                 return
+            elif all(item["index"].get("status") in (200, 201, 429) for item in response.json()["items"]):
+                last_error = f"OpenSearch rejected documents with 429: {response.text}"
+            else:
+                raise RuntimeError(f"OpenSearch rejected documents in the batch: {response.text}")
 
         if attempt < MAX_ATTEMPTS:
             time.sleep(BACKOFF_SECONDS * attempt)
