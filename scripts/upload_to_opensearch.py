@@ -106,7 +106,12 @@ def main():
     session = requests.Session()
     uploaded = args.skip
     lines = []
-    batch_starts_at = args.skip + 1
+
+    def flush():
+        nonlocal uploaded
+        upload_bulk(convert_to_json(lines, fields, index_name, id_field, uploaded + 1), session, opensearch_url)
+        uploaded += len(lines)
+        lines.clear()
 
     try:
         for line_number, line in enumerate(sys.stdin, start=1):
@@ -118,14 +123,10 @@ def main():
             lines.append(line.rstrip("\n"))
 
             if len(lines) == batch_size:
-                upload_bulk(convert_to_json(lines, fields, index_name, id_field, batch_starts_at), session, opensearch_url)
-                uploaded += len(lines)
-                batch_starts_at = uploaded + 1
-                lines = []
+                flush()
 
-        if len(lines) > 0:
-            upload_bulk(convert_to_json(lines, fields, index_name, id_field, batch_starts_at), session, opensearch_url)
-            uploaded += len(lines)
+        if lines:
+            flush()
     except (ValueError, RuntimeError) as error:
         print(f"Error: {error}", file=sys.stderr)
         print(f"{uploaded} rows are indexed. Continue with --skip {uploaded}.", file=sys.stderr)
