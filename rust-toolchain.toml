@@ -1,10 +1,5 @@
-# Nightly is required for formatting: .rustfmt.toml sets `unstable_features = true`, and stable
-# rustfmt warns and reformats against the remaining rules instead of ignoring them.
-#
-# Pinned to a date because rustfmt's output changes between nightlies. Bumping is two steps: change
-# the date and run `cargo fmt --all`, committed together.
-#
-# CI builds on stable through RUSTUP_TOOLCHAIN, which takes precedence over this file.
+# Nightly for rustfmt: .rustfmt.toml sets unstable_features. Bump the date together with a
+# `cargo fmt --all` run.
 [toolchain]
 channel = "nightly-2026-03-11"
 components = ["rustfmt", "clippy"]
