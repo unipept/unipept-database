@@ -2,8 +2,8 @@
 
 set -eo pipefail
 
-# This script expects an OpenSearch instance to be active on this machine. It will then drop all existing indices,
-# recreate them according to the current versions of these indices and then import all proteins.
+# Drops and recreates the uniprot_entries index on a running OpenSearch instance, then imports the
+# proteins into it. Other indices on the instance are not touched.
 
 
 # All references to an external script should be relative to the location of this script.
