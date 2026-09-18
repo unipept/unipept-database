@@ -160,6 +160,8 @@ download_and_process_uniprot_tryptic() {
 
   log "Finished generating the uniprot_entries file."
 
+  wait_for_writers
+
   log "Started sorting peptides table"
 
   $CMD_LZ4CAT "$temp_dir/$temp_constant/peptides-out.tsv.lz4" \
@@ -801,23 +803,23 @@ if [[ "$MODE" == "kmer" ]]; then
   parse_kmer_arguments "$@"
   checkDirectoryAndCreate "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT"
   build_binaries "taxdmp-parser" "uniprot-parser"
-  create_taxon_tables "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT" "$OUTPUT_DIR"
-  download_and_process_uniprot_kmer "$DB_TYPES" "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT" "$OUTPUT_DIR"
-  create_kmer_index "$OUTPUT_DIR" "$KMER_LENGTH"
+  run_step create_taxon_tables "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT" "$OUTPUT_DIR"
+  run_step download_and_process_uniprot_kmer "$DB_TYPES" "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT" "$OUTPUT_DIR"
+  run_step create_kmer_index "$OUTPUT_DIR" "$KMER_LENGTH"
 elif [[ "$MODE" == "tryptic" ]]; then
   parse_tryptic_arguments "$@"
   checkDirectoryAndCreate "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT"
   build_binaries "taxdmp-parser" "uniprot-parser-tryptic" "function-calculator" "lca-calculator"
-  create_taxon_tables "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT" "$OUTPUT_DIR"
-  download_and_process_uniprot_tryptic "$DB_TYPES" "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT" "$OUTPUT_DIR" "$PEPTIDE_MIN_LENGTH" "$PEPTIDE_MAX_LENGTH"
-  number_sequences "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT"
-  substitute_aas "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT"
-  calculate_equalized_lcas "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT" "$OUTPUT_DIR"
-  calculate_original_lcas "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT" "$OUTPUT_DIR"
-  calculate_equalized_fas "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT"
-  calculate_original_fas "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT"
-  create_sequence_table "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT" "$OUTPUT_DIR"
-  create_tryptic_index "$OUTPUT_DIR"
+  run_step create_taxon_tables "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT" "$OUTPUT_DIR"
+  run_step download_and_process_uniprot_tryptic "$DB_TYPES" "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT" "$OUTPUT_DIR" "$PEPTIDE_MIN_LENGTH" "$PEPTIDE_MAX_LENGTH"
+  run_step number_sequences "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT"
+  run_step substitute_aas "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT"
+  run_step calculate_equalized_lcas "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT" "$OUTPUT_DIR"
+  run_step calculate_original_lcas "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT" "$OUTPUT_DIR"
+  run_step calculate_equalized_fas "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT"
+  run_step calculate_original_fas "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT"
+  run_step create_sequence_table "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT" "$OUTPUT_DIR"
+  run_step create_tryptic_index "$OUTPUT_DIR"
 else
   echo "Error: Invalid mode '$MODE'. Supported modes are 'kmer' and 'tryptic'."
   exit 1
