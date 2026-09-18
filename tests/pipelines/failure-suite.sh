@@ -30,8 +30,6 @@ run_driver() {
     local mode=$1 output=$2
 
     rm -rf "${WORK}/temp"
-    mkdir -p "${WORK}/temp"
-    : > "${WORK}/stderr"
 
     STUB_LZ4_MODE="$mode" "${HERE}/lz-driver.sh" "${WORK}/temp" "$output" 200 2> "${WORK}/stderr"
     rc=$?
