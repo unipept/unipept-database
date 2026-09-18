@@ -1,0 +1,55 @@
+# The suites in tests/, which run the shell scripts in containers or against stand-ins.
+# Path-filtered, so never make these required checks: a check that never starts blocks a merge.
+name: Shell tests
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'pipelines/**'
+      - 'opensearch/**'
+      - 'tests/**'
+      - '.github/workflows/shell-tests.yml'
+  pull_request:
+    paths:
+      - 'pipelines/**'
+      - 'opensearch/**'
+      - 'tests/**'
+      - '.github/workflows/shell-tests.yml'
+  workflow_dispatch:
+
+# A new push to a pull request cancels the older run. Runs on master are kept.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
+
+permissions:
+  contents: read
+
+jobs:
+  pipelines:
+    # lz() and luz() against a stand-in lz4. No container.
+    name: Pipeline suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      # Actions starts steps with SIGPIPE ignored; the suite needs its default action.
+      - name: Run the pipeline suite
+        run: env --default-signal=PIPE tests/run-tests.sh lz
+
+  opensearch:
+    # opensearch/load.sh against a real OpenSearch in a container.
+    name: OpenSearch suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Run the OpenSearch suite
+        run: tests/run-tests.sh opensearch
