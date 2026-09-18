@@ -33,16 +33,12 @@ load() {
     rc=$?
 }
 
-status_of() { if [ "$1" -eq 0 ]; then echo zero; else echo non-zero; fi; }
-
 documents_in() {
     curl -s "${OPENSEARCH_URL}/$1/_count" | tr ',' '\n' | sed -n 's/.*"count":\([0-9]*\).*/\1/p' | head -1
 }
 
 index_exists() {
-    local status
-    status=$(curl -s -o /dev/null -w '%{http_code}' "${OPENSEARCH_URL}/$1")
-    if [ "$status" = 200 ]; then echo present; else echo absent; fi
+    [ "$(curl -s -o /dev/null -w '%{http_code}' "${OPENSEARCH_URL}/$1")" = 200 ]
 }
 
 
@@ -51,22 +47,22 @@ curl -s -X PUT "${OPENSEARCH_URL}/unrelated_index" -H 'Content-Type: application
     -d '{"mappings":{"properties":{"note":{"type":"keyword"}}}}' > /dev/null
 curl -s -X POST "${OPENSEARCH_URL}/unrelated_index/_doc/1?refresh=true" -H 'Content-Type: application/json' \
     -d '{"note":"keep me"}' > /dev/null
-check "the unrelated index is there to start with" "$(index_exists unrelated_index)" "present"
+check_true "the unrelated index is there to start with" index_exists unrelated_index
 
 write_fixture "$FIXTURE" "$(row 1 P00001 'First protein')" "$(row 2 P00002 'Second protein')" "$(row 3 P00003 'Third protein')"
 load "${WORK}/load.log" --uniprot-entries "$FIXTURE"
-check "the load succeeds" "$(status_of "$rc")" "zero"
+check_true "the load succeeds" [ "$rc" -eq 0 ]
 curl -s -X POST "${OPENSEARCH_URL}/uniprot_entries/_refresh" > /dev/null
-check "the unrelated index survives the load" "$(index_exists unrelated_index)" "present"
+check_true "the unrelated index survives the load" index_exists unrelated_index
 check "every row is indexed" "$(documents_in uniprot_entries)" "3"
 
 
 section "a row of the wrong width stops the load and says where"
 write_fixture "${WORK}/short.tsv.lz4" "$(row 1 P00001 'First protein')" "$(short_row 2 P00002)"
 load "${WORK}/short.log" --uniprot-entries "${WORK}/short.tsv.lz4"
-check "the load reports a failure" "$(status_of "$rc")" "non-zero"
-check "the failure names the line" "$(grep -qE 'line 2' "${WORK}/short.log" && echo named || echo 'not named')" "named"
-check "the failure says where to continue" "$(grep -q -- '--skip' "${WORK}/short.log" && echo said || echo 'not said')" "said"
+check_true "the load reports a failure" [ "$rc" -ne 0 ]
+check_true "the failure names the line" grep -q 'line 2' "${WORK}/short.log"
+check_true "the failure says where to continue" grep -q -- '--skip' "${WORK}/short.log"
 
 
 section "continuing an upload keeps what is already indexed"
