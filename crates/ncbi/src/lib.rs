@@ -3,6 +3,8 @@ use strum::{Display, EnumCount, EnumIter, EnumString};
 pub const RANKS: usize = 29;
 
 #[rustfmt::skip]
+// `NoRank` is the NCBI rank "no rank"; the name is kept for the crates that match on it.
+#[allow(clippy::enum_variant_names)]
 #[derive(PartialEq, Eq, Debug, Clone, Copy, Display, EnumString, EnumCount, EnumIter)]
 pub enum Rank {
     #[strum(serialize="no rank")]                     NoRank,
