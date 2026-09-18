@@ -354,7 +354,6 @@ lz() {
 	local marker
 	pipe="$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/$(uuidgen)-$(basename "$1")"
 	marker="$(register_writer "$(basename "$pipe")" "writing $1")"
-	rm -f "$pipe"
 	mkfifo "$pipe"
 	echo "$pipe"
 	mkdir -p "$(dirname "$1")"
@@ -396,7 +395,6 @@ luz() {
 	local marker
 	pipe="$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/$(uuidgen)-$(basename "$1")"
 	marker="$(register_writer "$(basename "$pipe")" "reading $1")"
-	rm -f "$pipe"
 	mkfifo "$pipe"
 	echo "$pipe"
 	{
