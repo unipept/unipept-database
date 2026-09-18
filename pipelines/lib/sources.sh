@@ -87,14 +87,12 @@ extract_uniprot_version() {
 #   stream of decompressed UniProtKB entries (stdout)                          #
 ################################################################################
 download_uniprot() {
-  local old_ifs="$IFS"
-  IFS=","
-  local db_types_array=($1)
-  IFS="$old_ifs"
+  local db_types_array
+  IFS="," read -r -a db_types_array <<< "$1"
 
   local idx=0
 
-  while [[ "$idx" -ne "${#db_types_array}" ]] && [[ -n $(echo "${db_types_array[$idx]}" | sed "s/\s//g") ]]
+  while [[ "$idx" -ne "${#db_types_array}" ]] && [[ -n "${db_types_array[$idx]//[[:space:]]/}" ]]
   do
     local db_type=${db_types_array[$idx]}
     local db_source=${SOURCE_URLS["$db_type"]}
@@ -110,7 +108,8 @@ download_uniprot() {
 
     # Extract the total size of the database that's being downloaded. This is required for pv to know which percentage
     # of the total download has been processed.
-    local size="$(curl -I "$db_source" -s | grep -i content-length | tr -cd '[0-9]')"
+    local size
+    size="$(curl -I "$db_source" -s | grep -i content-length | tr -cd '0-9')"
 
     # Effectively download the database and convert to a tabular format
     curl --continue-at - --create-dirs "$db_source" --silent \
@@ -146,9 +145,10 @@ download_taxdmp() {
   local latest_release_url="https://api.github.com/repos/unipept/unipept-database/releases/latest"
   local taxon_release_asset_re="unipept/unipept-database/releases/download/[^/]+/taxdmp_v2.zip"
 
-  # Temporary disable the pipefail check (cause egrep can exit with code 1 if nothing is found).
+  # Temporary disable the pipefail check (cause grep can exit with code 1 if nothing is found).
   set +eo pipefail
-  local self_hosted_url=$(curl -s "$latest_release_url" | egrep -o "$taxon_release_asset_re")
+  local self_hosted_url
+  self_hosted_url=$(curl -s "$latest_release_url" | grep -E -o "$taxon_release_asset_re")
   set -eo pipefail
 
 
@@ -161,6 +161,7 @@ download_taxdmp() {
     local taxon_url="https://ftp.ncbi.nlm.nih.gov/pub/taxonomy/taxdmp.zip"
   fi
 
+  # shellcheck disable=SC2153 # TEMP_DIR is set by the build script
   curl -L --create-dirs --silent --output "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/taxdmp.zip" "$taxon_url"
 
   log "Finished downloading the taxdmp file."
@@ -249,6 +250,7 @@ create_taxon_tables() {
 # Returns:                                                                     #
 #   None                                                                       #
 ################################################################################
+# shellcheck disable=SC2016 # the single-quoted strings are awk programs
 fetch_ec_numbers() {
 	local output_dir="$1"
 
@@ -292,6 +294,7 @@ fetch_ec_numbers() {
 # Returns:                                                                     #
 #   None                                                                       #
 ################################################################################
+# shellcheck disable=SC2016 # the single-quoted strings are awk programs
 fetch_go_terms() {
   local output_dir="$1"
 

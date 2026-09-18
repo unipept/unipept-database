@@ -463,6 +463,7 @@ calculate_original_fas() {
 # Returns:                                                                     #
 #   None                                                                       #
 ################################################################################
+# shellcheck disable=SC2016 # the single-quoted strings are awk programs
 create_sequence_table() {
   local temp_dir="$1"
   local temp_constant="$2"

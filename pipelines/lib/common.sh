@@ -7,6 +7,7 @@
 
 # The directory of this file. Not CURRENT_LOCATION, which belongs to the script that sources it.
 LIB_DIR="${BASH_SOURCE%/*}"
+# shellcheck disable=SC2034 # read by the build scripts that source this file
 RUST_BIN_DIR="$LIB_DIR/../../target/release"
 
 ################################################################################
@@ -520,7 +521,7 @@ decompress_to_pipe() {
 #   0 if all files exist, 1 otherwise                                          #
 ################################################################################
 have() {
-	if [ "$#" -gt 0 -a -e "$1" ]; then
+	if [ "$#" -gt 0 ] && [ -e "$1" ]; then
 		shift
 		have "$@"
 	else
@@ -586,8 +587,13 @@ $CMD_AWK '
 #   None                                                                       #
 ################################################################################
 build_binaries() {
-  packages=$(echo "$@" | sed 's/[^ ]*/-p &/g')
+  local packages=()
+  local package
+  for package in "$@"
+  do
+    packages+=(-p "$package")
+  done
   log "Started building Rust utilities"
-  cargo build --release --quiet --manifest-path "$LIB_DIR/../../Cargo.toml" $packages
+  cargo build --release --quiet --manifest-path "$LIB_DIR/../../Cargo.toml" "${packages[@]}"
   log "Finished building Rust utilities"
 }
