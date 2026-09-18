@@ -2,7 +2,6 @@ use std::io::BufRead;
 
 use anyhow::Result;
 use crossbeam_channel::{Receiver, bounded};
-use lazy_static::lazy_static;
 
 use crate::{consumer::Consumer, entry::UniProtDATEntry, producer::Producer};
 
@@ -22,10 +21,7 @@ impl<B: BufRead + Send + 'static> ThreadedDATParser<B> {
     /// Passing 0 as the amount of threads uses the amount of (virtual) CPUs available in your machine
     pub fn new(reader: B, mut threads: usize) -> Self {
         if threads == 0 {
-            lazy_static! {
-                static ref THREADS: usize = num_cpus::get();
-            }
-            threads = *THREADS
+            threads = std::thread::available_parallelism().map_or(1, |n| n.get());
         }
 
         let producer = Producer::new(reader);
