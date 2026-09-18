@@ -7,6 +7,7 @@
 # All references to an external script should be relative to the location of this script.
 # See: http://mywiki.wooledge.org/BashFAQ/028
 CURRENT_LOCATION="${BASH_SOURCE%/*}"
+RUST_BIN_DIR="$CURRENT_LOCATION/../target/release"
 
 ################################################################################
 #                                    Imports                                   #
@@ -718,7 +719,7 @@ create_taxon_tables() {
 
   log "Parsing names.dmp and nodes.dmp files"
   mkdir -p "$output_dir"
-  "$CURRENT_LOCATION"/../target/release/taxdmp-parser \
+  "$RUST_BIN_DIR"/taxdmp-parser \
     --names "$temp_dir/$temp_constant/names.dmp" \
     --nodes "$temp_dir/$temp_constant/nodes.dmp" \
     --taxa "$(lz "$output_dir/taxons.tsv.lz4")" \
