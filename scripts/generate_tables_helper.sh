@@ -513,9 +513,7 @@ $CMD_AWK '
 build_binaries() {
   packages=$(echo "$@" | sed 's/[^ ]*/-p &/g')
   log "Started building Rust utilities"
-  cd "$CURRENT_LOCATION"/..
-  cargo build --release --quiet $packages
-  cd - > /dev/null
+  cargo build --release --quiet --manifest-path "$CURRENT_LOCATION/../Cargo.toml" $packages
   log "Finished building Rust utilities"
 }
 
