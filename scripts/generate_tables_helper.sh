@@ -420,7 +420,10 @@ luz() {
 }
 
 decompress_to_pipe() {
-	$CMD_LZ4CAT "$2" > "$1"
+	local status=0
+	$CMD_LZ4CAT "$2" > "$1" || status=$?
+	# 141 is SIGPIPE: the reader closed the FIFO before the end of the file.
+	[[ "$status" -eq 0 || "$status" -eq 141 ]]
 }
 
 ################################################################################

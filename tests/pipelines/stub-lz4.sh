@@ -5,6 +5,7 @@
 #   late   read all of stdin, then fail — a failure the producer never sees
 #   early  fail before reading anything
 #   slow   succeed, but finish after the producer has exited
+#   endless  write rows until the reader closes the pipe
 
 case "${STUB_LZ4_MODE:-}" in
     late)
@@ -17,6 +18,9 @@ case "${STUB_LZ4_MODE:-}" in
     slow)
         sleep 1
         exec cat
+        ;;
+    endless)
+        exec yes row
         ;;
     *)
         echo "stub-lz4: STUB_LZ4_MODE is '${STUB_LZ4_MODE:-unset}'" >&2

@@ -58,4 +58,21 @@ check_true "the build succeeds" [ "$rc" -eq 0 ]
 check "the table holds every row the producer wrote" "$(wc -l < "$output" 2> /dev/null | tr -d ' ')" "200"
 
 
+# Runs luz-driver.sh with the stand-in in the given mode. Leaves the exit status in `rc`.
+run_reader() {
+    rm -rf "${WORK}/temp"
+    : > "${WORK}/input.tsv.lz4"
+    STUB_LZ4_MODE="$1" "${HERE}/luz-driver.sh" "${WORK}/temp" "${WORK}/input.tsv.lz4" 2> "${WORK}/stderr"
+    rc=$?
+}
+
+section "a reader that stops before the end of a decompressed table"
+run_reader endless
+check_true "the build succeeds" [ "$rc" -eq 0 ]
+
+section "a decompressor that fails"
+run_reader early
+check_true "the build reports a failure" [ "$rc" -ne 0 ]
+
+
 summary
