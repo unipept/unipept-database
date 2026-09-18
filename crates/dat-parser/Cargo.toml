@@ -1,0 +1,10 @@
+[package]
+name = "dat-parser"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+crossbeam-channel.workspace = true
+tables-generator = { path = "../tables-generator" }

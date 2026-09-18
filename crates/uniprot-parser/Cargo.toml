@@ -1,0 +1,12 @@
+[package]
+name = "uniprot-parser"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+dat-parser = { path = "../dat-parser" }
+tables-generator = { path = "../tables-generator" }
+utils = { path = "../utils" }

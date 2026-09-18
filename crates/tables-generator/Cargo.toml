@@ -1,0 +1,10 @@
+[package]
+name = "tables-generator"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+bit-vec.workspace = true
+utils = { path = "../utils" }

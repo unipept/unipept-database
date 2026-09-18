@@ -1,0 +1,5 @@
+# Nightly for rustfmt: .rustfmt.toml sets unstable_features. Bump the date together with a
+# `cargo fmt --all` run.
+[toolchain]
+channel = "nightly-2026-03-11"
+components = ["rustfmt", "clippy"]

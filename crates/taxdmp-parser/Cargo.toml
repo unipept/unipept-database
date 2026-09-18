@@ -1,0 +1,13 @@
+[package]
+name = "taxdmp-parser"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+ncbi = { path = "../ncbi" }
+regex.workspace = true
+strum.workspace = true
+utils = { path = "../utils" }

@@ -7,6 +7,7 @@
 # All references to an external script should be relative to the location of this script.
 # See: http://mywiki.wooledge.org/BashFAQ/028
 CURRENT_LOCATION="${BASH_SOURCE%/*}"
+RUST_BIN_DIR="$CURRENT_LOCATION/../target/release"
 
 ################################################################################
 #                                    Imports                                   #
@@ -493,7 +494,7 @@ $CMD_AWK '
 ################################################################################
 # build_binaries                                                               #
 #                                                                              #
-# Builds the release binaries for the rust-utils project                       #
+# Builds the release binaries of the Cargo workspace                           #
 # This function ensures that all the required binaries are available for the   #
 # database building process.                                                   #
 #                                                                              #
@@ -512,9 +513,7 @@ $CMD_AWK '
 build_binaries() {
   packages=$(echo "$@" | sed 's/[^ ]*/-p &/g')
   log "Started building Rust utilities"
-  cd "$CURRENT_LOCATION"/rust-utils
-  cargo build --release --quiet $packages
-  cd - > /dev/null
+  cargo build --release --quiet --manifest-path "$CURRENT_LOCATION/../Cargo.toml" $packages
   log "Finished building Rust utilities"
 }
 
@@ -718,7 +717,7 @@ create_taxon_tables() {
 
   log "Parsing names.dmp and nodes.dmp files"
   mkdir -p "$output_dir"
-  "$CURRENT_LOCATION"/rust-utils/target/release/taxdmp-parser \
+  "$RUST_BIN_DIR"/taxdmp-parser \
     --names "$temp_dir/$temp_constant/names.dmp" \
     --nodes "$temp_dir/$temp_constant/nodes.dmp" \
     --taxa "$(lz "$output_dir/taxons.tsv.lz4")" \
