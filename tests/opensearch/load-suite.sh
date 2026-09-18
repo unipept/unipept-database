@@ -39,19 +39,16 @@ docker run -d --name "$SERVER" --network "$NETWORK" \
     -e OPENSEARCH_JAVA_OPTS="-Xms512m -Xmx512m" \
     "$OPENSEARCH_IMAGE" > /dev/null
 
-waited=0
-until docker run --rm --network "$NETWORK" "$IMAGE" \
-        curl -s -f "http://${SERVER}:9200/_cluster/health" > /dev/null 2>&1
-do
-    sleep 2
-    waited=$((waited + 2))
-    if [ "$waited" -ge 180 ]; then
-        echo "OpenSearch did not come up within ${waited} seconds" >&2
-        docker logs "$SERVER" 2>&1 | tail -20 >&2
-        exit 1
-    fi
-done
-log "OpenSearch came up in ${waited} seconds"
+started=$SECONDS
+if ! docker run --rm --network "$NETWORK" "$IMAGE" \
+        curl -s -f --retry 90 --retry-delay 2 --retry-max-time 180 --retry-all-errors \
+        "http://${SERVER}:9200/_cluster/health" > /dev/null 2>&1
+then
+    echo "OpenSearch did not come up within $((SECONDS - started)) seconds" >&2
+    docker logs "$SERVER" 2>&1 | tail -20 >&2
+    exit 1
+fi
+log "OpenSearch came up in $((SECONDS - started)) seconds"
 
 log "OpenSearch suite: initialize_opensearch.sh"
 docker run --rm --network "$NETWORK" \
