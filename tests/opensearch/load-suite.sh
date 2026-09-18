@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Brings up a real OpenSearch and a client that has what initialize_opensearch.sh needs, then runs
+# Brings up a real OpenSearch and a client that has what opensearch/load.sh needs, then runs
 # the cases inside the client. A real instance rather than a stub, because what this script gets
 # wrong is which indices it touches, and a stub is written by the same hand as the script.
 #
@@ -19,6 +19,7 @@ readonly SERVER=unipept-opensearch-test-server
 log() { printf '\n\033[1m%s\033[0m\n' "$*"; }
 
 command -v docker > /dev/null || { echo "docker is not installed" >&2; exit 1; }
+docker info > /dev/null 2>&1 || { echo "the Docker daemon is not running" >&2; exit 1; }
 
 cleanup() {
     docker rm -f "$SERVER" > /dev/null 2>&1
@@ -50,7 +51,7 @@ then
 fi
 log "OpenSearch came up in $((SECONDS - started)) seconds"
 
-log "OpenSearch suite: initialize_opensearch.sh"
+log "OpenSearch suite: opensearch/load.sh"
 docker run --rm --network "$NETWORK" \
     -v "${REPO}:/repo:ro" \
     -e OPENSEARCH_URL="http://${SERVER}:9200" \

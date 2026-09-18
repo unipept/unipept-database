@@ -1,4 +1,4 @@
-# Everything initialize_opensearch.sh needs on a host, at the versions the script expects.
+# Everything opensearch/load.sh needs on a host, at the versions the script expects.
 FROM ubuntu:24.04
 
 RUN apt-get update \
