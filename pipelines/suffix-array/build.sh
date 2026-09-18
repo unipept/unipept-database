@@ -16,6 +16,7 @@ CURRENT_LOCATION="${BASH_SOURCE%/*}"
 #   - SOURCE_URLS: Associative array mapping database types to download URLs
 #   - CMD_LZ4: Command or path to the lz4 binary
 source "${CURRENT_LOCATION}/../lib/common.sh"
+source "${CURRENT_LOCATION}/../lib/sources.sh"
 
 ################################################################################
 #                            Variables and options                             #

@@ -14,7 +14,7 @@ CURRENT_LOCATION="${BASH_SOURCE%/*}"
 #                                    Imports                                   #
 ################################################################################
 
-source "${CURRENT_LOCATION}/../pipelines/lib/general_helpers.sh"
+source "${CURRENT_LOCATION}/../pipelines/lib/common.sh"
 
 ################################################################################
 #                            Variables and options                             #

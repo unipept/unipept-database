@@ -20,6 +20,7 @@ CURRENT_LOCATION="${BASH_SOURCE%/*}"
 #   - PEPTIDE_MIN_LENGTH
 #   - PEPTIDE_MAX_LENGTH
 source "${CURRENT_LOCATION}/../lib/common.sh"
+source "${CURRENT_LOCATION}/../lib/sources.sh"
 
 ################################################################################
 #                            Variables and options                             #
