@@ -134,8 +134,11 @@ log() { echo "$(date +'[%s (%F %T)]')" "$@"; }
 #   None                                                                       #
 ################################################################################
 clean() {
-	# Clean contents of temporary directory
-	rm -rf "${TEMP_DIR:?}/$UNIPEPT_TEMP_CONSTANT"
+	# Clean contents of temporary directory, if the calling script uses one
+	if [[ -n "${TEMP_DIR:-}" ]]
+	then
+		rm -rf "${TEMP_DIR:?}/$UNIPEPT_TEMP_CONSTANT"
+	fi
 	export TMPDIR="$OLD_TMPDIR"
 }
 
