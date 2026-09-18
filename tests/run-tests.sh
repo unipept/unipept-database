@@ -9,14 +9,17 @@ set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-log() { printf '\n\033[1m%s\033[0m\n' "$*"; }
+# shellcheck source=../scripts/general_helpers.sh
+source "${HERE}/../scripts/general_helpers.sh"
+
+heading() { printf '\n\033[1m%s\033[0m\n' "$*"; }
 
 for tool in uuidgen mktemp install; do
-    command -v "$tool" > /dev/null || { echo "${tool} is not installed" >&2; exit 1; }
+    checkdep "$tool"
 done
 
 suite_lz() {
-    log "lz() failure suite"
+    heading "lz() failure suite"
     "${HERE}/pipelines/failure-suite.sh" || status=1
 }
 
