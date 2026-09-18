@@ -37,31 +37,26 @@ run_driver() {
     rc=$?
 }
 
-status_of() { if [ "$1" -eq 0 ]; then echo zero; else echo non-zero; fi; }
-presence_of() { if [ -e "$1" ]; then echo present; else echo absent; fi; }
-names_file() { if grep -q -- "$(basename "$1")" "${WORK}/stderr"; then echo named; else echo "not named"; fi; }
+# A compressor that fails must fail the build, be named in the error, and leave no partial table.
+expect_failure() {
+    local mode=$1 output="${WORK}/$1.tsv.lz4"
+
+    section "$2"
+    run_driver "$mode" "$output"
+    check_true "the build reports a failure" [ "$rc" -ne 0 ]
+    check_true "the failure names the table" grep -q -- "$(basename "$output")" "${WORK}/stderr"
+    check_true "no partial table is left behind" [ ! -e "$output" ]
+}
 
 
-section "a compressor that fails after the producer has finished"
-output="${WORK}/late.tsv.lz4"
-run_driver late "$output"
-check "the build reports a failure" "$(status_of "$rc")" "non-zero"
-check "the failure names the table" "$(names_file "$output")" "named"
-check "no partial table is left behind" "$(presence_of "$output")" "absent"
-
-
-section "a compressor that fails before it reads anything"
-output="${WORK}/early.tsv.lz4"
-run_driver early "$output"
-check "the build reports a failure" "$(status_of "$rc")" "non-zero"
-check "the failure names the table" "$(names_file "$output")" "named"
-check "no partial table is left behind" "$(presence_of "$output")" "absent"
+expect_failure late "a compressor that fails after the producer has finished"
+expect_failure early "a compressor that fails before it reads anything"
 
 
 section "a compressor still writing when the producer has finished"
 output="${WORK}/slow.tsv.lz4"
 run_driver slow "$output"
-check "the build succeeds" "$(status_of "$rc")" "zero"
+check_true "the build succeeds" [ "$rc" -eq 0 ]
 check "the table holds every row the producer wrote" "$(wc -l < "$output" 2> /dev/null | tr -d ' ')" "200"
 
 
