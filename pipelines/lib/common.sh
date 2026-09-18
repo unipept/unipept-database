@@ -1,13 +1,13 @@
 # shellcheck shell=bash
 ################################################################################
 # This file contains a collection of variables and helper functions shared     #
-# between the `generate_sa_tables.sh` and `generate_umgap_tables.sh` scripts.  #
+# between `pipelines/suffix-array/build.sh` and `pipelines/umgap/build.sh`.    #
 ################################################################################
 
 # All references to an external script should be relative to the location of this script.
 # See: http://mywiki.wooledge.org/BashFAQ/028
 CURRENT_LOCATION="${BASH_SOURCE%/*}"
-RUST_BIN_DIR="$CURRENT_LOCATION/../target/release"
+RUST_BIN_DIR="$CURRENT_LOCATION/../../target/release"
 
 ################################################################################
 #                                    Imports                                   #
@@ -513,7 +513,7 @@ $CMD_AWK '
 build_binaries() {
   packages=$(echo "$@" | sed 's/[^ ]*/-p &/g')
   log "Started building Rust utilities"
-  cargo build --release --quiet --manifest-path "$CURRENT_LOCATION/../Cargo.toml" $packages
+  cargo build --release --quiet --manifest-path "$CURRENT_LOCATION/../../Cargo.toml" $packages
   log "Finished building Rust utilities"
 }
 

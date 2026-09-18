@@ -15,10 +15,10 @@ OUTPUT_FILE="$2"
 ROWS="$3"
 UNIPEPT_TEMP_CONSTANT="unipept_temp"
 
-# shellcheck source=../../scripts/generate_tables_helper.sh
-source "${REPO}/scripts/generate_tables_helper.sh"
+# shellcheck source=../../pipelines/lib/common.sh
+source "${REPO}/pipelines/lib/common.sh"
 
-# The same traps generate_sa_tables.sh installs, so the driver fails the way the pipeline does.
+# The same traps pipelines/suffix-array/build.sh installs, so the driver fails the way the pipeline does.
 trap errorAndExit ERR
 
 mkdir -p "${TEMP_DIR}/${UNIPEPT_TEMP_CONSTANT}"

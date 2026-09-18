@@ -13,8 +13,8 @@ TEMP_DIR="$1"
 INPUT_FILE="$2"
 UNIPEPT_TEMP_CONSTANT="unipept_temp"
 
-# shellcheck source=../../scripts/generate_tables_helper.sh
-source "${REPO}/scripts/generate_tables_helper.sh"
+# shellcheck source=../../pipelines/lib/common.sh
+source "${REPO}/pipelines/lib/common.sh"
 
 trap errorAndExit ERR
 

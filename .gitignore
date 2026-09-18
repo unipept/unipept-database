@@ -15,8 +15,6 @@ createKeggPathways.sh
 data/
 .DS_Store
 out
-scripts/helper_scripts/parser/output
-scripts/helper_scripts/parser/src/META-INF
 .idea/
 *.iml
 index/

@@ -12,14 +12,14 @@ CURRENT_LOCATION="${BASH_SOURCE%/*}"
 ################################################################################
 
 # Imports various helper variables.
-# Globals imported from generate_tables_helper.sh:
+# Globals imported from pipelines/lib/common.sh:
 #   - SORT_MEMORY
 #   - CMD_SORT
 #   - CMD_LZ4
 #   - CMD_LZ4CAT
 #   - PEPTIDE_MIN_LENGTH
 #   - PEPTIDE_MAX_LENGTH
-source "${CURRENT_LOCATION}/generate_tables_helper.sh"
+source "${CURRENT_LOCATION}/../lib/common.sh"
 
 ################################################################################
 #                            Variables and options                             #
