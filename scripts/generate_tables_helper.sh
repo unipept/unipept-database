@@ -329,6 +329,42 @@ report_failed_writers() {
 }
 
 ################################################################################
+# start_writer                                                                 #
+#                                                                              #
+# Creates a FIFO for a file, prints its path, and runs a command on it in the  #
+# background. The command gets the FIFO as $1 and the file as $2. Its exit     #
+# status is recorded in the writer marker for wait_for_writers.                #
+#                                                                              #
+# Globals:                                                                     #
+#   TEMP_DIR, UNIPEPT_TEMP_CONSTANT                                            #
+#                                                                              #
+# Arguments:                                                                   #
+#   $1 - The file the command reads or writes                                  #
+#   $2 - What the command does, reported if it fails                           #
+#   $3 - The command                                                           #
+#                                                                              #
+# Outputs:                                                                     #
+#   The path to the created FIFO                                               #
+################################################################################
+start_writer() {
+	local pipe
+	local marker
+	pipe="$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/$(uuidgen)-$(basename "$1")"
+	marker="$(register_writer "$(basename "$pipe")" "$2")"
+	mkfifo "$pipe"
+	echo "$pipe"
+	{
+		if "$3" "$pipe" "$1"
+		then
+			mv "$marker.running" "$marker.ok"
+		else
+			mv "$marker.running" "$marker.fail"
+		fi
+		rm -f "$pipe"
+	} > /dev/null &
+}
+
+################################################################################
 # lz                                                                           #
 #                                                                              #
 # Creates a named pipe (FIFO) for the provided file and prepares it to receive #
@@ -350,23 +386,12 @@ report_failed_writers() {
 #   None                                                                       #
 ################################################################################
 lz() {
-	local pipe
-	local marker
-	pipe="$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/$(uuidgen)-$(basename "$1")"
-	marker="$(register_writer "$(basename "$pipe")" "writing $1")"
-	mkfifo "$pipe"
-	echo "$pipe"
 	mkdir -p "$(dirname "$1")"
-	{
-		if $CMD_LZ4 - < "$pipe" > "$1"
-		then
-			mv "$marker.running" "$marker.ok"
-		else
-			rm -f "$1"
-			mv "$marker.running" "$marker.fail"
-		fi
-		rm -f "$pipe"
-	} > /dev/null &
+	start_writer "$1" "writing $1" compress_from_pipe
+}
+
+compress_from_pipe() {
+	$CMD_LZ4 - < "$1" > "$2" || { rm -f "$2"; return 1; }
 }
 
 ################################################################################
@@ -391,21 +416,11 @@ lz() {
 #   None                                                                       #
 ################################################################################
 luz() {
-	local pipe
-	local marker
-	pipe="$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT/$(uuidgen)-$(basename "$1")"
-	marker="$(register_writer "$(basename "$pipe")" "reading $1")"
-	mkfifo "$pipe"
-	echo "$pipe"
-	{
-		if $CMD_LZ4CAT "$1" > "$pipe"
-		then
-			mv "$marker.running" "$marker.ok"
-		else
-			mv "$marker.running" "$marker.fail"
-		fi
-		rm -f "$pipe"
-	} > /dev/null &
+	start_writer "$1" "reading $1" decompress_to_pipe
+}
+
+decompress_to_pipe() {
+	$CMD_LZ4CAT "$2" > "$1"
 }
 
 ################################################################################
