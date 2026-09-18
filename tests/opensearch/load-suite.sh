@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Brings up a real OpenSearch and a client that has what initialize_opensearch.sh needs, then runs
+# Brings up a real OpenSearch and a client that has what opensearch/load.sh needs, then runs
 # the cases inside the client. A real instance rather than a stub, because what this script gets
 # wrong is which indices it touches, and a stub is written by the same hand as the script.
 #
@@ -50,7 +50,7 @@ then
 fi
 log "OpenSearch came up in $((SECONDS - started)) seconds"
 
-log "OpenSearch suite: initialize_opensearch.sh"
+log "OpenSearch suite: opensearch/load.sh"
 docker run --rm --network "$NETWORK" \
     -v "${REPO}:/repo:ro" \
     -e OPENSEARCH_URL="http://${SERVER}:9200" \

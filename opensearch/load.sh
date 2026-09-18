@@ -14,7 +14,7 @@ CURRENT_LOCATION="${BASH_SOURCE%/*}"
 #                                    Imports                                   #
 ################################################################################
 
-source "${CURRENT_LOCATION}/general_helpers.sh"
+source "${CURRENT_LOCATION}/../scripts/general_helpers.sh"
 
 ################################################################################
 #                            Variables and options                             #
@@ -174,7 +174,7 @@ init_indices() {
 
     log "Started creating the ${INDEX_NAME} index."
 
-    local index_file="${CURRENT_LOCATION}/../schemas_suffix_array/index_${INDEX_NAME}.json"
+    local index_file="${CURRENT_LOCATION}/mappings/${INDEX_NAME}.json"
 
     if [[ ! -f "${index_file}" ]]
     then
@@ -212,7 +212,7 @@ init_indices() {
 upload_uniprot_entries() {
     log "Started uploading UniProt entries."
 
-    pv "$UNIPROT_ENTRIES_FILE" | lz4cat | cut -f 2-8 | python3 "${CURRENT_LOCATION}/upload_to_opensearch.py" \
+    pv "$UNIPROT_ENTRIES_FILE" | lz4cat | cut -f 2-8 | python3 "${CURRENT_LOCATION}/bulk_load.py" \
         --opensearch-url "$OPENSEARCH_URL" \
         --index-name "$INDEX_NAME" \
         --fields "uniprot_accession_number,version,taxon_id,type,name,sequence,fa" \

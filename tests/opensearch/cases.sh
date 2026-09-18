@@ -29,7 +29,7 @@ short_row() { printf '%s\t%s\t1\t9606' "$1" "$2"; }
 load() {
     local logfile=$1
     shift
-    "${REPO}/scripts/initialize_opensearch.sh" --opensearch-url "$OPENSEARCH_URL" "$@" > "$logfile" 2>&1
+    "${REPO}/opensearch/load.sh" --opensearch-url "$OPENSEARCH_URL" "$@" > "$logfile" 2>&1
     rc=$?
 }
 

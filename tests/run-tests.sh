@@ -4,7 +4,7 @@
 #
 #   run-tests.sh            every suite
 #   run-tests.sh lz         lz() and the compressors it starts
-#   run-tests.sh opensearch initialize_opensearch.sh, against a real OpenSearch
+#   run-tests.sh opensearch opensearch/load.sh, against a real OpenSearch
 
 set -uo pipefail
 
