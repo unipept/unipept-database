@@ -257,6 +257,26 @@ wait_for_writers() {
 }
 
 ################################################################################
+# run_step                                                                     #
+#                                                                              #
+# Runs one pipeline step, then waits for the background writers it started.   #
+# The next step can then read every table this step wrote.                     #
+#                                                                              #
+# Globals:                                                                     #
+#   TEMP_DIR, UNIPEPT_TEMP_CONSTANT, WRITER_TIMEOUT                            #
+#                                                                              #
+# Arguments:                                                                   #
+#   $@ - The step function and its arguments                                   #
+#                                                                              #
+# Returns:                                                                     #
+#   1 if a writer failed or did not finish, the status of the step otherwise   #
+################################################################################
+run_step() {
+	"$@"
+	wait_for_writers
+}
+
+################################################################################
 # report_failed_writers                                                        #
 #                                                                              #
 # Reports every background writer that has already failed, without waiting for #

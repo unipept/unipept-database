@@ -259,17 +259,11 @@ checkdep xmllint "libxml2-utils"
 parse_arguments "$@"
 checkDirectoryAndCreate "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT"
 build_binaries "taxdmp-parser" "uniprot-parser"
-# wait_for_writers follows every step that writes a table, because the compression runs in the
-# background: without it the next step reads a file that is still being written.
-create_taxon_tables "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT" "$OUTPUT_DIR"
-wait_for_writers
-download_and_process_uniprot "$DB_TYPES" "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT" "$OUTPUT_DIR"
-wait_for_writers
-fetch_ec_numbers "$OUTPUT_DIR"
-fetch_go_terms "$OUTPUT_DIR"
-fetch_interpro_entries "$OUTPUT_DIR"
-fetch_reference_proteomes "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT"
-wait_for_writers
-compute_reference_proteomes "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT" "$OUTPUT_DIR"
-wait_for_writers
-extract_uniprot_version "$OUTPUT_DIR"
+run_step create_taxon_tables "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT" "$OUTPUT_DIR"
+run_step download_and_process_uniprot "$DB_TYPES" "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT" "$OUTPUT_DIR"
+run_step fetch_ec_numbers "$OUTPUT_DIR"
+run_step fetch_go_terms "$OUTPUT_DIR"
+run_step fetch_interpro_entries "$OUTPUT_DIR"
+run_step fetch_reference_proteomes "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT"
+run_step compute_reference_proteomes "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT" "$OUTPUT_DIR"
+run_step extract_uniprot_version "$OUTPUT_DIR"
