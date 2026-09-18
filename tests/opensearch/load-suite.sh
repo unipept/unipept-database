@@ -19,6 +19,7 @@ readonly SERVER=unipept-opensearch-test-server
 log() { printf '\n\033[1m%s\033[0m\n' "$*"; }
 
 command -v docker > /dev/null || { echo "docker is not installed" >&2; exit 1; }
+docker info > /dev/null 2>&1 || { echo "the Docker daemon is not running" >&2; exit 1; }
 
 cleanup() {
     docker rm -f "$SERVER" > /dev/null 2>&1
