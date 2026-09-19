@@ -5,6 +5,7 @@
 #   run-tests.sh            every suite
 #   run-tests.sh lz         lz() and the compressors it starts
 #   run-tests.sh shell      the helpers in pipelines/lib/common.sh
+#   run-tests.sh build      pipelines/suffix-array/build.sh end to end, offline
 #   run-tests.sh opensearch opensearch/load.sh, against a real OpenSearch
 
 set -uo pipefail
@@ -30,6 +31,11 @@ suite_shell() {
     "${HERE}/shell/suite.sh" || status=1
 }
 
+suite_build() {
+    heading "build suite"
+    "${HERE}/pipelines/build-suite.sh" || status=1
+}
+
 suite_opensearch() {
     "${HERE}/opensearch/load-suite.sh" || status=1
 }
@@ -37,8 +43,8 @@ suite_opensearch() {
 status=0
 
 case ${1:-all} in
-    all) suite_lz; suite_shell; suite_opensearch ;;
-    lz | shell | opensearch) "suite_${1}" ;;
+    all) suite_lz; suite_shell; suite_build; suite_opensearch ;;
+    lz | shell | build | opensearch) "suite_${1}" ;;
     *) echo "unknown suite '${1}'" >&2; exit 1 ;;
 esac
 

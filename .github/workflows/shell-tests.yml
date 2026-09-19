@@ -9,12 +9,18 @@ on:
       - 'pipelines/**'
       - 'opensearch/**'
       - 'tests/**'
+      - 'crates/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
       - '.github/workflows/shell-tests.yml'
   pull_request:
     paths:
       - 'pipelines/**'
       - 'opensearch/**'
       - 'tests/**'
+      - 'crates/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
       - '.github/workflows/shell-tests.yml'
   workflow_dispatch:
 
@@ -56,6 +62,31 @@ jobs:
 
       - name: Run the shell library suite
         run: tests/run-tests.sh shell
+
+  build:
+    # pipelines/suffix-array/build.sh end to end, with every source replaced by a local file.
+    name: Build suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      RUSTUP_TOOLCHAIN: stable
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install the pipeline's tools
+        run: sudo apt-get update && sudo apt-get install -y gawk lz4 pigz pv libxml2-utils zip unzip uuid-runtime
+
+      # Actions starts steps with SIGPIPE ignored; luz relies on its default action.
+      - name: Run the build suite
+        run: env --default-signal=PIPE tests/run-tests.sh build
 
   opensearch:
     # opensearch/load.sh against a real OpenSearch in a container.
