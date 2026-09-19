@@ -274,12 +274,11 @@ fetch_ec_numbers() {
 		curl -s "$ec_number_url" | grep -E '^ID|^DE' | $CMD_AWK '
 			BEGIN { FS="   "
 			        OFS="\t" }
-			/^ID/ { if(id != "") { print id, name }
+			/^ID/ { if(id != "") { sub(/\.$/, "", name); print id, name }
 			        name = ""
 			        id = $2 }
-			/^DE/ { gsub(/.$/, "", $2)
-			        name = name $2 }
-			END   { print id, name }'
+			/^DE/ { name = (name == "" ? $2 : name " " $2) }
+			END   { sub(/\.$/, "", name); print id, name }'
 	} | cat -n | sed 's/^ *//' | $CMD_LZ4 - > "$output_dir/ec_numbers.tsv.lz4"
 	log "Finished creating EC numbers."
 }
