@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::BTreeSet;
 
 use anyhow::{Context, anyhow};
 use tables_generator::models::Entry;
@@ -201,9 +201,9 @@ fn parse_date_fields(data: &[String], data_cursor: &mut usize) -> anyhow::Result
 /// - Last submitted name of protein components
 /// - Last submitted name of protein domains
 /// - Submitted name of protein itself
-fn parse_description_field(data: &[String], data_cursor: &mut usize) -> (String, HashSet<String>) {
+fn parse_description_field(data: &[String], data_cursor: &mut usize) -> (String, BTreeSet<String>) {
     let mut name = String::new();
-    let mut ec_references = HashSet::new();
+    let mut ec_references = BTreeSet::new();
 
     // Track all names in order of preference
     let mut name_indices: [usize; 6] = [usize::MAX; 6];
@@ -250,10 +250,7 @@ fn parse_description_field(data: &[String], data_cursor: &mut usize) -> (String,
         }
         // Find EC numbers
         else if line.starts_with("EC=") {
-            let ec_target = read_until_metadata(&line[DE_PREFIX_EC_LENGTH..]);
-            if !ec_references.contains(&ec_target) {
-                ec_references.insert(ec_target);
-            }
+            ec_references.insert(read_until_metadata(&line[DE_PREFIX_EC_LENGTH..]));
         }
 
         *data_cursor += 1;
@@ -448,6 +445,20 @@ mod tests {
 
         assert_eq!(got_name, want_name);
         assert!(got_ec.is_empty());
+    }
+
+    #[test]
+    fn test_parse_description_field_sorts_ec_numbers() {
+        let lines = _raw_str_to_strings(vec![
+            "DE   RecName: Full=Example;",
+            "DE            EC=2.7.11.1;",
+            "DE            EC=1.1.1.1 {ECO:0000256|ARBA:ARBA00000001};",
+            "DE            EC=2.7.11.1;",
+            "OX   NCBI_TaxID=1;",
+        ]);
+        let (_, got_ec) = parse_description_field(&lines, &mut 0);
+
+        assert_eq!(got_ec.into_iter().collect::<Vec<_>>(), vec!["1.1.1.1", "2.7.11.1"]);
     }
 
     #[test]
