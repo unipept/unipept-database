@@ -1,0 +1,121 @@
+"""Tests for bulk_load.py, against a stand-in for the OpenSearch HTTP session.
+
+Run from the repository root: python3 -m unittest discover -s opensearch
+"""
+
+import io
+import json
+import sys
+import unittest
+from unittest import mock
+
+import requests
+
+import bulk_load
+
+FIELDS = "accession,taxon"
+
+
+class Reply:
+    def __init__(self, status_code, body):
+        self.status_code = status_code
+        self.text = json.dumps(body)
+        self._body = body
+
+    def json(self):
+        return self._body
+
+
+def ok(count=1):
+    return Reply(200, {"errors": False, "items": [{"index": {"status": 201}}] * count})
+
+
+def rejected(*statuses):
+    return Reply(200, {"errors": True, "items": [{"index": {"status": status}} for status in statuses]})
+
+
+class Session:
+    """Answers each bulk request with the next reply and keeps what was sent."""
+
+    def __init__(self, *replies):
+        self.replies = list(replies)
+        self.payloads = []
+
+    def post(self, url, headers, data, timeout):
+        self.payloads.append(data)
+        reply = self.replies.pop(0)
+        if isinstance(reply, Exception):
+            raise reply
+        return reply
+
+
+def load(rows, session, *args):
+    """Runs main() on the rows and returns its exit status and what it wrote to stderr."""
+    argv = ["bulk_load.py", "--index-name", "entries", "--fields", FIELDS, "--id-field", "accession", *args]
+    stderr = io.StringIO()
+    with mock.patch.object(sys, "argv", argv), mock.patch.object(sys, "stdin", io.StringIO("".join(rows))), \
+            mock.patch.object(sys, "stderr", stderr), mock.patch.object(bulk_load.requests, "Session", return_value=session), \
+            mock.patch.object(bulk_load.time, "sleep"):
+        try:
+            bulk_load.main()
+            status = 0
+        except SystemExit as error:
+            status = error.code
+    return status, stderr.getvalue()
+
+
+def documents(payload):
+    lines = payload.strip("\n").split("\n")
+    return [(json.loads(action)["index"]["_id"], json.loads(source)) for action, source in zip(lines[::2], lines[1::2])]
+
+
+class BulkLoadTest(unittest.TestCase):
+    def test_uploads_in_batches_keyed_by_the_id_field(self):
+        session = Session(ok(2), ok(1))
+
+        status, stderr = load(["P1\t8501\n", "P2\t8502\n", "P3\t7\n"], session, "--batch-size", "2")
+
+        self.assertEqual(status, 0)
+        self.assertEqual([documents(payload) for payload in session.payloads], [
+            [("P1", {"accession": "P1", "taxon": "8501"}), ("P2", {"accession": "P2", "taxon": "8502"})],
+            [("P3", {"accession": "P3", "taxon": "7"})],
+        ])
+        self.assertIn("3 rows indexed", stderr)
+
+    def test_skip_passes_over_the_leading_rows(self):
+        session = Session(ok(1))
+
+        status, _ = load(["P1\t8501\n", "P2\t8502\n"], session, "--skip", "1")
+
+        self.assertEqual(status, 0)
+        self.assertEqual([accession for accession, _ in documents(session.payloads[0])], ["P2"])
+
+    def test_a_short_row_names_its_line_and_where_to_continue(self):
+        session = Session(ok(2))
+
+        status, stderr = load(["P1\t8501\n", "P2\t8502\n", "P3\n"], session, "--batch-size", "2")
+
+        self.assertEqual(status, 1)
+        self.assertIn("line 3: expected 2 columns, found 1", stderr)
+        self.assertIn("Continue with --skip 2", stderr)
+
+    def test_retries_a_busy_cluster(self):
+        session = Session(requests.ConnectionError("reset"), Reply(503, {}), rejected(201, 429), ok(2))
+
+        status, _ = load(["P1\t8501\n", "P2\t8502\n"], session)
+
+        self.assertEqual(status, 0)
+        self.assertEqual(len(session.payloads), 4)
+
+    def test_a_rejected_document_is_not_retried(self):
+        session = Session(rejected(201, 400))
+
+        status, stderr = load(["P1\t8501\n", "P2\t8502\n"], session)
+
+        self.assertEqual(status, 1)
+        self.assertEqual(len(session.payloads), 1)
+        self.assertIn("rejected documents in the batch", stderr)
+
+
+if __name__ == "__main__":
+    unittest.main()
