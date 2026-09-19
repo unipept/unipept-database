@@ -57,3 +57,62 @@ impl Taxon {
         Taxon { name, rank, parent, valid }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::str::FromStr;
+
+    use strum::{EnumCount, IntoEnumIterator};
+
+    use super::*;
+
+    /// A lineage row has one column per rank, in this order. unipept-api's `RANK_NAMES` lists the
+    /// same ranks after `no rank`, so a change here must be made there too.
+    const RANK_NAMES: [&str; RANKS] = [
+        "no rank",
+        "domain",
+        "realm",
+        "kingdom",
+        "subkingdom",
+        "superphylum",
+        "phylum",
+        "subphylum",
+        "superclass",
+        "class",
+        "subclass",
+        "superorder",
+        "order",
+        "suborder",
+        "infraorder",
+        "superfamily",
+        "family",
+        "subfamily",
+        "tribe",
+        "subtribe",
+        "genus",
+        "subgenus",
+        "species group",
+        "species subgroup",
+        "species",
+        "subspecies",
+        "strain",
+        "varietas",
+        "forma"
+    ];
+
+    #[test]
+    fn test_ranks_are_named_and_ordered() {
+        assert_eq!(Rank::COUNT, RANKS);
+
+        for (index, (rank, name)) in Rank::iter().zip(RANK_NAMES).enumerate() {
+            assert_eq!(rank.to_string(), name);
+            assert_eq!(Rank::from_str(name).unwrap(), rank);
+            assert_eq!(rank.index(), index);
+        }
+    }
+
+    #[test]
+    fn test_unknown_rank_is_an_error() {
+        assert!(Rank::from_str("clade").is_err());
+    }
+}

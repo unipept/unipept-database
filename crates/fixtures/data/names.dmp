@@ -1,0 +1,293 @@
+1	|	all	|		|	synonym	|
+1	|	root	|		|	scientific name	|
+2	|	Bacteria	|	Bacteria <bacteria>	|	scientific name	|
+2	|	bacteria	|	bacteria <blast name>	|	blast name	|
+2	|	bacteria	|	bacteria <genbank common name>	|	genbank common name	|
+2	|	"Bacteria" Cavalier-Smith 1987	|		|	authority	|
+2	|	Bacteria (ex Cavalier-Smith 1987)	|		|	synonym	|
+2	|	Bacteria Woese et al. 2024	|		|	synonym	|
+2	|	"Bacteriobiota" Luketa 2012	|		|	authority	|
+2	|	Bacteriobiota	|		|	synonym	|
+2	|	eubacteria	|		|	common name	|
+2	|	Monera	|	Monera <bacteria>	|	in-part	|
+2	|	Procaryotae	|	Procaryotae <bacteria>	|	in-part	|
+2	|	Prokaryotae	|	Prokaryotae <bacteria>	|	in-part	|
+2	|	Prokaryota	|	Prokaryota <bacteria>	|	in-part	|
+2	|	prokaryote	|	prokaryote <bacteria>	|	in-part	|
+2	|	prokaryotes	|	prokaryotes <bacteria>	|	in-part	|
+6	|	Azorhizobium Dreyfus et al. 1988 emend. Lang et al. 2013	|		|	authority	|
+6	|	Azorhizobium	|		|	scientific name	|
+7	|	ATCC 43989	|	ATCC 43989 <type strain>	|	type material	|
+7	|	Azorhizobium caulinodans Dreyfus et al. 1988	|		|	authority	|
+7	|	Azorhizobium caulinodans	|		|	scientific name	|
+7	|	Azotirhizobium caulinodans	|		|	equivalent name	|
+7	|	CCUG 26647	|	CCUG 26647 <type strain>	|	type material	|
+7	|	DSM 5975	|	DSM 5975 <type strain>	|	type material	|
+7	|	IFO 14845	|	IFO 14845 <type strain>	|	type material	|
+7	|	JCM 20966	|	JCM 20966 <type strain>	|	type material	|
+7	|	LMG 6465	|	LMG 6465 <type strain>	|	type material	|
+7	|	LMG:6465	|	LMG:6465 <type strain>	|	type material	|
+7	|	NBRC 14845	|	NBRC 14845 <type strain>	|	type material	|
+7	|	ORS 571	|	ORS 571 <type strain>	|	type material	|
+9	|	Acyrthosiphon pisum symbiont P	|		|	includes	|
+9	|	Buchnera aphidicola Munson et al. 1991	|		|	authority	|
+9	|	Buchnera aphidicola	|		|	scientific name	|
+9	|	primary endosymbiont of Schizaphis graminum	|		|	includes	|
+9	|	strain Sg (ex Schizaphis graminum)	|	strain Sg (ex Schizaphis graminum) <type strain>	|	type material	|
+356	|	alpha-2 proteobacteria	|	alpha-2 proteobacteria <Hyphomicrobiales>	|	in-part	|
+356	|	Hyphomicrobiales Douglas 1957 (Approved Lists 1980)	|		|	authority	|
+356	|	Hyphomicrobiales Douglas 1957 emend. Hordt et al. 2020	|		|	authority	|
+356	|	Hyphomicrobiales	|		|	scientific name	|
+356	|	rhizobacteria	|		|	synonym	|
+356	|	Rhizobiales Kuykendall 2006	|		|	authority	|
+356	|	Rhizobiales	|		|	synonym	|
+1224	|	Alphaproteobacteriota	|		|	synonym	|
+1224	|	"Alphaproteobacteriota" Whitman et al. 2018	|		|	synonym	|
+1224	|	"Proteobacteria" Garrity et al. 2005	|		|	authority	|
+1224	|	proteobacteria	|	proteobacteria <blast name>	|	blast name	|
+1224	|	proteobacteria	|	proteobacteria <genbank common name>	|	genbank common name	|
+1224	|	Proteobacteria Stackebrandt et al. 1988	|		|	authority	|
+1224	|	Proteobacteria	|		|	synonym	|
+1224	|	"Proteobacteriota" Panda et al. 2022	|		|	authority	|
+1224	|	Proteobacteriota	|		|	synonym	|
+1224	|	Pseudomonadota corrig. Garrity et al. 2021	|		|	authority	|
+1224	|	Pseudomonadota	|		|	scientific name	|
+1224	|	purple photosynthetic bacteria and relatives	|		|	common name	|
+1236	|	Gammaproteobacteria Garrity et al. 2005 emend. Williams and Kelly 2013	|		|	authority	|
+1236	|	Gammaproteobacteria	|		|	scientific name	|
+1236	|	gamma proteobacteria	|		|	synonym	|
+1236	|	gamma subdivision	|		|	synonym	|
+1236	|	gamma subgroup	|		|	synonym	|
+1236	|	g-proteobacteria	|	g-proteobacteria <blast name>	|	blast name	|
+1236	|	g-proteobacteria	|	g-proteobacteria <genbank common name>	|	genbank common name	|
+1236	|	Proteobacteria gamma subdivision	|		|	synonym	|
+1236	|	"Pseudomonadia" Oren et al. 2016	|		|	authority	|
+1236	|	Pseudomonadia	|		|	synonym	|
+1236	|	Purple bacteria, gamma subdivision	|		|	synonym	|
+2759	|	Eucarya	|		|	synonym	|
+2759	|	Eucaryotae	|		|	synonym	|
+2759	|	Eukarya	|		|	synonym	|
+2759	|	Eukaryotae	|		|	synonym	|
+2759	|	Eukaryota	|		|	scientific name	|
+2759	|	eukaryotes	|	eukaryotes <blast name>	|	blast name	|
+2759	|	eukaryotes	|	eukaryotes <genbank common name>	|	genbank common name	|
+6072	|	Eumetazoa	|		|	scientific name	|
+6656	|	Arthropoda	|		|	scientific name	|
+6656	|	arthropods	|	arthropods <blast name>	|	blast name	|
+6656	|	arthropods	|	arthropods <genbank common name>	|	genbank common name	|
+6960	|	Atelocerata	|	Atelocerata <hexapods>	|	in-part	|
+6960	|	Hexapoda	|		|	scientific name	|
+6960	|	hexapods	|	hexapods <blast name>	|	blast name	|
+6960	|	hexapods	|	hexapods <genbank common name>	|	genbank common name	|
+6960	|	Tracheata	|	Tracheata <hexapods>	|	in-part	|
+6960	|	Uniramia	|	Uniramia <hexapods>	|	in-part	|
+7147	|	Diptera	|		|	scientific name	|
+7147	|	flies	|	flies <blast name>	|	blast name	|
+7147	|	flies	|	flies <genbank common name>	|	genbank common name	|
+7203	|	Brachycera	|		|	scientific name	|
+7214	|	Drosophilidae	|		|	scientific name	|
+7214	|	pomace flies	|		|	genbank common name	|
+7215	|	Drosophila	|	Drosophila <flies,genus>	|	scientific name	|
+7215	|	Drosophila Fallen, 1823	|		|	authority	|
+7215	|	fruit flies	|	fruit flies <Drosophila>	|	genbank common name	|
+7215	|	fruit fly	|	fruit fly <Drosophila>	|	common name	|
+7496	|	Pterygota	|	Pterygota <insects>	|	scientific name	|
+7496	|	winged insects	|		|	genbank common name	|
+7711	|	Chordata	|		|	scientific name	|
+7711	|	chordates	|	chordates <blast name>	|	blast name	|
+7711	|	chordates	|	chordates <genbank common name>	|	genbank common name	|
+7742	|	Vertebrata Cuvier, 1812	|		|	authority	|
+7742	|	Vertebrata	|	Vertebrata <vertebrates>	|	scientific name	|
+7742	|	vertebrates	|	vertebrates <blast name>	|	blast name	|
+7742	|	vertebrates	|	vertebrates <genbank common name>	|	genbank common name	|
+7776	|	Gnathostomata	|	Gnathostomata <vertebrates>	|	scientific name	|
+7776	|	jawed vertebrates	|		|	genbank common name	|
+8287	|	Sarcopterygii	|		|	scientific name	|
+8457	|	Sauropsida	|		|	scientific name	|
+8457	|	sauropsids	|		|	genbank common name	|
+8492	|	Archosauria	|		|	scientific name	|
+8493	|	crocodiles	|		|	genbank common name	|
+8493	|	Crocodylidae	|		|	scientific name	|
+8493	|	Crocodylinae	|		|	includes	|
+8500	|	Crocodylus	|		|	scientific name	|
+8501	|	African crocodile	|		|	common name	|
+8501	|	Crocodylus niloticus Laurenti, 1768	|		|	authority	|
+8501	|	Crocodylus niloticus	|		|	scientific name	|
+8501	|	Nile crocodile	|		|	genbank common name	|
+8502	|	Australian saltwater crocodile	|		|	genbank common name	|
+8502	|	Crocodylus porosus Schneider, 1801	|		|	authority	|
+8502	|	Crocodylus porosus	|		|	scientific name	|
+8502	|	estuarine crocodile	|		|	common name	|
+8502	|	ZMB 278	|	ZMB 278 <lectotype>	|	type material	|
+8503	|	Crocodylus novaeguineae Schmidt, 1928	|		|	authority	|
+8503	|	Crocodylus novaeguineae	|		|	scientific name	|
+8503	|	FMNH 13092	|	FMNH 13092 <holotype>	|	type material	|
+8503	|	New Guinea crocodile	|		|	genbank common name	|
+8504	|	Lepidosauria	|		|	scientific name	|
+8504	|	lepidosaurs	|		|	common name	|
+8504	|	lizards & snakes	|	lizards & snakes <blast name>	|	blast name	|
+8504	|	lizards & snakes	|	lizards & snakes <genbank common name>	|	genbank common name	|
+8504	|	reptiles	|	reptiles <lizards & snakes>	|	in-part	|
+8504	|	Reptilia	|	Reptilia <lizards & snakes>	|	in-part	|
+8505	|	beaked reptiles	|		|	genbank common name	|
+8505	|	rhynchocephalians	|		|	common name	|
+8505	|	Rhynchocephalia	|		|	synonym	|
+8505	|	Rhynchosauria	|		|	synonym	|
+8505	|	Sphenodontia	|		|	scientific name	|
+8509	|	Squamata	|		|	scientific name	|
+8509	|	squamates	|		|	genbank common name	|
+8548	|	Anguimorpha	|		|	scientific name	|
+8548	|	anguimorph lizards	|		|	genbank common name	|
+8548	|	Lacertilia	|	Lacertilia <Anguimorpha>	|	in-part	|
+8549	|	beaded lizards	|		|	genbank common name	|
+8549	|	Helodermatidae	|		|	scientific name	|
+8550	|	Heloderma	|		|	scientific name	|
+8553	|	beaded lizard	|		|	genbank common name	|
+8553	|	Heloderma sp.	|		|	scientific name	|
+9347	|	eutherian mammals	|		|	common name	|
+9347	|	Eutheria	|		|	scientific name	|
+9347	|	Placentalia	|		|	synonym	|
+9347	|	placental mammals	|		|	common name	|
+9347	|	placentals	|	placentals <blast name>	|	blast name	|
+9347	|	placentals	|	placentals <genbank common name>	|	genbank common name	|
+9443	|	Primata	|		|	synonym	|
+9443	|	primate	|		|	equivalent name	|
+9443	|	Primates Linnaeus, 1758	|		|	authority	|
+9443	|	primates	|	primates <blast name>	|	blast name	|
+9443	|	primates	|	primates <genbank common name>	|	genbank common name	|
+9443	|	Primates	|		|	scientific name	|
+9479	|	monkey	|	monkey <Platyrrhini>	|	common name	|
+9479	|	monkeys	|	monkeys <Platyrrhini>	|	common name	|
+9479	|	New World monkeys	|		|	genbank common name	|
+9479	|	Platyrrhini	|		|	scientific name	|
+9499	|	Alouatta	|		|	scientific name	|
+9499	|	howler monkeys	|		|	genbank common name	|
+9503	|	Alouatta seniculus	|		|	scientific name	|
+9503	|	howler monkey	|	howler monkey <Alouatta seniculus>	|	genbank common name	|
+9503	|	red howler monkey	|		|	common name	|
+9503	|	Simia seniculus Linnaeus, 1766	|		|	authority	|
+9503	|	Simia seniculus	|		|	synonym	|
+28211	|	"Alphabacteria" Cavalier-Smith 1992	|		|	authority	|
+28211	|	Alphabacteria Cavalier-Smith, 2002	|		|	authority	|
+28211	|	Alphabacteria	|		|	synonym	|
+28211	|	Alphaproteobacteria Garrity et al. 2006	|		|	authority	|
+28211	|	Alphaproteobacteria	|		|	scientific name	|
+28211	|	alpha proteobacteria	|		|	synonym	|
+28211	|	alpha subdivision	|		|	synonym	|
+28211	|	alpha subgroup	|		|	synonym	|
+28211	|	a-proteobacteria	|	a-proteobacteria <blast name>	|	blast name	|
+28211	|	a-proteobacteria	|	a-proteobacteria <genbank common name>	|	genbank common name	|
+28211	|	Proteobacteria alpha subdivision	|		|	synonym	|
+28211	|	Purple bacteria, alpha subdivision	|		|	synonym	|
+32199	|	aphid P-endosymbionts	|		|	genbank common name	|
+32199	|	Buchnera	|	Buchnera <enterobacteria>	|	scientific name	|
+32199	|	Buchnera Munson et al. 1991	|		|	authority	|
+32341	|	Sophophora	|		|	scientific name	|
+32346	|	melanogaster group	|		|	scientific name	|
+32351	|	melanogaster subgroup	|		|	scientific name	|
+32523	|	Tetrapoda	|		|	scientific name	|
+32523	|	tetrapods	|		|	genbank common name	|
+32524	|	Amniota	|		|	scientific name	|
+32524	|	amniotes	|		|	genbank common name	|
+32525	|	Theria Parker & Haswell, 1897	|		|	authority	|
+32525	|	Theria	|	Theria <mammals>	|	scientific name	|
+32561	|	Diapsida	|		|	synonym	|
+32561	|	diapsids	|		|	genbank common name	|
+32561	|	Sauria	|		|	scientific name	|
+33154	|	Fungi/Metazoa group	|		|	synonym	|
+33154	|	Opisthokonta Cavalier-Smith 1987	|		|	authority	|
+33154	|	Opisthokonta	|		|	scientific name	|
+33154	|	opisthokonts	|		|	synonym	|
+33208	|	Animalia	|		|	synonym	|
+33208	|	animals	|	animals <blast name>	|	blast name	|
+33208	|	animals	|	animals <genbank common name>	|	genbank common name	|
+33208	|	metazoans	|		|	common name	|
+33208	|	Metazoa	|		|	scientific name	|
+33208	|	multicellular animals	|		|	common name	|
+33213	|	Bilateria	|		|	scientific name	|
+33317	|	Protostomia	|		|	scientific name	|
+33340	|	Neoptera	|		|	scientific name	|
+33392	|	Endopterygota	|		|	scientific name	|
+33392	|	Holometabola	|		|	synonym	|
+33511	|	deuterostomes	|		|	common name	|
+33511	|	Deuterostomia	|		|	scientific name	|
+38066	|	Alouattinae	|		|	scientific name	|
+40674	|	Mammalia	|		|	scientific name	|
+40674	|	mammals	|	mammals <blast name>	|	blast name	|
+40674	|	mammals	|	mammals <genbank common name>	|	genbank common name	|
+43733	|	Asilomorpha	|		|	synonym	|
+43733	|	Muscomorpha	|		|	scientific name	|
+43738	|	Schizophora	|		|	scientific name	|
+43741	|	Acalyptratae	|		|	scientific name	|
+43746	|	Ephydroidea	|		|	scientific name	|
+43845	|	Drosophilinae	|		|	scientific name	|
+46877	|	Drosophilini	|		|	scientific name	|
+50557	|	Insecta	|		|	scientific name	|
+50557	|	insects	|	insects <blast name>	|	blast name	|
+50557	|	insects	|	insects <genbank common name>	|	genbank common name	|
+50557	|	true insects	|		|	common name	|
+85512	|	Dicondylia	|		|	scientific name	|
+88770	|	Panarthropoda	|		|	scientific name	|
+89593	|	Craniata	|	Craniata <chordates>	|	scientific name	|
+91347	|	Enterobacterales Adeolu et al. 2016	|		|	authority	|
+91347	|	Enterobacterales	|		|	scientific name	|
+91347	|	Enterobacteriaceae and related endosymbionts	|		|	synonym	|
+91347	|	Enterobacteriaceae group	|		|	synonym	|
+91347	|	Enterobacteriales	|		|	synonym	|
+91347	|	gamma-3 proteobacteria	|	gamma-3 proteobacteria <enterobacteria,Enterobacterales>	|	in-part	|
+117570	|	Teleostomi	|		|	scientific name	|
+117571	|	bony vertebrates	|		|	genbank common name	|
+117571	|	Euteleostomi	|		|	scientific name	|
+131567	|	biota	|		|	synonym	|
+131567	|	cellular organisms	|		|	scientific name	|
+197562	|	Crustacea	|		|	includes	|
+197562	|	crustaceans and hexapods	|		|	genbank common name	|
+197562	|	crustaceans	|		|	blast name	|
+197562	|	Pancrustacea	|		|	scientific name	|
+197563	|	Mandibulata	|		|	scientific name	|
+197563	|	mandibulates	|		|	common name	|
+314146	|	Euarchontoglires	|		|	scientific name	|
+314293	|	Anthropoidea	|		|	synonym	|
+314293	|	Simiiformes	|		|	scientific name	|
+335928	|	Xanthobacteraceae Lee et al. 2005	|		|	authority	|
+335928	|	Xanthobacteraceae	|		|	scientific name	|
+376913	|	Haplorrhini	|		|	scientific name	|
+378855	|	Atelidae	|		|	scientific name	|
+480117	|	Cyclorrhapha	|		|	scientific name	|
+480118	|	Eremoneura	|		|	scientific name	|
+1206794	|	Ecdysozoa	|		|	scientific name	|
+1294634	|	alligators and others	|		|	genbank common name	|
+1294634	|	crocodilians	|		|	blast name	|
+1294634	|	Crocodilia	|		|	synonym	|
+1294634	|	Crocodylia	|		|	scientific name	|
+1294634	|	reptiles	|	reptiles <crocodilians>	|	in-part	|
+1294634	|	Reptilia	|	Reptilia <crocodilians>	|	in-part	|
+1298654	|	Longirostres Harshman et al. 2003	|		|	authority	|
+1298654	|	Longirostres	|		|	scientific name	|
+1329799	|	Archelosauria Crawfort et al. 2014	|		|	authority	|
+1329799	|	Archelosauria	|		|	scientific name	|
+1329799	|	Archosauria-Testudines	|		|	synonym	|
+1329799	|	Testudines + Archosauria group	|		|	synonym	|
+1329911	|	Toxicofera	|		|	scientific name	|
+1329911	|	Toxicofera Vidal & Hedges 2009	|		|	authority	|
+1329912	|	Episquamata	|		|	scientific name	|
+1329950	|	Unidentata	|		|	scientific name	|
+1329961	|	Bifurcata	|		|	scientific name	|
+1329961	|	split-tongued squamates	|		|	genbank common name	|
+1330543	|	Neoanguimorpha	|		|	scientific name	|
+1330543	|	New World anguimorph lizards	|		|	genbank common name	|
+1338369	|	Dipnotetrapodomorpha	|		|	scientific name	|
+1437010	|	Boreoeutheria	|		|	scientific name	|
+1437010	|	Boreotheria	|		|	synonym	|
+1903409	|	Erwiniaceae Adeolu et al. 2016	|		|	authority	|
+1903409	|	Erwiniaceae	|		|	scientific name	|
+2640747	|	unclassified Heloderma	|		|	scientific name	|
+3379134	|	Pseudomonadati (Gibbons and Murray 1978) Oren and Goker 2024	|		|	authority	|
+3379134	|	Pseudomonadati	|		|	scientific name	|
+3701028	|	Altocrustacea	|		|	scientific name	|
+3701028	|	Hexanauplia	|		|	includes	|
+3701028	|	Multicrustacea	|		|	includes	|
+3701030	|	Allotriocarida	|		|	scientific name	|
+3701061	|	Eumetabola	|		|	scientific name	|
+3701062	|	Aparaglossata	|		|	scientific name	|
+3701063	|	Panorpida	|		|	scientific name	|
