@@ -59,7 +59,8 @@ section "the tables made from the sources"
 check "ec_numbers.tsv" "$(table ec_numbers)" "$(printf '%s\n' \
     $'1\t1.-.-.-\tOxidoreductases' \
     $'2\t1.1.1.1\tAlcohol dehydrogenase' \
-    $'3\t2.7.11.1\tNon-specific serine/threonine protein kinase')"
+    $'3\t1.1.1.2\tAlcohol dehydrogenase (NADP(+))' \
+    $'4\t2.7.11.1\tNon-specific serine/threonine protein kinase')"
 check "go_terms.tsv" "$(table go_terms)" "$(printf '%s\n' \
     $'1\tGO:0009279\tcellular component\tcell outer membrane' \
     $'2\tGO:0005515\tmolecular function\tprotein binding')"
