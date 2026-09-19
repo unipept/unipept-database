@@ -534,7 +534,8 @@ have() {
 #                                                                              #
 # Read from stdin. Each input line consists of two tab-separated columns       #
 # (key, value). This function takes the key and collapses all values together  #
-# using a semicolon (;)                                                        #
+# using a semicolon (;). Only neighbouring lines are collapsed, so the input   #
+# has to be sorted by key.                                                     #
 #                                                                              #
 # Globals:                                                                     #
 #   None                                                                       #
