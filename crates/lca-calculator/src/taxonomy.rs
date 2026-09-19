@@ -73,7 +73,11 @@ impl Taxonomy {
             taxa.push(taxon_id);
         }
 
-        self.handle_lca(&current_sequence, self.calculate_lca(&taxa));
+        // Nothing to report when the input held no sequence at all.
+        if !current_sequence.is_empty() {
+            self.handle_lca(&current_sequence, self.calculate_lca(&taxa));
+        }
+
         Ok(())
     }
 
@@ -83,8 +87,9 @@ impl Taxonomy {
         let genus_rank_idx = Rank::Genus.index() - 1;
         let species_rank_idx = Rank::Species.index() - 1;
 
+        // A taxon the lineage table does not know counts as one without a lineage.
         let lineages: Vec<&Vec<i32>> =
-            taxa.iter().map(|x| &self.taxonomy[*x as usize]).filter(|x| !x.is_empty()).collect();
+            taxa.iter().filter_map(|x| self.taxonomy.get(*x as usize)).filter(|x| !x.is_empty()).collect();
 
         // Iterate until RANKS - 1 since the root rank is not present in the lineage array
         // (Each array should implicitly start with 1, but this is handled by the default lca value
