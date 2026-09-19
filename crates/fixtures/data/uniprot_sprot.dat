@@ -1,0 +1,166 @@
+ID   P00001_SYNTH              Reviewed;          62 AA.
+AC   P00001; Q00001;
+DT   01-JAN-2020, integrated into UniProtKB/Swiss-Prot.
+DT   01-JAN-2020, sequence version 1.
+DT   01-JUN-2026, entry version 1.
+DE   RecName: Full=Synthetic protein 1;
+DE            EC=1.1.1.1;
+OX   NCBI_TaxID=8501;
+DR   Proteomes; UP000000001; Genome.
+DR   GO; GO:0009279; C:cell outer membrane; IEA:InterPro.
+DR   InterPro; IPR016364; Synthetic_fam1.
+SQ   SEQUENCE   62 AA;  0 MW;  0000000000000000 CRC64;
+     MKTAYIAKQR AWDIQNGKVS TLNETVGENY SAKAAGGKLH CDMPTFAKDE FRGISVNDAW
+     EK
+//
+ID   P00002_SYNTH              Reviewed;          31 AA.
+AC   P00002;
+DT   01-JAN-2020, integrated into UniProtKB/Swiss-Prot.
+DT   01-JAN-2020, sequence version 1.
+DT   01-JUN-2026, entry version 2.
+DE   RecName: Full=Synthetic protein 2;
+OX   NCBI_TaxID=8501;
+DR   Proteomes; UP000000001; Genome.
+SQ   SEQUENCE   31 AA;  0 MW;  0000000000000000 CRC64;
+     MSDKPVLAAG GKHTNEVFDS RVALIDATEK R
+//
+ID   P00003_SYNTH              Reviewed;          36 AA.
+AC   P00003;
+DT   01-JAN-2020, integrated into UniProtKB/Swiss-Prot.
+DT   01-JAN-2020, sequence version 1.
+DT   01-JUN-2026, entry version 3.
+DE   RecName: Full=Synthetic protein 3;
+OX   NCBI_TaxID=8502;
+DR   Proteomes; UP000000002; Genome.
+DR   Proteomes; UP000000004; Genome.
+DR   GO; GO:0009279; C:cell outer membrane; IEA:InterPro.
+DR   GO; GO:0005515; F:protein binding; IPI:IntAct.
+SQ   SEQUENCE   36 AA;  0 MW;  0000000000000000 CRC64;
+     MQLFDATVGE NYSAKPRIPT LNAGVKAAGG KWNDET
+//
+ID   P00004_SYNTH              Reviewed;          26 AA.
+AC   P00004;
+DT   01-JAN-2020, integrated into UniProtKB/Swiss-Prot.
+DT   01-JAN-2020, sequence version 1.
+DT   01-JUN-2026, entry version 4.
+DE   RecName: Full=Synthetic protein 4;
+OX   NCBI_TaxID=8503;
+DR   InterPro; IPR008816; Synthetic_fam2.
+SQ   SEQUENCE   26 AA;  0 MW;  0000000000000000 CRC64;
+     MTHNCLPTLN AGVKAAGGKY SEDVFR
+//
+ID   P00005_SYNTH              Unreviewed;          29 AA.
+AC   P00005;
+DT   01-JAN-2020, integrated into UniProtKB/TrEMBL.
+DT   01-JAN-2020, sequence version 1.
+DT   01-JUN-2026, entry version 5.
+DE   SubName: Full=Synthetic protein 5 {ECO:0000313|EMBL:SYN00005.1};
+DE            EC=2.7.11.1 {ECO:0000256|ARBA:ARBA00000001};
+OX   NCBI_TaxID=9503;
+DR   InterPro; IPR016364; Synthetic_fam1.
+SQ   SEQUENCE   29 AA;  0 MW;  0000000000000000 CRC64;
+     MPRVLHCDMP TFAKGSTNDA AGGKEIVWQ
+//
+ID   P00006_SYNTH              Reviewed;          28 AA.
+AC   P00006;
+DT   01-JAN-2020, integrated into UniProtKB/Swiss-Prot.
+DT   01-JAN-2020, sequence version 1.
+DT   01-JUN-2026, entry version 6.
+DE   RecName: Full=Synthetic protein 6;
+DE            EC=1.1.1.1;
+OX   NCBI_TaxID=7;
+DR   Proteomes; UP000000003; Genome.
+SQ   SEQUENCE   28 AA;  0 MW;  0000000000000000 CRC64;
+     MSTNKGISVN DAWEKPLFAA GGKRDTEV
+//
+ID   P00007_SYNTH              Reviewed;          18 AA.
+AC   P00007;
+DT   01-JAN-2020, integrated into UniProtKB/Swiss-Prot.
+DT   01-JAN-2020, sequence version 1.
+DT   01-JUN-2026, entry version 7.
+DE   RecName: Full=Synthetic protein 7;
+OX   NCBI_TaxID=9;
+DR   GO; GO:0005515; F:protein binding; IPI:IntAct.
+SQ   SEQUENCE   18 AA;  0 MW;  0000000000000000 CRC64;
+     MKAAGGKNVT LSDFEHIR
+//
+ID   P00008_SYNTH              Reviewed;          20 AA.
+AC   P00008;
+DT   01-JAN-2020, integrated into UniProtKB/Swiss-Prot.
+DT   01-JAN-2020, sequence version 1.
+DT   01-JUN-2026, entry version 8.
+DE   RecName: Full=Synthetic protein 8;
+OX   NCBI_TaxID=8505;
+SQ   SEQUENCE   20 AA;  0 MW;  0000000000000000 CRC64;
+     MDTVSNAKPL FGHIWQEYCR
+//
+ID   P00009_SYNTH              Reviewed;          20 AA.
+AC   P00009;
+DT   01-JAN-2020, integrated into UniProtKB/Swiss-Prot.
+DT   01-JAN-2020, sequence version 1.
+DT   01-JUN-2026, entry version 9.
+DE   RecName: Full=Synthetic protein 9;
+OX   NCBI_TaxID=8500;
+DR   InterPro; IPR008816; Synthetic_fam2.
+SQ   SEQUENCE   20 AA;  0 MW;  0000000000000000 CRC64;
+     MRLNDGTVSA KPEFIHWQCY
+//
+ID   P00010_SYNTH              Reviewed;          20 AA.
+AC   P00010;
+DT   01-JAN-2020, integrated into UniProtKB/Swiss-Prot.
+DT   01-JAN-2020, sequence version 1.
+DT   01-JUN-2026, entry version 10.
+DE   RecName: Full=Synthetic protein 10;
+DE            EC=2.7.11.1;
+DE            EC=1.1.1.1;
+OX   NCBI_TaxID=8501;
+DR   Proteomes; UP000000001; Genome.
+SQ   SEQUENCE   20 AA;  0 MW;  0000000000000000 CRC64;
+     MSAKTNDLVG EFIHPWQCRY
+//
+ID   P00011_SYNTH              Reviewed;          21 AA.
+AC   P00011;
+DT   01-JAN-2020, integrated into UniProtKB/Swiss-Prot.
+DT   01-JAN-2020, sequence version 1.
+DT   01-JUN-2026, entry version 11.
+DE   RecName: Full=Synthetic protein 11;
+OX   NCBI_TaxID=8502;
+DR   Proteomes; UP000000002; Genome.
+DR   Proteomes; UP000000004; Genome.
+DR   GO; GO:0009279; C:cell outer membrane; IEA:InterPro.
+SQ   SEQUENCE   21 AA;  0 MW;  0000000000000000 CRC64;
+     MKTVSNDLAG GEFIHPWQCR Y
+//
+ID   P00012_SYNTH              Reviewed;          20 AA.
+AC   P00012;
+DT   01-JAN-2020, integrated into UniProtKB/Swiss-Prot.
+DT   01-JAN-2020, sequence version 1.
+DT   01-JUN-2026, entry version 12.
+DE   RecName: Full=Synthetic protein 12;
+OX   NCBI_TaxID=9503;
+DR   GO; GO:0005515; F:protein binding; IPI:IntAct.
+DR   InterPro; IPR016364; Synthetic_fam1.
+SQ   SEQUENCE   20 AA;  0 MW;  0000000000000000 CRC64;
+     MRAKSTNDLV GEFIHPWQCY
+//
+ID   P00013_SYNTH              Unreviewed;          25 AA.
+AC   P00013;
+DT   01-JAN-2020, integrated into UniProtKB/TrEMBL.
+DT   01-JAN-2020, sequence version 1.
+DT   01-JUN-2026, entry version 13.
+DE   SubName: Full=Synthetic protein 13 {ECO:0000313|EMBL:SYN00013.1};
+OX   NCBI_TaxID=8553;
+DR   GO; GO:0005515; F:protein binding; IPI:IntAct.
+SQ   SEQUENCE   25 AA;  0 MW;  0000000000000000 CRC64;
+     MQTWNPFSAH VALIDATEKR YCGDE
+//
+ID   P00014_SYNTH              Reviewed;          13 AA.
+AC   P00014;
+DT   01-JAN-2020, integrated into UniProtKB/Swiss-Prot.
+DT   01-JAN-2020, sequence version 1.
+DT   01-JUN-2026, entry version 14.
+DE   RecName: Full=Synthetic protein 14;
+OX   NCBI_TaxID=562;
+SQ   SEQUENCE   13 AA;  0 MW;  0000000000000000 CRC64;
+     MKVLAAGIVG AKR
+//
