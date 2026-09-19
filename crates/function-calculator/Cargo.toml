@@ -8,3 +8,6 @@ rust-version.workspace = true
 anyhow.workspace = true
 clap.workspace = true
 utils = { path = "../utils" }
+
+[dev-dependencies]
+fixtures = { path = "../fixtures" }

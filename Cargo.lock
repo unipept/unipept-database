@@ -215,6 +215,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
+ "fixtures",
  "utils",
 ]
 
@@ -270,6 +271,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
+ "fixtures",
  "ncbi",
  "utils",
 ]
@@ -459,6 +461,7 @@ dependencies = [
  "anyhow",
  "clap",
  "dat-parser",
+ "fixtures",
  "tables-generator",
  "utils",
 ]
