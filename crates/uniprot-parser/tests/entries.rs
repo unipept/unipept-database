@@ -79,6 +79,26 @@ fn test_threaded_and_sequential_parsing_agree() {
     );
 }
 
+/// The pipeline parses with several threads, where a bad entry stops the reader while the workers
+/// are still sending.
+#[test]
+fn test_a_malformed_entry_is_an_error_with_several_threads() {
+    let dir = fixtures::temp_dir("uniprot-parser-malformed-threads");
+    let dat = fs::read_to_string(fixtures::path("uniprot_sprot.dat")).unwrap().replacen(
+        "UniProtKB/Swiss-Prot.",
+        "UniProtKB/Unknown.",
+        1
+    );
+    fs::write(dir.join("malformed.dat"), dat).unwrap();
+
+    let (output, _) = run("malformed-threads", &dir.join("malformed.dat"), "4");
+
+    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    assert!(!output.status.success());
+    assert!(stderr.contains("Unknown database type"), "{stderr}");
+    assert!(!stderr.contains("panicked"), "{stderr}");
+}
+
 #[test]
 fn test_a_malformed_entry_is_an_error() {
     let dir = std::env::temp_dir().join(format!("uniprot-parser-malformed-{}", std::process::id()));

@@ -64,7 +64,10 @@ impl<B: BufRead + Send + 'static> Producer<B> {
                             }
 
                             data.extend_from_slice(&buffer[start_index..=i]);
-                            sender.send(data).unwrap();
+                            // A closed channel means the consumers stopped; so does the producer.
+                            if sender.send(data).is_err() {
+                                return;
+                            }
 
                             // The next chunk will start at offset i+2 because we skip the next newline as well
                             start_index = i + 2;
