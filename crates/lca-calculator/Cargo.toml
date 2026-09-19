@@ -9,3 +9,6 @@ anyhow.workspace = true
 clap.workspace = true
 ncbi = { path = "../ncbi" }
 utils = { path = "../utils" }
+
+[dev-dependencies]
+fixtures = { path = "../fixtures" }

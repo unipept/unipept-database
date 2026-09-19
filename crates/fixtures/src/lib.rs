@@ -9,6 +9,8 @@
 //!   API's taxa are the rows of the API's `taxons.tsv` and `lineages.tsv`.
 //! - `uniprot_entries.tsv`, `proteomes.tsv`: what `uniprot-parser --threads 1` writes for the
 //!   entries. P00014 is not in them.
+//! - `peptides.tsv`: what `uniprot-parser-tryptic --threads 1 --peptide-min 5 --peptide-max 50`
+//!   writes for the entries. Its `uniprot_entries.tsv` is the one above.
 //!
 //! To regenerate the outputs, run both binaries on the inputs and check the difference by eye.
 //! The fifth column of `taxons.tsv` is a raw `0x01`/`0x00` byte, not text.
