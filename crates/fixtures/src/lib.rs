@@ -10,10 +10,17 @@
 //! - `uniprot_entries.tsv`, `proteomes.tsv`: what `uniprot-parser --threads 1` writes for the
 //!   entries. P00014 is not in them.
 //!
-//! To regenerate the outputs, run both binaries on the inputs and check the difference by eye.
+//! To regenerate the outputs, run the binaries on the inputs and check the difference by eye.
 //! The fifth column of `taxons.tsv` is a raw `0x01`/`0x00` byte, not text.
 
 use std::path::PathBuf;
+
+/// A directory for a test to write in. The process id keeps the tests of one binary apart.
+pub fn temp_dir(test: &str) -> PathBuf {
+    let dir = std::env::temp_dir().join(format!("{test}-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).expect("a writable temporary directory");
+    dir
+}
 
 /// The path of a file in the corpus, for tests that pass files to a binary.
 pub fn path(file: &str) -> PathBuf {

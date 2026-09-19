@@ -6,8 +6,7 @@ use std::{
 
 /// Runs taxdmp-parser on a names/nodes pair and returns its output with the directory it wrote to.
 fn run(test: &str, names: &Path, nodes: &Path) -> (Output, PathBuf) {
-    let dir = std::env::temp_dir().join(format!("taxdmp-parser-{test}-{}", std::process::id()));
-    fs::create_dir_all(&dir).unwrap();
+    let dir = fixtures::temp_dir(&format!("taxdmp-parser-{test}"));
     // The binary opens its output files without creating them.
     fs::write(dir.join("taxons.tsv"), "").unwrap();
     fs::write(dir.join("lineages.tsv"), "").unwrap();
@@ -38,8 +37,7 @@ fn test_writes_the_expected_tables() {
 
 #[test]
 fn test_rejects_a_rank_it_does_not_know() {
-    let dir = std::env::temp_dir().join(format!("taxdmp-parser-rank-{}", std::process::id()));
-    fs::create_dir_all(&dir).unwrap();
+    let dir = fixtures::temp_dir("taxdmp-parser-rank");
     let nodes = fs::read_to_string(fixtures::path("nodes.dmp")).unwrap().replacen("\tno rank\t", "\tclade\t", 1);
     fs::write(dir.join("nodes.dmp"), nodes).unwrap();
 
@@ -51,8 +49,7 @@ fn test_rejects_a_rank_it_does_not_know() {
 
 #[test]
 fn test_an_invalid_taxon_invalidates_its_descendants() {
-    let dir = std::env::temp_dir().join(format!("taxdmp-parser-invalid-{}", std::process::id()));
-    fs::create_dir_all(&dir).unwrap();
+    let dir = fixtures::temp_dir("taxdmp-parser-invalid");
     let names = fs::read_to_string(fixtures::path("names.dmp")).unwrap().replace(
         "8500\t|\tCrocodylus\t|\t\t|\tscientific name",
         "8500\t|\tuncultured Crocodylus\t|\t\t|\tscientific name"

@@ -10,3 +10,6 @@ clap.workspace = true
 dat-parser = { path = "../dat-parser" }
 tables-generator = { path = "../tables-generator" }
 utils = { path = "../utils" }
+
+[dev-dependencies]
+fixtures = { path = "../fixtures" }
