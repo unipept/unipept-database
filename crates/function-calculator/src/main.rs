@@ -72,7 +72,7 @@ fn main() -> Result<()> {
 
         done += 1;
 
-        if done % 1000000 == 0 {
+        if done.is_multiple_of(1000000) {
             eprintln!("[{}] FA {} rows", now_str(), done);
         }
     }

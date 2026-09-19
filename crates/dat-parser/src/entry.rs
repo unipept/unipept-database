@@ -423,8 +423,8 @@ mod tests {
     #[test]
     fn test_parse_ac_number() {
         let want = "P9WPY2";
-        let mut lines = get_example_entry();
-        let got = parse_accession_number_field(&mut lines, &mut 1).unwrap();
+        let lines = get_example_entry();
+        let got = parse_accession_number_field(&lines, &mut 1).unwrap();
 
         assert_eq!(got, want);
     }
@@ -433,8 +433,8 @@ mod tests {
     fn test_parse_version() {
         let want_type = "swissprot";
         let want_version = "44";
-        let mut lines = get_example_entry();
-        let (got_type, got_version) = parse_date_fields(&mut lines, &mut 2).unwrap();
+        let lines = get_example_entry();
+        let (got_type, got_version) = parse_date_fields(&lines, &mut 2).unwrap();
 
         assert_eq!(got_type, want_type);
         assert_eq!(got_version, want_version);
@@ -443,17 +443,18 @@ mod tests {
     #[test]
     fn test_parse_description_field() {
         let want_name = "Putative transcription factor 001R";
-        let mut lines = get_example_entry();
-        let (got_name, got_ec) = parse_description_field(&mut lines, &mut 5);
+        let lines = get_example_entry();
+        let (got_name, got_ec) = parse_description_field(&lines, &mut 5);
 
         assert_eq!(got_name, want_name);
+        assert!(got_ec.is_empty());
     }
 
     #[test]
     fn test_parse_taxon_id() {
         let want = "654924";
-        let mut lines = get_example_entry();
-        let got = parse_taxonomy_reference(&mut lines, &mut 10);
+        let lines = get_example_entry();
+        let got = parse_taxonomy_reference(&lines, &mut 10);
 
         assert_eq!(got, want);
     }
@@ -463,8 +464,8 @@ mod tests {
         let want_go = vec![String::from("GO:0046782"), String::from("GO:0016743")];
         let want_ipr = vec![String::from("IPR007031"), String::from("IPR000308")];
         let want_proteome = vec![String::from("UP000008770")];
-        let mut lines = get_example_entry();
-        let got_references = parse_db_references(&mut lines, &mut 27);
+        let lines = get_example_entry();
+        let got_references = parse_db_references(&lines, &mut 27);
 
         assert_eq!(got_references.go_references, want_go);
         assert_eq!(got_references.ipr_references, want_ipr);
@@ -474,11 +475,11 @@ mod tests {
     #[test]
     fn test_parse_db_reference_go() {
         let want = vec![String::from("GO:0046782")];
-        let mut line = String::from("GO; GO:0046782; P:regulation of viral transcription; IEA:InterPro.");
+        let line = String::from("GO; GO:0046782; P:regulation of viral transcription; IEA:InterPro.");
         let mut target = Vec::new();
         let mut _dummy = Vec::new();
         let mut _dummy2 = Vec::new();
-        parse_db_reference(&mut line, &mut target, &mut _dummy, &mut _dummy2);
+        parse_db_reference(&line, &mut target, &mut _dummy, &mut _dummy2);
 
         assert_eq!(target, want);
         assert!(_dummy.is_empty());
@@ -488,11 +489,11 @@ mod tests {
     #[test]
     fn test_parse_db_reference_ip() {
         let want = vec![String::from("IPR007031")];
-        let mut line = String::from("InterPro; IPR007031; Poxvirus_VLTF3.");
+        let line = String::from("InterPro; IPR007031; Poxvirus_VLTF3.");
         let mut target = Vec::new();
         let mut _dummy = Vec::new();
         let mut _dummy2 = Vec::new();
-        parse_db_reference(&mut line, &mut _dummy, &mut target, &mut _dummy2);
+        parse_db_reference(&line, &mut _dummy, &mut target, &mut _dummy2);
 
         assert_eq!(target, want);
         assert!(_dummy.is_empty());
@@ -502,11 +503,11 @@ mod tests {
     #[test]
     fn test_parse_db_reference_proteome() {
         let want = vec![String::from("UP000008770")];
-        let mut line = String::from("Proteomes; UP000008770; Segment.");
+        let line = String::from("Proteomes; UP000008770; Segment.");
         let mut target = Vec::new();
         let mut _dummy = Vec::new();
         let mut _dummy2 = Vec::new();
-        parse_db_reference(&mut line, &mut _dummy, &mut _dummy2, &mut target);
+        parse_db_reference(&line, &mut _dummy, &mut _dummy2, &mut target);
 
         assert_eq!(target, want);
         assert!(_dummy.is_empty());
@@ -516,8 +517,8 @@ mod tests {
     #[test]
     fn test_parse_sequence() {
         let want = "MAFSAEDVLKEYDRRRRMEALLLSLYYPNDRKLLDYKEWSPPRVQVECPKAPVEWNNPPSEKGLIVGHFSGIKYKGEKAQASEVDVNKMCCWVSKFKDAMRRYQGIQTCKIPGKVLSDLD";
-        let mut lines = get_example_entry();
-        let got = parse_sequence(&mut lines, &mut 43);
+        let lines = get_example_entry();
+        let got = parse_sequence(&lines, &mut 43);
         assert_eq!(got, want);
     }
 
@@ -527,7 +528,7 @@ mod tests {
     //     let mut line = String::from(format!(
     //         "RecName: Full={want} {{ECO:0000255|HAMAP-Rule:MF_01201}};"
     //     ));
-    //     let got = read_until_metadata(&mut line, ORGANISM_RECOMMENDED_NAME_PREFIX_LEN);
+    //     let got = read_until_metadata(&line, ORGANISM_RECOMMENDED_NAME_PREFIX_LEN);
     //     assert_eq!(got, want);
     // }
     //
@@ -537,7 +538,7 @@ mod tests {
     //     let mut line = String::from(format!(
     //         "RecName: Full={want} {{ECO:0000255|HAMAP-Rule:MF_01201}};"
     //     ));
-    //     let target = read_until_metadata(&mut line, ORGANISM_RECOMMENDED_NAME_PREFIX_LEN);
+    //     let target = read_until_metadata(&line, ORGANISM_RECOMMENDED_NAME_PREFIX_LEN);
     //     assert_eq!(target, want);
     // }
     //
@@ -545,14 +546,14 @@ mod tests {
     // fn test_read_until_metadata_none() {
     //     let want = "Recommended Name";
     //     let mut line = String::from(format!("RecName: Full={want};"));
-    //     let target = read_until_metadata(&mut line, ORGANISM_RECOMMENDED_NAME_PREFIX_LEN);
+    //     let target = read_until_metadata(&line, ORGANISM_RECOMMENDED_NAME_PREFIX_LEN);
     //     assert_eq!(target, want);
     // }
 
     #[test]
     fn test_parse_entry() {
-        let mut lines = get_example_entry();
-        let got = UniProtDATEntry::from_lines(&mut lines).unwrap();
+        let lines = get_example_entry();
+        let got = UniProtDATEntry::from_lines(&lines).unwrap();
 
         assert_eq!(got.accession_number, "P9WPY2");
         assert_eq!(got.name, "Putative transcription factor 001R");

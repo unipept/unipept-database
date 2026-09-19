@@ -124,7 +124,7 @@ impl PeptideTableWriter {
                 String::from_utf8_lossy(&equated_sequence),
                 String::from_utf8_lossy(sequence),
                 entry_id,
-                &summary,
+                summary,
                 entry.taxon_id
             )
             .context("Error writing to TSV")?;
