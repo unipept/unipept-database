@@ -1,0 +1,16 @@
+format-version: 1.2
+
+[Term]
+id: GO:0009279
+name: cell outer membrane
+namespace: cellular_component
+
+[Term]
+id: GO:0005515
+name: protein binding
+namespace: molecular_function
+
+[Typedef]
+id: part_of
+name: part of
+
