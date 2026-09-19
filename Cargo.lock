@@ -206,6 +206,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "fixtures"
+version = "0.1.0"
+
+[[package]]
 name = "function-calculator"
 version = "0.1.0"
 dependencies = [

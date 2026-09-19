@@ -12,7 +12,7 @@ latest-config
 .settings
 .vscode
 createKeggPathways.sh
-data/
+/data/
 .DS_Store
 out
 .idea/

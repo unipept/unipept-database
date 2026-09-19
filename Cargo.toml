@@ -2,6 +2,18 @@
 # Explicit: a virtual root infers no resolver from its members' editions and falls back to 1.
 resolver = "3"
 members = ["crates/*"]
+# fixtures is test-only, so a release build never compiles it.
+default-members = [
+    "crates/dat-parser",
+    "crates/function-calculator",
+    "crates/lca-calculator",
+    "crates/ncbi",
+    "crates/tables-generator",
+    "crates/taxdmp-parser",
+    "crates/uniprot-parser",
+    "crates/uniprot-parser-tryptic",
+    "crates/utils",
+]
 
 [workspace.package]
 version = "0.1.0"
