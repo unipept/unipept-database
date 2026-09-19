@@ -21,3 +21,4 @@ index/
 output/
 temp/
 unipept-temp/
+__pycache__/
