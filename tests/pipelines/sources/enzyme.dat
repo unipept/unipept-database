@@ -4,6 +4,14 @@ ID   1.1.1.1
 DE   Alcohol dehydrogenase.
 AN   Aldehyde reductase.
 //
+ID   1.1.1.2
+DE   Alcohol dehydrogenase
+DE   (NADP(+)).
+//
+ID   1.14.11.1
+DE   2-oxoglutarate 3-
+DE   dioxygenase.
+//
 ID   2.7.11.1
 DE   Non-specific serine/threonine protein kinase.
 //

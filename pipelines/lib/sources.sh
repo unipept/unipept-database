@@ -279,12 +279,12 @@ fetch_ec_numbers() {
 		curl -s "$ec_number_url" | grep -E '^ID|^DE' | $CMD_AWK '
 			BEGIN { FS="   "
 			        OFS="\t" }
-			/^ID/ { if(id != "") { print id, name }
-			        name = ""
-			        id = $2 }
-			/^DE/ { gsub(/.$/, "", $2)
-			        name = name $2 }
-			END   { print id, name }'
+			function flush() { if(id != "") { sub(/\.$/, "", name); print id, name } }
+			# A name can run over several DE lines, and only the last one ends in a period. A line
+			# that ends in a hyphen breaks mid-word, so it takes no space.
+			/^ID/ { flush(); name = ""; id = $2 }
+			/^DE/ { name = (name == "" ? $2 : (name ~ /-$/ ? name $2 : name " " $2)) }
+			END   { flush() }'
 	} | cat -n | sed 's/^ *//' | $CMD_LZ4 - > "$output_dir/ec_numbers.tsv.lz4"
 	log "Finished creating EC numbers."
 }
