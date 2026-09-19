@@ -8,10 +8,12 @@
 #                            Variables and options                             #
 ################################################################################
 
+# Every source URL below can be replaced by setting the UNIPEPT_*_URL variable next to it.
+
 # URLs that should be used to download the UniProtKB database in dat.gz format
 declare -A SOURCE_URLS=(
-    [swissprot]="https://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/complete/uniprot_sprot.dat.gz"
-    [trembl]="https://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/complete/uniprot_trembl.dat.gz"
+    [swissprot]="${UNIPEPT_SWISSPROT_URL:-https://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/complete/uniprot_sprot.dat.gz}"
+    [trembl]="${UNIPEPT_TREMBL_URL:-https://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/complete/uniprot_trembl.dat.gz}"
 )
 
 ################################################################################
@@ -42,7 +44,7 @@ extract_uniprot_version() {
   local output_dir="$1"
 
   # URL of the XML file
-  local xml_url="https://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/complete/RELEASE.metalink"
+  local xml_url="${UNIPEPT_RELEASE_METALINK_URL:-https://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/complete/RELEASE.metalink}"
 
   # Use curl to download the XML content
   local xml_content
@@ -141,24 +143,31 @@ download_uniprot() {
 download_taxdmp() {
   log "Starting the download of the taxdmp file."
 
-  # Check if our self-hosted version is available or not using the GitHub API
-  local latest_release_url="https://api.github.com/repos/unipept/unipept-database/releases/latest"
-  local taxon_release_asset_re="unipept/unipept-database/releases/download/[^/]+/taxdmp_v2.zip"
+  local taxon_url
 
-  # Temporary disable the pipefail check (cause grep can exit with code 1 if nothing is found).
-  set +eo pipefail
-  local self_hosted_url
-  self_hosted_url=$(curl -s "$latest_release_url" | grep -E -o "$taxon_release_asset_re")
-  set -eo pipefail
-
-
-  if [ "$self_hosted_url" ]
+  if [ -n "${UNIPEPT_TAXDMP_URL:-}" ]
   then
-    log "Using self-hosted taxon dump."
-    local taxon_url="https://github.com/$self_hosted_url"
+    log "Using the taxon dump at UNIPEPT_TAXDMP_URL."
+    taxon_url="$UNIPEPT_TAXDMP_URL"
   else
-    log "Using fallback taxon dump."
-    local taxon_url="https://ftp.ncbi.nlm.nih.gov/pub/taxonomy/taxdmp.zip"
+    # Check if our self-hosted version is available or not using the GitHub API
+    local latest_release_url="https://api.github.com/repos/unipept/unipept-database/releases/latest"
+    local taxon_release_asset_re="unipept/unipept-database/releases/download/[^/]+/taxdmp_v2.zip"
+
+    # Temporary disable the pipefail check (cause grep can exit with code 1 if nothing is found).
+    set +eo pipefail
+    local self_hosted_url
+    self_hosted_url=$(curl -s "$latest_release_url" | grep -E -o "$taxon_release_asset_re")
+    set -eo pipefail
+
+    if [ "$self_hosted_url" ]
+    then
+      log "Using self-hosted taxon dump."
+      taxon_url="https://github.com/$self_hosted_url"
+    else
+      log "Using fallback taxon dump."
+      taxon_url="https://ftp.ncbi.nlm.nih.gov/pub/taxonomy/taxdmp.zip"
+    fi
   fi
 
   # shellcheck disable=SC2153 # TEMP_DIR is set by the build script
@@ -256,8 +265,8 @@ fetch_ec_numbers() {
 
 	log "Started creating EC numbers."
 
-	local ec_class_url="https://ftp.expasy.org/databases/enzyme/enzclass.txt"
-  local ec_number_url="https://ftp.expasy.org/databases/enzyme/enzyme.dat"
+	local ec_class_url="${UNIPEPT_EC_CLASS_URL:-https://ftp.expasy.org/databases/enzyme/enzclass.txt}"
+  local ec_number_url="${UNIPEPT_EC_NUMBER_URL:-https://ftp.expasy.org/databases/enzyme/enzyme.dat}"
 
 	mkdir -p "$output_dir"
 	{
@@ -300,7 +309,7 @@ fetch_go_terms() {
 
 	log "Started creating GO terms."
 
-	local go_term_url="http://geneontology.org/ontology/go-basic.obo"
+	local go_term_url="${UNIPEPT_GO_TERM_URL:-http://geneontology.org/ontology/go-basic.obo}"
 
 	mkdir -p "$output_dir"
 	curl -Ls "$go_term_url" | $CMD_AWK '
@@ -355,7 +364,7 @@ fetch_interpro_entries() {
 
 	log "Started creating InterPro Entries."
 
-	local interpro_url="http://ftp.ebi.ac.uk/pub/databases/interpro/current_release/entry.list"
+	local interpro_url="${UNIPEPT_INTERPRO_URL:-http://ftp.ebi.ac.uk/pub/databases/interpro/current_release/entry.list}"
 
 	mkdir -p "$output_dir"
 	curl -s "$interpro_url" | grep '^IPR' | cat -n | sed 's/^ *//' | $CMD_LZ4 - > "$output_dir/interpro_entries.tsv.lz4"
@@ -386,7 +395,7 @@ fetch_reference_proteomes() {
 
   log "Started creating UniProt Reference Proteomes."
 
-  local reference_proteome_url="https://rest.uniprot.org/proteomes/stream?fields=upid,organism_id,protein_count&format=tsv&query=reference:true"
+  local reference_proteome_url="${UNIPEPT_REFERENCE_PROTEOME_URL:-https://rest.uniprot.org/proteomes/stream?fields=upid,organism_id,protein_count&format=tsv&query=reference:true}"
 
   mkdir -p "$output_dir"
   curl -s "$reference_proteome_url" | tail -n +2 | sort -k1,1 | $CMD_LZ4 - > "$output_dir/reference_proteomes.tsv.lz4"
