@@ -1,13 +1,27 @@
 {
+  "settings": {
+    "index": {
+      "number_of_replicas": 0,
+      "max_result_window": 10000
+    }
+  },
   "mappings": {
     "properties": {
       "uniprot_accession_number": {
         "type": "keyword"
       },
-      "version": { "type": "integer" },
-      "taxon_id": { "type": "integer" },
-      "type": { "type": "keyword" },
-      "name": { "type": "text" },
+      "version": {
+        "type": "integer"
+      },
+      "taxon_id": {
+        "type": "integer"
+      },
+      "type": {
+        "type": "keyword"
+      },
+      "name": {
+        "type": "text"
+      },
       "sequence": {
         "type": "text",
         "index": false
