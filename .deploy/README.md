@@ -10,6 +10,24 @@ pipeline itself lives in `pipelines/` and the loader in `opensearch/`.
 - `verify.sh` checks a finished database against the files the API needs. Both of the others run
   it before they put anything in place; run it by hand to check a database that is already there.
 
+## Preparing a host
+
+```sh
+sudo .deploy/opensearch/install.sh --heap 8g
+```
+
+Installs and configures the OpenSearch instance this host loads its proteins into, and starts it.
+Run once per host, as root. It pins a version and holds it, so an unrelated `apt-get upgrade`
+cannot move a host onto a release nothing has been tested against.
+
+The instance binds to localhost and runs with the security plugin off, which is what the loader
+and the API both expect. That pair is only safe while nothing outside the host can reach it, so
+change the bind address only together with turning the security plugin back on.
+
+The heap is the one number a host decides, and it defaults low. This host also serves the API,
+which holds the index resident, and `unipept-api/.deploy` sizes that against the memory it can
+see: heap taken here is memory that sizing does not know about.
+
 ## Configuration
 
 Copy `deploy.conf.example` to `deploy.conf` and edit it. A flag wins over that file, and the file
