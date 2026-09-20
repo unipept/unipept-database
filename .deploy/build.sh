@@ -30,11 +30,15 @@ REPLACE=false
 
 read_conf
 
-# sa-builder settings, below read_conf because they are not a host's to change: the release build
-# in unipept-index uses the same ones, and an index built with other values still looks valid to
-# the API.
+# sa-builder settings, below read_conf because they are not a host's to change: an index built with
+# other values still looks valid to the API, so a mistake here is only visible in what it serves.
 SA_SPARSENESS=2
 SA_ALGORITHM=lib-sais
+
+# The k-mer table is an accelerator the API loads when it is there. Without it every search reads
+# the whole suffix array. It is a dense bucket array, about 127 MB at k=5 whatever the database
+# size.
+SA_KMER_SIZE=5
 
 usage() {
     cat <<'USAGE'
@@ -100,6 +104,8 @@ build_suffix_array() {
         --output-sa "${build_dir}/suffix-array/sa.bin" \
         --output-proteins "${build_dir}/suffix-array/proteins.bin" \
         --output-mapping "${build_dir}/suffix-array/mapping.bin" \
+        --output-kmer-table "${build_dir}/suffix-array/kmer_table.bin" \
+        --kmer-size "$SA_KMER_SIZE" \
         --sparseness-factor "$SA_SPARSENESS" \
         --construction-algorithm "$SA_ALGORITHM" \
         --compress-sa
