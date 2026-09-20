@@ -190,6 +190,9 @@ load_opensearch "$STAGING_DIR"
 # After the load, so a directory that carries this file is one whose proteins are in OpenSearch.
 write_build_info "${STAGING_DIR}/suffix-array" "$UNIPROT_VERSION" "$DATABASE_COMMIT" "$INDEX_COMMIT"
 
+# Before the swap, so a build that produced an incomplete layout never replaces a whole one.
+check_index "${STAGING_DIR}/suffix-array" || die "the build is missing files the API needs."
+
 swap_into_place "$STAGING_DIR" "$BUILD_DIR"
 
 log "The database is ready in ${BUILD_DIR}."

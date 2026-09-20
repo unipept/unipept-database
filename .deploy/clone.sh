@@ -110,12 +110,14 @@ copy_database() {
 # What the API needs, and the table clone.sh itself reads. A copy that stopped part way leaves
 # files that exist and are short, so the check is on content.
 check_database() {
-    local dir="$1" remote_dir="$2" file
+    local dir="$1" remote_dir="$2"
 
-    for file in suffix-array/sa.bin suffix-array/proteins.bin suffix-array/mapping.bin \
-        suffix-array/.version tables/uniprot_entries.tsv.lz4; do
-        [ -s "${dir}/${file}" ] || die "the copied database has no ${file}"
-    done
+    check_index "${dir}/suffix-array" || die "the copy is missing files the API needs."
+    check_index_version "${dir}/suffix-array" || die "the copy is not the version it is named after."
+
+    # Outside the index, so not in INDEX_FILES: it is what this script feeds to OpenSearch.
+    [ -s "${dir}/tables/uniprot_entries.tsv.lz4" ] \
+        || die "the copied database has no tables/uniprot_entries.tsv.lz4"
 
     # The k-mer table is an accelerator the API runs without, so a database built before build.sh
     # wrote one has none and is still worth cloning. The remote decides: one the remote has and the
@@ -123,8 +125,6 @@ check_database() {
     if remote_sh "[ -s '${remote_dir}/suffix-array/kmer_table.bin' ]"; then
         [ -s "${dir}/suffix-array/kmer_table.bin" ] \
             || die "the remote has a k-mer table and the copy does not"
-    else
-        log "The remote database has no k-mer table. Searches read the whole suffix array."
     fi
 }
 
