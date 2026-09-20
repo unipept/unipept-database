@@ -25,7 +25,12 @@ impl Consumer {
                     String::from_utf8_lossy(data_slice).split('\n').map(|x| x.to_string()).collect();
 
                 let entry = UniProtDATEntry::from_lines(&lines).context("Error parsing DAT entry");
-                sender.send(entry).context("Error sending parsed DAT entry to receiver channel").unwrap();
+
+                // A closed channel means the reader stopped, for example on an earlier entry it
+                // could not parse. Stopping here leaves that error as the one the run reports.
+                if sender.send(entry).is_err() {
+                    break;
+                }
             }
         }));
     }
