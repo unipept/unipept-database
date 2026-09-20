@@ -1,0 +1,46 @@
+# RustSec advisory check over Cargo.lock. Separate from ci.yml because of the schedule: an advisory
+# is published against code that has not changed, so a push-only check finds it whenever the next
+# push happens to be. Not the same as Dependabot, which proposes newer versions; this reads the
+# lockfile as it resolves today.
+#
+# Path-filtered, so never make it a required check: a check that never starts blocks a merge.
+name: Audit
+
+on:
+  schedule:
+    # Weekly, independent of Dependabot's monthly run.
+    - cron: '0 7 * * 1'
+  push:
+    branches: [master]
+    paths:
+      - '**/Cargo.toml'
+      - '**/Cargo.lock'
+      - '.github/workflows/audit.yml'
+  pull_request:
+    paths:
+      - '**/Cargo.toml'
+      - '**/Cargo.lock'
+      - '.github/workflows/audit.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  # The action annotates the run with each advisory, and opens an issue for one found by the
+  # scheduled run, where there is no pull request to annotate.
+  checks: write
+  issues: write
+
+jobs:
+  audit:
+    name: cargo audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Audit dependencies
+        uses: rustsec/audit-check@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
