@@ -41,6 +41,22 @@ jobs:
       - name: Run the pipeline suite
         run: env --default-signal=PIPE tests/run-tests.sh lz
 
+  shell:
+    # The helpers in pipelines/lib/common.sh. No container.
+    name: Shell library suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Install gawk and lz4
+        run: sudo apt-get update && sudo apt-get install -y gawk lz4
+
+      - name: Run the shell library suite
+        run: tests/run-tests.sh shell
+
   opensearch:
     # opensearch/load.sh against a real OpenSearch in a container.
     name: OpenSearch suite
