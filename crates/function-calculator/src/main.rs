@@ -1,4 +1,4 @@
-use std::{collections::HashMap, io::BufRead, path::PathBuf};
+use std::{collections::BTreeMap, io::BufRead, path::PathBuf};
 
 use anyhow::{Context, Result};
 use clap::Parser;
@@ -17,7 +17,7 @@ fn main() -> Result<()> {
     let mut num_annotated_ip: u32 = 0;
     let mut done: u64 = 0;
 
-    let mut m: HashMap<String, u32> = HashMap::new();
+    let mut m: BTreeMap<String, u32> = BTreeMap::new();
 
     for line in reader.lines() {
         let line = line.context("Error reading input file")?;
@@ -90,7 +90,7 @@ fn write_entry(
     num_go: u32,
     num_ec: u32,
     num_ip: u32,
-    m: &HashMap<String, u32>
+    m: &BTreeMap<String, u32>
 ) {
     let data = m.iter().map(|(key, value)| format!(r#""{key}":{value}"#)).collect::<Vec<String>>().join(",");
 
