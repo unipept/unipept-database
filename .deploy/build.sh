@@ -110,14 +110,12 @@ load_opensearch() {
 
 parse_arguments "$@"
 
+# What this script runs itself. The pipeline checks its own tools in the seconds after it starts,
+# so they are not repeated here; the loader's are, because it runs last.
 checkdep git
-checkdep curl
-checkdep lz4
 checkdep cargo "the Rust toolchain"
-checkdep uuidgen
-checkdep pv
-checkdep pigz
 checkdep cmake
+check_loader_deps
 
 # The checkout this script belongs to is what builds the database, so it is what build-info.txt
 # records. A deploy from an archive rather than a clone has no commit to name.

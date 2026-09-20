@@ -101,9 +101,9 @@ load_opensearch() {
 
 parse_arguments "$@"
 
-checkdep lz4
 checkdep ssh
 checkdep scp
+check_loader_deps
 
 [ -n "$UNIPROT_VERSION" ] || UNIPROT_VERSION=$(remote_latest_version)
 log "Cloning UniProtKB ${UNIPROT_VERSION} from ${REMOTE_ADDRESS}."

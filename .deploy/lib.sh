@@ -39,6 +39,16 @@ die() {
     exit 2
 }
 
+# What opensearch/load.sh needs. Checked before the work starts: the load is the last step of a
+# build that takes days, and load.sh only reports a missing package once it is reached.
+check_loader_deps() {
+    checkdep lz4
+    checkdep pv
+    checkdep python3
+    python3 -c "import requests" > /dev/null 2>&1 \
+        || die "the OpenSearch loader requires the requests package: pip install -r ${DEPLOY_DIR}/../opensearch/requirements.txt"
+}
+
 # The UniProtKB version the pipeline wrote beside the tables, as YYYY-MM. The file holds YYYY.MM,
 # which is the form the API reads; the directory name has always used dashes.
 uniprot_version_from() {
