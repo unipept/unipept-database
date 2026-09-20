@@ -3,9 +3,9 @@
 # Builds a Unipept database on this host: the tables, the suffix array, the datastore layout the
 # API reads, and the proteins in OpenSearch.
 #
-#   .deploy/build.sh [--output-dir DIR] [--database-sources LIST] [--replace]
+#   .deploy/build.sh [--output-dir DIR] [--scratch-dir DIR] [--database-sources LIST] [--replace]
 #
-# Settings come from the environment, then .deploy/build.conf, then the defaults in lib.sh.
+# A flag wins over .deploy/deploy.conf, which wins over the defaults below and in lib.sh.
 
 set -eo pipefail
 set -o errtrace
@@ -17,19 +17,33 @@ source "${HERE}/lib.sh"
 
 trap errorAndExit ERR
 
-# sa-builder settings. Not configurable: the release build in unipept-index uses the same ones, and
-# an index built with other values still looks valid to the API.
-SA_SPARSENESS=2
-SA_ALGORITHM=lib-sais
+# The settings only this script has. lib.sh holds the two both scripts have.
+
+# Where the repositories are cloned and built. The tables are not built here: they go to a staging
+# directory under OUTPUT_DIR, which is the volume that has to hold the whole build.
+SCRATCH_DIR="$HOME"
+
+DATABASE_SOURCES=swissprot,trembl
+
+INDEX_REPO=https://github.com/unipept/unipept-index.git
 
 # Whether a database of the version this build turns out to be may be replaced. Off, a build whose
 # version already exists stops and keeps its own result, rather than removing what the API serves.
 REPLACE=false
 
+read_conf
+
+# sa-builder settings, below read_conf because they are not a host's to change: the release build
+# in unipept-index uses the same ones, and an index built with other values still looks valid to
+# the API.
+SA_SPARSENESS=2
+SA_ALGORITHM=lib-sais
+
 parse_arguments() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --output-dir) need_value "$1" "${2-}"; OUTPUT_DIR="$2"; shift 2 ;;
+            --scratch-dir) need_value "$1" "${2-}"; SCRATCH_DIR="$2"; shift 2 ;;
             --database-sources) need_value "$1" "${2-}"; DATABASE_SOURCES="$2"; shift 2 ;;
             --opensearch-url) need_value "$1" "${2-}"; OPENSEARCH_URL="$2"; shift 2 ;;
             --replace) REPLACE=true; shift ;;
@@ -111,6 +125,7 @@ load_opensearch() {
 parse_arguments "$@"
 
 [ -n "$OUTPUT_DIR" ] || die "--output-dir requires a value."
+[ -n "$SCRATCH_DIR" ] || die "--scratch-dir requires a value."
 
 # What this script runs itself. The pipeline checks its own tools in the seconds after it starts,
 # so they are not repeated here; the loader's are, because it runs last.

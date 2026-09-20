@@ -10,13 +10,17 @@ pipeline itself lives in `pipelines/` and the loader in `opensearch/`.
 
 ## Configuration
 
-Copy `build.conf.example` to `build.conf` and edit it. A setting already in the environment wins
-over the file, and the file wins over the defaults in `lib.sh`:
+Copy `deploy.conf.example` to `deploy.conf` and edit it. A flag wins over that file, and the file
+wins over the defaults in `lib.sh` for the settings both scripts have, and in `build.sh` or
+`clone.sh` for the settings one of them has:
 
 ```sh
-cp .deploy/build.conf.example .deploy/build.conf
-OUTPUT_DIR=/srv/data .deploy/build.sh          # the environment wins
+cp .deploy/deploy.conf.example .deploy/deploy.conf
+.deploy/build.sh --output-dir /srv/data        # the flag wins
 ```
+
+`deploy.conf.example` lists only what a host has to decide. It holds no defaults, so it cannot
+disagree with the scripts.
 
 ## Running a build
 

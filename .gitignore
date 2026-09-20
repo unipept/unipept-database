@@ -24,4 +24,4 @@ unipept-temp/
 __pycache__/
 
 # The deploy configuration of a host.
-.deploy/build.conf
+.deploy/deploy.conf

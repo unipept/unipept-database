@@ -10,29 +10,35 @@ DEPLOY_DIR="${BASH_SOURCE%/*}"
 # shellcheck source=../pipelines/lib/common.sh
 source "${DEPLOY_DIR}/../pipelines/lib/common.sh"
 
-# Read build.conf first, so what it sets wins over the defaults below, and anything already in the
-# environment wins over both. Every assignment here and there uses := for that reason.
-: "${UNIPEPT_BUILD_CONF:=${DEPLOY_DIR}/build.conf}"
-# shellcheck source=/dev/null
-[ -f "$UNIPEPT_BUILD_CONF" ] && source "$UNIPEPT_BUILD_CONF"
+################################################################################
+#                                   Settings                                   #
+################################################################################
 
-# Where the finished database is written, one directory per UniProtKB version.
-: "${OUTPUT_DIR:=/mnt/data}"
-# Where the repositories are cloned and the tables are built.
-: "${SCRATCH_DIR:=$HOME}"
-: "${DATABASE_SOURCES:=swissprot,trembl}"
+# The settings both scripts have. Each script adds the ones only it uses, and calls read_conf once
+# all of them have a default.
 
-# The host clone.sh copies a finished database from.
-: "${REMOTE_ADDRESS:=}"
-: "${REMOTE_PORT:=4840}"
-: "${REMOTE_USER:=unipept}"
-: "${REMOTE_OUTPUT_DIR:=/mnt/data}"
-: "${LOCAL_SSH_KEY:=}"
+# Where the finished databases are written, one directory per UniProtKB version.
+# shellcheck disable=SC2034 # read by the scripts that source this file
+OUTPUT_DIR=/mnt/data
 
 # The OpenSearch instance the proteins are loaded into.
-: "${OPENSEARCH_URL:=http://localhost:9200}"
+# shellcheck disable=SC2034 # read by the scripts that source this file
+OPENSEARCH_URL=http://localhost:9200
 
-: "${INDEX_REPO:=https://github.com/unipept/unipept-index.git}"
+# What this host decides. Read after the defaults, so it wins over them, and before the arguments
+# are parsed, so a flag wins over both.
+DEPLOY_CONF="${DEPLOY_DIR}/deploy.conf"
+
+read_conf() {
+    if [ -f "$DEPLOY_CONF" ]; then
+        # shellcheck source=/dev/null
+        source "$DEPLOY_CONF"
+    fi
+}
+
+################################################################################
+#                                   Helpers                                    #
+################################################################################
 
 die() {
     echo "Error: $*" 1>&2
@@ -99,6 +105,6 @@ built: $(date -u +'%F %T UTC')
 uniprot: ${uniprot_version}
 unipept-database: ${database_commit}
 unipept-index: ${index_commit}
-sources: ${DATABASE_SOURCES}
+sources: ${DATABASE_SOURCES:-none}
 INFO
 }

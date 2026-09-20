@@ -5,7 +5,7 @@
 #
 #   .deploy/clone.sh --remote-address HOST --local-ssh-key KEY [--uniprot-version YYYY-MM]
 #
-# Settings come from the environment, then .deploy/build.conf, then the defaults in lib.sh.
+# A flag wins over .deploy/deploy.conf, which wins over the defaults below and in lib.sh.
 
 set -eo pipefail
 set -o errtrace
@@ -17,11 +17,22 @@ source "${HERE}/lib.sh"
 
 trap errorAndExit ERR
 
+# The settings only this script has. lib.sh holds the two both scripts have.
+
+# The host a finished database is copied from.
+REMOTE_ADDRESS=
+REMOTE_PORT=4840
+REMOTE_USER=unipept
+REMOTE_OUTPUT_DIR=/mnt/data
+LOCAL_SSH_KEY=
+
 # Which database to copy. Empty means the newest one the remote host has.
-UNIPROT_VERSION=""
+UNIPROT_VERSION=
 
 # Whether a database of that version already here may be replaced.
 REPLACE=false
+
+read_conf
 
 parse_arguments() {
     while [[ $# -gt 0 ]]; do
