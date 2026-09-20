@@ -77,7 +77,7 @@ generate_tables() {
         --temp-dir "${build_dir}/temp"
 
     local table
-    for table in uniprot_entries taxons lineages interpro_entries go_terms ec_numbers proteomes; do
+    for table in "${PIPELINE_TABLES[@]}"; do
         [ -s "${build_dir}/tables/${table}.tsv.lz4" ] || die "the pipeline wrote no ${table}.tsv.lz4"
     done
 
@@ -115,7 +115,7 @@ fill_datastore() {
     mkdir -p "$datastore"
 
     local table
-    for table in taxons lineages interpro_entries go_terms ec_numbers proteomes; do
+    for table in "${DATASTORE_TABLES[@]}"; do
         lz4cat "${build_dir}/tables/${table}.tsv.lz4" > "${datastore}/${table}.tsv"
         rm "${build_dir}/tables/${table}.tsv.lz4"
     done

@@ -40,6 +40,13 @@ read_conf() {
 #                                   Helpers                                    #
 ################################################################################
 
+# What the pipeline writes. uniprot_entries feeds the suffix array and OpenSearch; the other six
+# are the datastore the API reads.
+# shellcheck disable=SC2034 # read by the scripts that source this file
+DATASTORE_TABLES=(taxons lineages interpro_entries go_terms ec_numbers proteomes)
+# shellcheck disable=SC2034 # read by the scripts that source this file
+PIPELINE_TABLES=(uniprot_entries "${DATASTORE_TABLES[@]}")
+
 die() {
     echo "Error: $*" 1>&2
     exit 2
