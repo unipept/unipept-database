@@ -3,6 +3,8 @@
 # Prepares a host to hold the proteins: installs OpenSearch, configures it for the one instance
 # this host runs, and starts it. Run once per host, as root. Run it with --help for the options.
 #
+# For the Ubuntu 24.04 LTS the servers run: it installs through apt and starts through systemd.
+#
 # It loads nothing. opensearch/load.sh does that, here and after every build.
 #
 # Flow:
@@ -120,8 +122,11 @@ install_opensearch() {
 # One instance, reachable from this host only, with the security plugin off. That combination is
 # what the loader and the API both expect, and it is only safe while the bind address is local.
 write_config() {
-    if [ -f "$CONFIG_FILE" ] && ! grep -q '^# Written by unipept-database' "$CONFIG_FILE"; then
-        cp -n "$CONFIG_FILE" "${CONFIG_FILE}.dist"
+    # Explicitly rather than with cp -n, which coreutils 9.4 on Ubuntu 24.04 warns about on every
+    # run, and which says nothing about whether it copied.
+    if [ -f "$CONFIG_FILE" ] && ! grep -q '^# Written by unipept-database' "$CONFIG_FILE" \
+        && [ ! -e "${CONFIG_FILE}.dist" ]; then
+        cp "$CONFIG_FILE" "${CONFIG_FILE}.dist"
         log "Kept the packaged configuration as ${CONFIG_FILE}.dist."
     fi
 
