@@ -1,11 +1,7 @@
 #!/usr/bin/env bash
 #
 # Builds a Unipept database on this host: the tables, the suffix array, the datastore layout the
-# API reads, and the proteins in OpenSearch.
-#
-#   .deploy/build.sh [--output-dir DIR] [--scratch-dir DIR] [--database-sources LIST] [--replace]
-#
-# A flag wins over .deploy/deploy.conf, which wins over the defaults below and in lib.sh.
+# API reads, and the proteins in OpenSearch. Run it with --help for the options.
 
 set -eo pipefail
 set -o errtrace
@@ -39,6 +35,24 @@ read_conf
 SA_SPARSENESS=2
 SA_ALGORITHM=lib-sais
 
+usage() {
+    cat <<'USAGE'
+Builds a Unipept database on this host: the tables, the suffix array, the datastore layout the API
+reads, and the proteins in OpenSearch.
+
+  .deploy/build.sh [OPTIONS]
+
+  --output-dir DIR         where the finished databases are written
+  --scratch-dir DIR        where the repositories are cloned and built
+  --database-sources LIST  swissprot, trembl, or both, comma separated
+  --opensearch-url URL     the instance the proteins are loaded into
+  --replace                replace a database of the version this build turns out to be
+  --help                   print this message
+
+A flag wins over .deploy/deploy.conf, which wins over the defaults in lib.sh and in this script.
+USAGE
+}
+
 parse_arguments() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -47,7 +61,7 @@ parse_arguments() {
             --database-sources) need_value "$1" "${2-}"; DATABASE_SOURCES="$2"; shift 2 ;;
             --opensearch-url) need_value "$1" "${2-}"; OPENSEARCH_URL="$2"; shift 2 ;;
             --replace) REPLACE=true; shift ;;
-            --help) sed -n '2,8p' "${BASH_SOURCE[0]}" | cut -c3-; exit 0 ;;
+            --help) usage; exit 0 ;;
             *) die "unknown option '$1'" ;;
         esac
     done

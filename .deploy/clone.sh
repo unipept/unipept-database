@@ -1,11 +1,8 @@
 #!/usr/bin/env bash
 #
 # Copies a finished database from another host and loads its proteins into this host's OpenSearch.
-# The build itself runs once, on one host; every other host clones the result.
-#
-#   .deploy/clone.sh --remote-address HOST --local-ssh-key KEY [--uniprot-version YYYY-MM]
-#
-# A flag wins over .deploy/deploy.conf, which wins over the defaults below and in lib.sh.
+# The build itself runs once, on one host; every other host clones the result. Run it with --help
+# for the options.
 
 set -eo pipefail
 set -o errtrace
@@ -34,6 +31,27 @@ REPLACE=false
 
 read_conf
 
+usage() {
+    cat <<'USAGE'
+Copies a finished database from another host and loads its proteins into this host's OpenSearch.
+
+  .deploy/clone.sh --remote-address HOST --local-ssh-key KEY [OPTIONS]
+
+  --remote-address HOST    the host to copy from, required
+  --local-ssh-key KEY      the private key to reach it with, required
+  --remote-port PORT       its SSH port
+  --remote-user USER       the user to connect as
+  --remote-output-dir DIR  where it keeps its databases
+  --uniprot-version YYYY-MM  which database to copy, default the newest it has
+  --output-dir DIR         where the copy is written
+  --opensearch-url URL     the instance the proteins are loaded into
+  --replace                replace a database of that version already here
+  --help                   print this message
+
+A flag wins over .deploy/deploy.conf, which wins over the defaults in lib.sh and in this script.
+USAGE
+}
+
 parse_arguments() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -46,7 +64,7 @@ parse_arguments() {
             --opensearch-url) need_value "$1" "${2-}"; OPENSEARCH_URL="$2"; shift 2 ;;
             --uniprot-version) need_value "$1" "${2-}"; UNIPROT_VERSION="$2"; shift 2 ;;
             --replace) REPLACE=true; shift ;;
-            --help) sed -n '2,8p' "${BASH_SOURCE[0]}" | cut -c3-; exit 0 ;;
+            --help) usage; exit 0 ;;
             *) die "unknown option '$1'" ;;
         esac
     done
