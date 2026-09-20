@@ -51,11 +51,8 @@ copy_database() {
 load_opensearch() {
     local build_dir="$1"
 
-    DATABASE_COMMIT=$(clone_repo "$DATABASE_REPO" "${SCRATCH_DIR:?}/unipept-database")
-    log "Cloned unipept-database at ${DATABASE_COMMIT}."
-
     log "Started loading the proteins into OpenSearch."
-    "${SCRATCH_DIR:?}/unipept-database/opensearch/load.sh" \
+    "${HERE}/../opensearch/load.sh" \
         --opensearch-url "$OPENSEARCH_URL" \
         --uniprot-entries "${build_dir}/tables/uniprot_entries.tsv.lz4"
     log "Finished loading the proteins into OpenSearch."
@@ -63,7 +60,6 @@ load_opensearch() {
 
 parse_arguments "$@"
 
-checkdep git
 checkdep curl
 checkdep lz4
 checkdep ssh

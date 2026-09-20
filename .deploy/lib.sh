@@ -32,7 +32,6 @@ source "${DEPLOY_DIR}/../pipelines/lib/common.sh"
 # The OpenSearch instance the proteins are loaded into.
 : "${OPENSEARCH_URL:=http://localhost:9200}"
 
-: "${DATABASE_REPO:=https://github.com/unipept/unipept-database.git}"
 : "${INDEX_REPO:=https://github.com/unipept/unipept-index.git}"
 
 die() {

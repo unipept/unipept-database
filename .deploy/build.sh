@@ -34,14 +34,11 @@ parse_arguments() {
     done
 }
 
-# The tables, built from the pipeline in a fresh clone of unipept-database.
+# The tables, built from the pipeline in this checkout.
 generate_tables() {
     local build_dir="$1"
 
-    DATABASE_COMMIT=$(clone_repo "$DATABASE_REPO" "${SCRATCH_DIR:?}/unipept-database")
-    log "Cloned unipept-database at ${DATABASE_COMMIT}."
-
-    "${SCRATCH_DIR:?}/unipept-database/pipelines/suffix-array/build.sh" \
+    "${HERE}/../pipelines/suffix-array/build.sh" \
         --database-sources "$DATABASE_SOURCES" \
         --output-dir "${build_dir}/tables" \
         --temp-dir "${build_dir}/temp"
@@ -56,17 +53,15 @@ generate_tables() {
 
 # The suffix array the API searches, built from a fresh clone of unipept-index.
 build_suffix_array() {
-    local build_dir="$1"
+    local build_dir="$1" index_dir="$2"
 
-    INDEX_COMMIT=$(clone_repo "$INDEX_REPO" "${SCRATCH_DIR:?}/unipept-index")
-    log "Cloned unipept-index at ${INDEX_COMMIT}."
-    cargo build --release --quiet --manifest-path "${SCRATCH_DIR:?}/unipept-index/Cargo.toml"
+    cargo build --release --quiet --manifest-path "${index_dir}/Cargo.toml"
 
     # The four columns sa-builder reads: accession, taxon, sequence, annotations.
     lz4cat "${build_dir}/tables/uniprot_entries.tsv.lz4" | cut -f2,4,7,8 > "${build_dir}/suffix-array/proteins.tsv"
 
     log "Started building the suffix array."
-    "${SCRATCH_DIR:?}/unipept-index/target/release/sa-builder" \
+    "${index_dir}/target/release/sa-builder" \
         --database-file "${build_dir}/suffix-array/proteins.tsv" \
         --output-sa "${build_dir}/suffix-array/sa.bin" \
         --output-proteins "${build_dir}/suffix-array/proteins.bin" \
@@ -92,7 +87,7 @@ fill_datastore() {
         rm "${build_dir}/tables/${table}.tsv.lz4"
     done
 
-    cp "${SCRATCH_DIR:?}/unipept-database/assets/sampledata.json" "${datastore}/sampledata.json"
+    cp "${HERE}/../assets/sampledata.json" "${datastore}/sampledata.json"
     cp "${build_dir}/tables/.version" "${build_dir}/suffix-array/.version"
     log "Filled the datastore."
 }
@@ -102,7 +97,7 @@ load_opensearch() {
     local build_dir="$1"
 
     log "Started loading the proteins into OpenSearch."
-    "${SCRATCH_DIR:?}/unipept-database/opensearch/load.sh" \
+    "${HERE}/../opensearch/load.sh" \
         --opensearch-url "$OPENSEARCH_URL" \
         --uniprot-entries "${build_dir}/tables/uniprot_entries.tsv.lz4"
     log "Finished loading the proteins into OpenSearch."
@@ -119,6 +114,10 @@ checkdep pv
 checkdep pigz
 checkdep cmake
 
+# The checkout this script belongs to is what builds the database, so it is what build-info.txt
+# records. A deploy from an archive rather than a clone has no commit to name.
+DATABASE_COMMIT=$(git -C "${HERE}/.." rev-parse HEAD 2>/dev/null || echo unknown)
+
 UNIPROT_VERSION=$(latest_uniprot_version)
 log "UniProtKB version is ${UNIPROT_VERSION}."
 
@@ -127,7 +126,12 @@ rm -rf "${BUILD_DIR:?}"
 mkdir -p "${BUILD_DIR}"/{suffix-array,tables,temp}
 
 generate_tables "$BUILD_DIR"
-build_suffix_array "$BUILD_DIR"
+
+INDEX_DIR="${SCRATCH_DIR:?}/unipept-index"
+INDEX_COMMIT=$(clone_repo "$INDEX_REPO" "$INDEX_DIR")
+log "Cloned unipept-index at ${INDEX_COMMIT}."
+
+build_suffix_array "$BUILD_DIR" "$INDEX_DIR"
 fill_datastore "$BUILD_DIR"
 write_build_info "${BUILD_DIR}/suffix-array" "$UNIPROT_VERSION" "$DATABASE_COMMIT" "$INDEX_COMMIT"
 load_opensearch "$BUILD_DIR"
