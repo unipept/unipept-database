@@ -93,8 +93,7 @@ remote_latest_version() {
 }
 
 copy_database() {
-    local staging="$1" version="$2"
-    local remote_dir="${REMOTE_OUTPUT_DIR}/uniprot-${version}"
+    local staging="$1" remote_dir="$2"
 
     remote_sh "[ -d '${remote_dir}' ]" || die "the remote host has no ${remote_dir}"
 
@@ -111,12 +110,22 @@ copy_database() {
 # What the API needs, and the table clone.sh itself reads. A copy that stopped part way leaves
 # files that exist and are short, so the check is on content.
 check_database() {
-    local dir="$1" file
+    local dir="$1" remote_dir="$2" file
 
     for file in suffix-array/sa.bin suffix-array/proteins.bin suffix-array/mapping.bin \
         suffix-array/.version tables/uniprot_entries.tsv.lz4; do
         [ -s "${dir}/${file}" ] || die "the copied database has no ${file}"
     done
+
+    # The k-mer table is an accelerator the API runs without, so a database built before build.sh
+    # wrote one has none and is still worth cloning. The remote decides: one the remote has and the
+    # copy does not is a copy that lost it.
+    if remote_sh "[ -s '${remote_dir}/suffix-array/kmer_table.bin' ]"; then
+        [ -s "${dir}/suffix-array/kmer_table.bin" ] \
+            || die "the remote has a k-mer table and the copy does not"
+    else
+        log "The remote database has no k-mer table. Searches read the whole suffix array."
+    fi
 }
 
 load_opensearch() {
@@ -148,10 +157,11 @@ fi
 # Copied here and renamed into place at the end, so a copy that fails leaves the database this
 # host already serves untouched.
 STAGING_DIR="${OUTPUT_DIR}/.clone"
-copy_database "$STAGING_DIR" "$UNIPROT_VERSION"
+REMOTE_DIR="${REMOTE_OUTPUT_DIR}/uniprot-${UNIPROT_VERSION}"
+copy_database "$STAGING_DIR" "$REMOTE_DIR"
 
 COPIED_DIR="${STAGING_DIR}/uniprot-${UNIPROT_VERSION}"
-check_database "$COPIED_DIR"
+check_database "$COPIED_DIR" "$REMOTE_DIR"
 
 load_opensearch "$COPIED_DIR"
 
