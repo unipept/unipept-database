@@ -47,8 +47,15 @@ DATASTORE_TABLES=(taxons lineages interpro_entries go_terms ec_numbers proteomes
 # shellcheck disable=SC2034 # read by the scripts that source this file
 PIPELINE_TABLES=(uniprot_entries "${DATASTORE_TABLES[@]}")
 
+# The script's own process, captured before any subshell can shadow it. A die inside a command
+# substitution only ends that subshell, and the caller then reports the same failure a second time
+# through the ERR trap, so die signals the script itself. USR1 rather than TERM, so a real
+# interrupt still reads as one. Each script arms the trap that answers it.
+readonly MAIN_PID=$$
+
 die() {
     echo "Error: $*" 1>&2
+    [ "$$" = "$BASHPID" ] || kill -USR1 "$MAIN_PID" 2>/dev/null
     exit 2
 }
 
