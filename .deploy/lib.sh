@@ -47,6 +47,28 @@ DATASTORE_TABLES=(taxons lineages interpro_entries go_terms ec_numbers proteomes
 # shellcheck disable=SC2034 # read by the scripts that source this file
 PIPELINE_TABLES=(uniprot_entries "${DATASTORE_TABLES[@]}")
 
+# What the API needs under the directory it is pointed at, relative to it. The same list as
+# INDEX_FILES in unipept-api/.deploy/lib.sh: that repository starts a service against this layout
+# and this one produces it, so the two have to agree. A change here is a change there.
+readonly INDEX_FILES="
+.version
+sa.bin
+proteins.bin
+mapping.bin
+datastore/sampledata.json
+datastore/ec_numbers.tsv
+datastore/go_terms.tsv
+datastore/interpro_entries.tsv
+datastore/proteomes.tsv
+datastore/lineages.tsv
+datastore/taxons.tsv
+"
+
+# What the API opens when it is there and runs without. Searches are slower without it.
+readonly OPTIONAL_INDEX_FILES="
+kmer_table.bin
+"
+
 # The script's own process, captured before any subshell can shadow it. A die inside a command
 # substitution only ends that subshell, and the caller then reports the same failure a second time
 # through the ERR trap, so die signals the script itself. USR1 rather than TERM, so a real
@@ -74,6 +96,55 @@ check_loader_deps() {
     checkdep python3
     python3 -c "import requests" > /dev/null 2>&1 \
         || die "the OpenSearch loader requires the requests package: pip install -r ${DEPLOY_DIR}/../opensearch/requirements.txt"
+}
+
+# Reports every index file that is missing, empty or unreadable, rather than the first, and returns
+# non-zero if any of them was. An empty file passes the API's own readable check and fails the
+# service later, so the test here is on content.
+check_index() {
+    local index="$1" relative missing=0
+
+    [ -d "$index" ] || { echo "FAIL ${index} is not a directory" 1>&2; return 1; }
+
+    for relative in $INDEX_FILES; do
+        if [ ! -e "${index}/${relative}" ]; then
+            echo "FAIL ${relative} is missing" 1>&2
+            missing=1
+        elif [ ! -s "${index}/${relative}" ]; then
+            echo "FAIL ${relative} is empty" 1>&2
+            missing=1
+        elif [ ! -r "${index}/${relative}" ]; then
+            echo "FAIL ${relative} is not readable" 1>&2
+            missing=1
+        fi
+    done
+
+    for relative in $OPTIONAL_INDEX_FILES; do
+        [ -s "${index}/${relative}" ] \
+            || echo "WARN ${relative} is missing; the API runs without it and searches are slower" 1>&2
+    done
+
+    return "$missing"
+}
+
+# The directory a build writes is named after the version inside it. A pair that disagrees means
+# one of the two came from somewhere else, which is the defect that made the version a build reads
+# and the version it is called by two different things.
+check_index_version() {
+    local index="$1" name version
+
+    name="${index%/}"
+    name="${name%/suffix-array}"
+    name="${name##*/}"
+
+    case "$name" in uniprot-*) ;; *) return 0 ;; esac
+    [ -s "${index}/.version" ] || return 0
+
+    version=$(tr -d '[:space:]' < "${index}/.version" | tr '.' '-')
+    [ "${name#uniprot-}" = "$version" ] || {
+        echo "FAIL the directory says ${name#uniprot-} and .version says ${version}" 1>&2
+        return 1
+    }
 }
 
 # The UniProtKB version the pipeline wrote beside the tables, as YYYY-MM. The file holds YYYY.MM,
