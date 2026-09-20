@@ -3,9 +3,15 @@
 # Settings and helpers shared by build.sh and clone.sh. Sourced, never run.    #
 ################################################################################
 
+# The directory of this file. Not HERE, which belongs to the script that sources it.
+DEPLOY_DIR="${BASH_SOURCE%/*}"
+
+# log, checkdep and errorAndExit, the same ones the pipelines and the OpenSearch loader use.
+# shellcheck source=../pipelines/lib/common.sh
+source "${DEPLOY_DIR}/../pipelines/lib/common.sh"
+
 # Read build.conf first, so what it sets wins over the defaults below, and anything already in the
 # environment wins over both. Every assignment here and there uses := for that reason.
-DEPLOY_DIR="${BASH_SOURCE%/*}"
 : "${UNIPEPT_BUILD_CONF:=${DEPLOY_DIR}/build.conf}"
 # shellcheck source=/dev/null
 [ -f "$UNIPEPT_BUILD_CONF" ] && source "$UNIPEPT_BUILD_CONF"
@@ -29,21 +35,8 @@ DEPLOY_DIR="${BASH_SOURCE%/*}"
 : "${DATABASE_REPO:=https://github.com/unipept/unipept-database.git}"
 : "${INDEX_REPO:=https://github.com/unipept/unipept-index.git}"
 
-log() { echo "$(date +'[%s (%F %T)]')" "$@"; }
-
 die() {
     echo "Error: $*" 1>&2
-    exit 2
-}
-
-checkdep() {
-    command -v "$1" > /dev/null 2>&1 || die "this script requires ${2:-$1} to be installed."
-}
-
-errorAndExit() {
-    local exit_status="$?"
-    echo "Error: the deploy script stopped at line ${BASH_LINENO[0]}." 1>&2
-    echo "Command '${BASH_COMMAND}' failed with exit status ${exit_status}." 1>&2
     exit 2
 }
 
