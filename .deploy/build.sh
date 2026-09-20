@@ -3,7 +3,7 @@
 # Builds a Unipept database on this host: the tables, the suffix array, the datastore layout the
 # API reads, and the proteins in OpenSearch.
 #
-#   .deploy/build.sh [--output-dir DIR] [--database-sources LIST] [--opensearch-url URL]
+#   .deploy/build.sh [--output-dir DIR] [--database-sources LIST] [--replace]
 #
 # Settings come from the environment, then .deploy/build.conf, then the defaults in lib.sh.
 
@@ -22,12 +22,17 @@ trap errorAndExit ERR
 SA_SPARSENESS=2
 SA_ALGORITHM=lib-sais
 
+# Whether a database of the version this build turns out to be may be replaced. Off, a build whose
+# version already exists stops and keeps its own result, rather than removing what the API serves.
+REPLACE=false
+
 parse_arguments() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --output-dir) OUTPUT_DIR="$2"; shift 2 ;;
             --database-sources) DATABASE_SOURCES="$2"; shift 2 ;;
             --opensearch-url) OPENSEARCH_URL="$2"; shift 2 ;;
+            --replace) REPLACE=true; shift ;;
             --help) sed -n '2,8p' "${BASH_SOURCE[0]}" | cut -c3-; exit 0 ;;
             *) die "unknown option '$1'" ;;
         esac
@@ -118,14 +123,14 @@ checkdep cmake
 # records. A deploy from an archive rather than a clone has no commit to name.
 DATABASE_COMMIT=$(git -C "${HERE}/.." rev-parse HEAD 2>/dev/null || echo unknown)
 
-UNIPROT_VERSION=$(latest_uniprot_version)
-log "UniProtKB version is ${UNIPROT_VERSION}."
+# The build writes here and is renamed into place at the end. Beside the finished databases, so the
+# rename stays within one filesystem, and because the version it will be named after is not known
+# until the pipeline has run.
+STAGING_DIR="${OUTPUT_DIR:?}/.build"
+rm -rf "${STAGING_DIR:?}"
+mkdir -p "${STAGING_DIR}"/{suffix-array,tables,temp}
 
-BUILD_DIR="${OUTPUT_DIR:?}/uniprot-${UNIPROT_VERSION}"
-rm -rf "${BUILD_DIR:?}"
-mkdir -p "${BUILD_DIR}"/{suffix-array,tables,temp}
-
-generate_tables "$BUILD_DIR"
+generate_tables "$STAGING_DIR"
 
 # Under a directory of its own, because clone_repo removes it first and SCRATCH_DIR is a place the
 # operator also keeps work in.
@@ -133,9 +138,22 @@ INDEX_DIR="${SCRATCH_DIR:?}/unipept-build/unipept-index"
 INDEX_COMMIT=$(clone_repo "$INDEX_REPO" "$INDEX_DIR")
 log "Cloned unipept-index at ${INDEX_COMMIT}."
 
-build_suffix_array "$BUILD_DIR" "$INDEX_DIR"
-fill_datastore "$BUILD_DIR"
-write_build_info "${BUILD_DIR}/suffix-array" "$UNIPROT_VERSION" "$DATABASE_COMMIT" "$INDEX_COMMIT"
-load_opensearch "$BUILD_DIR"
+build_suffix_array "$STAGING_DIR" "$INDEX_DIR"
+fill_datastore "$STAGING_DIR"
+
+UNIPROT_VERSION=$(uniprot_version_from "${STAGING_DIR}/tables/.version")
+log "UniProtKB version is ${UNIPROT_VERSION}."
+
+BUILD_DIR="${OUTPUT_DIR:?}/uniprot-${UNIPROT_VERSION}"
+if [ -e "$BUILD_DIR" ] && [ "$REPLACE" != true ]; then
+    die "${BUILD_DIR} already exists. This build is in ${STAGING_DIR}; pass --replace to replace it."
+fi
+
+load_opensearch "$STAGING_DIR"
+
+# After the load, so a directory that carries this file is one whose proteins are in OpenSearch.
+write_build_info "${STAGING_DIR}/suffix-array" "$UNIPROT_VERSION" "$DATABASE_COMMIT" "$INDEX_COMMIT"
+
+swap_into_place "$STAGING_DIR" "$BUILD_DIR"
 
 log "The database is ready in ${BUILD_DIR}."

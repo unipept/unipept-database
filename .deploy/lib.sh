@@ -48,6 +48,31 @@ latest_uniprot_version() {
     echo "$version"
 }
 
+# The UniProtKB version the pipeline wrote beside the tables, as YYYY-MM. The file holds YYYY.MM,
+# which is the form the API reads; the directory name has always used dashes.
+uniprot_version_from() {
+    local version_file="$1" version
+
+    [ -s "$version_file" ] || die "the pipeline wrote no version in ${version_file}"
+    version=$(tr -d '[:space:]' < "$version_file" | tr '.' '-')
+    [ -n "$version" ] || die "the version in ${version_file} is empty"
+    echo "$version"
+}
+
+# Puts a finished build where the API reads it. The directory it replaces is kept until the rename
+# has happened, so an interruption here always leaves one whole database behind.
+swap_into_place() {
+    local staging="$1" target="$2"
+    local previous="${target}.replaced"
+
+    rm -rf "${previous:?}"
+    if [ -e "$target" ]; then
+        mv "$target" "$previous"
+    fi
+    mv "$staging" "$target"
+    rm -rf "${previous:?}"
+}
+
 # Clones a repository at the tip of its default branch and prints the commit it got.
 clone_repo() {
     local url="$1" target="$2"
