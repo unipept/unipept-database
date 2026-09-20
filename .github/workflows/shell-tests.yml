@@ -103,6 +103,33 @@ jobs:
       - name: Run the build suite
         run: env --default-signal=PIPE tests/run-tests.sh build
 
+  seam:
+    # .deploy/build.sh over the real pipeline, with every source replaced by a local file. The
+    # container suite stubs the pipeline, so this is what holds the contract between the two.
+    name: Deploy over the real pipeline
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      RUSTUP_TOOLCHAIN: stable
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo dependencies
+        uses: Swatinem/rust-cache@v2
+
+      # python3-requests because build.sh checks the loader's dependencies before it starts, even
+      # though this suite stands the loader in.
+      - name: Install the pipeline's tools
+        run: sudo apt-get update && sudo apt-get install -y gawk lz4 pigz pv libxml2-utils zip unzip uuid-runtime python3-requests
+
+      - name: Run the seam suite
+        run: env --default-signal=PIPE tests/run-tests.sh seam
+
   deploy:
     # .deploy/build.sh and clone.sh in a container, over a real ssh and scp.
     name: Deploy suite

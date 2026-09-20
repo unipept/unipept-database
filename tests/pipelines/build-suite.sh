@@ -18,6 +18,10 @@ SOURCES="${HERE}/sources"
 # shellcheck source=../lib.sh
 source "${HERE}/../lib.sh"
 
+# checkdep lives here, not in tests/lib.sh.
+# shellcheck source=../../pipelines/lib/common.sh
+source "${REPO}/pipelines/lib/common.sh"
+
 sed --version > /dev/null 2>&1 || { echo "the build suite needs GNU sed first on PATH" >&2; exit 1; }
 checkdep gawk
 checkdep zip
