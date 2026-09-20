@@ -3,7 +3,7 @@
 # Copies a finished database from another host and loads its proteins into this host's OpenSearch.
 # The build itself runs once, on one host; every other host clones the result.
 #
-#   .deploy/clone.sh --remote-address HOST --local-ssh-key KEY [--output-dir DIR]
+#   .deploy/clone.sh --remote-address HOST --local-ssh-key KEY [--uniprot-version YYYY-MM]
 #
 # Settings come from the environment, then .deploy/build.conf, then the defaults in lib.sh.
 
@@ -17,6 +17,12 @@ source "${HERE}/lib.sh"
 
 trap errorAndExit ERR
 
+# Which database to copy. Empty means the newest one the remote host has.
+UNIPROT_VERSION=""
+
+# Whether a database of that version already here may be replaced.
+REPLACE=false
+
 parse_arguments() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -27,7 +33,9 @@ parse_arguments() {
             --local-ssh-key) LOCAL_SSH_KEY="$2"; shift 2 ;;
             --output-dir) OUTPUT_DIR="$2"; shift 2 ;;
             --opensearch-url) OPENSEARCH_URL="$2"; shift 2 ;;
-            --help) sed -n '2,9p' "${BASH_SOURCE[0]}" | cut -c3-; exit 0 ;;
+            --uniprot-version) UNIPROT_VERSION="$2"; shift 2 ;;
+            --replace) REPLACE=true; shift ;;
+            --help) sed -n '2,8p' "${BASH_SOURCE[0]}" | cut -c3-; exit 0 ;;
             *) die "unknown option '$1'" ;;
         esac
     done
@@ -36,16 +44,49 @@ parse_arguments() {
     [ -n "$LOCAL_SSH_KEY" ] || die "--local-ssh-key is required."
 }
 
+remote_sh() {
+    ssh -i "$LOCAL_SSH_KEY" -p "$REMOTE_PORT" "${REMOTE_USER}@${REMOTE_ADDRESS}" "$@"
+}
+
+# The newest database the remote host holds, as YYYY-MM. The remote host is the authority on what
+# it built: the current UniProtKB release is not, because a build takes days and a release can
+# appear while one is running.
+remote_latest_version() {
+    local newest
+    newest=$(remote_sh "ls -1d '${REMOTE_OUTPUT_DIR}'/uniprot-* 2> /dev/null | sort" | tail -n 1) \
+        || true
+
+    [ -n "$newest" ] || die "found no database in ${REMOTE_OUTPUT_DIR} on ${REMOTE_ADDRESS}."
+
+    newest="${newest##*/}"
+    echo "${newest#uniprot-}"
+}
+
 copy_database() {
-    local build_dir="$1" remote_dir="$2"
+    local staging="$1" version="$2"
+    local remote_dir="${REMOTE_OUTPUT_DIR}/uniprot-${version}"
 
-    ssh -i "$LOCAL_SSH_KEY" -p "$REMOTE_PORT" "${REMOTE_USER}@${REMOTE_ADDRESS}" "[ -d '${remote_dir}' ]" \
-        || die "the remote host has no ${remote_dir}"
+    remote_sh "[ -d '${remote_dir}' ]" || die "the remote host has no ${remote_dir}"
 
-    rm -rf "${build_dir:?}"
+    rm -rf "${staging:?}"
+    mkdir -p "$staging"
+
+    # Into a directory this script made, so the copy lands where this script expects it whatever
+    # the scp back-end makes of a trailing slash.
     scp -i "$LOCAL_SSH_KEY" -P "$REMOTE_PORT" -r \
-        "${REMOTE_USER}@${REMOTE_ADDRESS}:${remote_dir}" "${OUTPUT_DIR:?}"
+        "${REMOTE_USER}@${REMOTE_ADDRESS}:${remote_dir}" "$staging"
     log "Copied the database from ${REMOTE_ADDRESS}."
+}
+
+# What the API needs, and the table clone.sh itself reads. A copy that stopped part way leaves
+# files that exist and are short, so the check is on content.
+check_database() {
+    local dir="$1" file
+
+    for file in suffix-array/sa.bin suffix-array/proteins.bin suffix-array/mapping.bin \
+        suffix-array/.version tables/uniprot_entries.tsv.lz4; do
+        [ -s "${dir}/${file}" ] || die "the copied database has no ${file}"
+    done
 }
 
 load_opensearch() {
@@ -60,17 +101,29 @@ load_opensearch() {
 
 parse_arguments "$@"
 
-checkdep curl
 checkdep lz4
 checkdep ssh
 checkdep scp
 
-UNIPROT_VERSION=$(latest_uniprot_version)
-log "UniProtKB version is ${UNIPROT_VERSION}."
+[ -n "$UNIPROT_VERSION" ] || UNIPROT_VERSION=$(remote_latest_version)
+log "Cloning UniProtKB ${UNIPROT_VERSION} from ${REMOTE_ADDRESS}."
 
 BUILD_DIR="${OUTPUT_DIR:?}/uniprot-${UNIPROT_VERSION}"
+if [ -e "$BUILD_DIR" ] && [ "$REPLACE" != true ]; then
+    die "${BUILD_DIR} already exists. Pass --replace to replace it."
+fi
 
-copy_database "$BUILD_DIR" "${REMOTE_OUTPUT_DIR}/uniprot-${UNIPROT_VERSION}/"
-load_opensearch "$BUILD_DIR"
+# Copied here and renamed into place at the end, so a copy that fails leaves the database this
+# host already serves untouched.
+STAGING_DIR="${OUTPUT_DIR:?}/.clone"
+copy_database "$STAGING_DIR" "$UNIPROT_VERSION"
+
+COPIED_DIR="${STAGING_DIR}/uniprot-${UNIPROT_VERSION}"
+check_database "$COPIED_DIR"
+
+load_opensearch "$COPIED_DIR"
+
+swap_into_place "$COPIED_DIR" "$BUILD_DIR"
+rm -rf "${STAGING_DIR:?}"
 
 log "The database is ready in ${BUILD_DIR}."

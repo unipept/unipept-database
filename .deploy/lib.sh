@@ -39,15 +39,6 @@ die() {
     exit 2
 }
 
-# The version of UniProtKB the release page names, as YYYY-MM.
-latest_uniprot_version() {
-    local version
-    version=$(curl -s "${UNIPEPT_RELDATE_URL:-https://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/complete/reldate.txt}" \
-        | head -n 1 | grep -oE '[0-9]{4}_[0-9]{2}' | sed 's/_/-/')
-    [ -n "$version" ] || die "could not read the UniProtKB version."
-    echo "$version"
-}
-
 # The UniProtKB version the pipeline wrote beside the tables, as YYYY-MM. The file holds YYYY.MM,
 # which is the form the API reads; the directory name has always used dashes.
 uniprot_version_from() {
