@@ -6,6 +6,7 @@ on:
   push:
     branches: [master]
     paths:
+      - '.deploy/**'
       - 'pipelines/**'
       - 'opensearch/**'
       - 'tests/**'
@@ -15,6 +16,7 @@ on:
       - '.github/workflows/shell-tests.yml'
   pull_request:
     paths:
+      - '.deploy/**'
       - 'pipelines/**'
       - 'opensearch/**'
       - 'tests/**'
@@ -46,6 +48,19 @@ jobs:
       # Actions starts steps with SIGPIPE ignored; the suite needs its default action.
       - name: Run the pipeline suite
         run: env --default-signal=PIPE tests/run-tests.sh lz
+
+  verify:
+    # .deploy/verify.sh against a fixture index directory. No container.
+    name: Verify suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Run the verify suite
+        run: tests/run-tests.sh verify
 
   shell:
     # The helpers in pipelines/lib/common.sh. No container.
