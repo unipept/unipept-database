@@ -39,6 +39,13 @@ die() {
     exit 2
 }
 
+# Stops a flag from swallowing the next flag, or nothing at all, as its value.
+need_value() {
+    local flag="$1" value="$2"
+
+    { [ -n "$value" ] && [[ "$value" != --* ]]; } || die "${flag} requires a value."
+}
+
 # What opensearch/load.sh needs. Checked before the work starts: the load is the last step of a
 # build that takes days, and load.sh only reports a missing package once it is reached.
 check_loader_deps() {

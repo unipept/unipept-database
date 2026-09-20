@@ -26,14 +26,14 @@ REPLACE=false
 parse_arguments() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            --remote-address) REMOTE_ADDRESS="$2"; shift 2 ;;
-            --remote-port) REMOTE_PORT="$2"; shift 2 ;;
-            --remote-user) REMOTE_USER="$2"; shift 2 ;;
-            --remote-output-dir) REMOTE_OUTPUT_DIR="$2"; shift 2 ;;
-            --local-ssh-key) LOCAL_SSH_KEY="$2"; shift 2 ;;
-            --output-dir) OUTPUT_DIR="$2"; shift 2 ;;
-            --opensearch-url) OPENSEARCH_URL="$2"; shift 2 ;;
-            --uniprot-version) UNIPROT_VERSION="$2"; shift 2 ;;
+            --remote-address) need_value "$1" "${2-}"; REMOTE_ADDRESS="$2"; shift 2 ;;
+            --remote-port) need_value "$1" "${2-}"; REMOTE_PORT="$2"; shift 2 ;;
+            --remote-user) need_value "$1" "${2-}"; REMOTE_USER="$2"; shift 2 ;;
+            --remote-output-dir) need_value "$1" "${2-}"; REMOTE_OUTPUT_DIR="$2"; shift 2 ;;
+            --local-ssh-key) need_value "$1" "${2-}"; LOCAL_SSH_KEY="$2"; shift 2 ;;
+            --output-dir) need_value "$1" "${2-}"; OUTPUT_DIR="$2"; shift 2 ;;
+            --opensearch-url) need_value "$1" "${2-}"; OPENSEARCH_URL="$2"; shift 2 ;;
+            --uniprot-version) need_value "$1" "${2-}"; UNIPROT_VERSION="$2"; shift 2 ;;
             --replace) REPLACE=true; shift ;;
             --help) sed -n '2,8p' "${BASH_SOURCE[0]}" | cut -c3-; exit 0 ;;
             *) die "unknown option '$1'" ;;
@@ -101,6 +101,8 @@ load_opensearch() {
 
 parse_arguments "$@"
 
+[ -n "$OUTPUT_DIR" ] || die "--output-dir requires a value."
+
 checkdep ssh
 checkdep scp
 check_loader_deps
@@ -108,14 +110,14 @@ check_loader_deps
 [ -n "$UNIPROT_VERSION" ] || UNIPROT_VERSION=$(remote_latest_version)
 log "Cloning UniProtKB ${UNIPROT_VERSION} from ${REMOTE_ADDRESS}."
 
-BUILD_DIR="${OUTPUT_DIR:?}/uniprot-${UNIPROT_VERSION}"
+BUILD_DIR="${OUTPUT_DIR}/uniprot-${UNIPROT_VERSION}"
 if [ -e "$BUILD_DIR" ] && [ "$REPLACE" != true ]; then
     die "${BUILD_DIR} already exists. Pass --replace to replace it."
 fi
 
 # Copied here and renamed into place at the end, so a copy that fails leaves the database this
 # host already serves untouched.
-STAGING_DIR="${OUTPUT_DIR:?}/.clone"
+STAGING_DIR="${OUTPUT_DIR}/.clone"
 copy_database "$STAGING_DIR" "$UNIPROT_VERSION"
 
 COPIED_DIR="${STAGING_DIR}/uniprot-${UNIPROT_VERSION}"

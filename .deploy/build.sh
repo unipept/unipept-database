@@ -29,9 +29,9 @@ REPLACE=false
 parse_arguments() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            --output-dir) OUTPUT_DIR="$2"; shift 2 ;;
-            --database-sources) DATABASE_SOURCES="$2"; shift 2 ;;
-            --opensearch-url) OPENSEARCH_URL="$2"; shift 2 ;;
+            --output-dir) need_value "$1" "${2-}"; OUTPUT_DIR="$2"; shift 2 ;;
+            --database-sources) need_value "$1" "${2-}"; DATABASE_SOURCES="$2"; shift 2 ;;
+            --opensearch-url) need_value "$1" "${2-}"; OPENSEARCH_URL="$2"; shift 2 ;;
             --replace) REPLACE=true; shift ;;
             --help) sed -n '2,8p' "${BASH_SOURCE[0]}" | cut -c3-; exit 0 ;;
             *) die "unknown option '$1'" ;;
@@ -110,6 +110,8 @@ load_opensearch() {
 
 parse_arguments "$@"
 
+[ -n "$OUTPUT_DIR" ] || die "--output-dir requires a value."
+
 # What this script runs itself. The pipeline checks its own tools in the seconds after it starts,
 # so they are not repeated here; the loader's are, because it runs last.
 checkdep git
@@ -124,7 +126,7 @@ DATABASE_COMMIT=$(git -C "${HERE}/.." rev-parse HEAD 2>/dev/null || echo unknown
 # The build writes here and is renamed into place at the end. Beside the finished databases, so the
 # rename stays within one filesystem, and because the version it will be named after is not known
 # until the pipeline has run.
-STAGING_DIR="${OUTPUT_DIR:?}/.build"
+STAGING_DIR="${OUTPUT_DIR}/.build"
 rm -rf "${STAGING_DIR:?}"
 mkdir -p "${STAGING_DIR}"/{suffix-array,tables,temp}
 
@@ -132,7 +134,7 @@ generate_tables "$STAGING_DIR"
 
 # Under a directory of its own, because clone_repo removes it first and SCRATCH_DIR is a place the
 # operator also keeps work in.
-INDEX_DIR="${SCRATCH_DIR:?}/unipept-build/unipept-index"
+INDEX_DIR="${SCRATCH_DIR}/unipept-build/unipept-index"
 INDEX_COMMIT=$(clone_repo "$INDEX_REPO" "$INDEX_DIR")
 log "Cloned unipept-index at ${INDEX_COMMIT}."
 
@@ -142,7 +144,7 @@ fill_datastore "$STAGING_DIR"
 UNIPROT_VERSION=$(uniprot_version_from "${STAGING_DIR}/tables/.version")
 log "UniProtKB version is ${UNIPROT_VERSION}."
 
-BUILD_DIR="${OUTPUT_DIR:?}/uniprot-${UNIPROT_VERSION}"
+BUILD_DIR="${OUTPUT_DIR}/uniprot-${UNIPROT_VERSION}"
 if [ -e "$BUILD_DIR" ] && [ "$REPLACE" != true ]; then
     die "${BUILD_DIR} already exists. This build is in ${STAGING_DIR}; pass --replace to replace it."
 fi
