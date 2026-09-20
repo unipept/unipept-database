@@ -31,15 +31,33 @@ disagree with the scripts.
 
 The result is `${OUTPUT_DIR}/uniprot-<version>/suffix-array/`, which holds `sa.bin`,
 `proteins.bin`, `mapping.bin`, `.version`, `datastore/` and `build-info.txt`. That directory is
-what the API is pointed at.
+what the API is pointed at. The version in the name is the one the pipeline wrote to `.version`,
+so the two always agree.
 
-`build-info.txt` records the UniProtKB version, the commits of unipept-database and unipept-index
-the build used, and the sources it read. Both repositories are cloned at the tip of their default
-branch, so two builds of the same UniProtKB release can differ; this file is how you tell.
+Beside it, `${OUTPUT_DIR}/uniprot-<version>/tables/uniprot_entries.tsv.lz4` is what `clone.sh`
+reads to fill another host's OpenSearch. Keep it on the build host for as long as hosts still
+clone that version. The rest of `tables/` is removed during the build.
+
+A build writes to `${OUTPUT_DIR}/.build/` and is renamed into place at the end, so the database
+this host serves is only ever replaced by a finished one. A build whose version already exists
+stops and keeps its result in `.build/`; `--replace` lets it take the place of the old one. The
+same holds for `clone.sh`, through `${OUTPUT_DIR}/.clone/`. Both therefore need room for two
+databases at the moment they finish.
+
+`build-info.txt` records the UniProtKB version, the commit of this checkout, the commit of the
+unipept-index clone the build used, and the sources it read. unipept-index is cloned at the tip of
+its default branch, so two builds of the same UniProtKB release can differ; this file is how you
+tell. It is written after the proteins are loaded, so a directory that has one is complete.
 
 ## What a host needs
 
-`git`, `curl`, `lz4`, `pigz`, `pv`, `uuidgen`, `cmake`, a Rust toolchain, and the tools the
-pipeline itself checks for. `clone.sh` needs `ssh` and `scp` instead of the build tools. The
-OpenSearch loader needs Python with `requests` (`opensearch/requirements.txt`) and an OpenSearch
-instance at `OPENSEARCH_URL`.
+Both scripts need `lz4`, `pv`, and Python with `requests` (`opensearch/requirements.txt`) for the
+OpenSearch loader, and an OpenSearch instance at `OPENSEARCH_URL`.
+
+`build.sh` also needs `git`, `cmake` and a Rust toolchain for its own work, plus what the pipeline
+checks for when it starts: `curl`, `uuidgen`, `pigz`, `gawk` and `xmllint`. `clone.sh` needs `ssh`
+and `scp`, and none of the build tools.
+
+`SCRATCH_DIR` holds the unipept-index clone and its cargo target, a few gigabytes. The build
+itself, tables and temporary files included, goes under `OUTPUT_DIR`, so that is the volume to
+size for a full UniProt build.
