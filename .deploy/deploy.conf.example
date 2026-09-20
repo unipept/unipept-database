@@ -1,0 +1,30 @@
+# Copy to deploy.conf beside this file and edit. deploy.conf is not in this repository.
+#
+# Only what a host has to decide is listed. Everything the scripts already default to sensibly is
+# left out, so this file cannot go stale. The defaults are in lib.sh, build.sh and clone.sh.
+#
+# A flag on the command line wins over this file, and this file wins over those defaults.
+
+# Where the finished databases are written, one directory per UniProtKB version. This volume also
+# holds the whole build while it runs.
+OUTPUT_DIR=/mnt/data
+
+# The OpenSearch instance the proteins are loaded into.
+#OPENSEARCH_URL=http://localhost:9200
+
+# build.sh: where the repositories are cloned and built.
+#SCRATCH_DIR=/srv/scratch
+
+# clone.sh: the host a finished database is copied from. Both are required to run clone.sh, here
+# or as a flag.
+#REMOTE_ADDRESS=selma.ugent.be
+#LOCAL_SSH_KEY=/home/unipept/.ssh/id_unipept
+
+# Uncomment to depart from the defaults.
+#DATABASE_SOURCES=swissprot,trembl
+#REMOTE_PORT=4840
+#REMOTE_USER=unipept
+#REMOTE_OUTPUT_DIR=/mnt/data
+
+# Each source the pipeline downloads can be read from somewhere else, a mirror or a local file.
+# The variable names and the URLs they replace are in pipelines/lib/sources.sh.

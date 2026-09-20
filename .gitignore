@@ -22,3 +22,6 @@ output/
 temp/
 unipept-temp/
 __pycache__/
+
+# The deploy configuration of a host.
+.deploy/deploy.conf
