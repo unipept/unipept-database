@@ -7,6 +7,8 @@ pipeline itself lives in `pipelines/` and the loader in `opensearch/`.
   the API reads, and the proteins in OpenSearch.
 - `clone.sh` copies a finished database from another host and loads its proteins into the
   OpenSearch of this one. The build runs once; every other host clones the result.
+- `verify.sh` checks a finished database against the files the API needs. Both of the others run
+  it before they put anything in place; run it by hand to check a database that is already there.
 
 ## Configuration
 
@@ -43,6 +45,19 @@ this host serves is only ever replaced by a finished one. A build whose version 
 stops and keeps its result in `.build/`; `--replace` lets it take the place of the old one. The
 same holds for `clone.sh`, through `${OUTPUT_DIR}/.clone/`. Both therefore need room for two
 databases at the moment they finish.
+
+## Checking a database
+
+```sh
+.deploy/verify.sh                              # the newest one under OUTPUT_DIR
+.deploy/verify.sh --uniprot-version 2026-03
+.deploy/verify.sh --index-dir /srv/data/uniprot-2026-03/suffix-array
+```
+
+It reports every file that is missing, empty or unreadable rather than the first, and exits
+non-zero if any of them is. A missing `kmer_table.bin` is a warning: the API runs without it and
+searches are slower. The list it checks is the one `unipept-api/.deploy/lib.sh` starts a service
+against, so a change on either side has to be made on both.
 
 `build-info.txt` records the UniProtKB version, the commit of this checkout, the commit of the
 unipept-index clone the build used, and the sources it read. unipept-index is cloned at the tip of
