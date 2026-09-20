@@ -103,6 +103,19 @@ jobs:
       - name: Run the build suite
         run: env --default-signal=PIPE tests/run-tests.sh build
 
+  deploy:
+    # .deploy/build.sh and clone.sh in a container, over a real ssh and scp.
+    name: Deploy suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Run the deploy suite
+        run: tests/run-tests.sh deploy
+
   opensearch:
     # opensearch/load.sh against a real OpenSearch in a container.
     name: OpenSearch suite
