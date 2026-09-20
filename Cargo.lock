@@ -447,6 +447,7 @@ dependencies = [
  "anyhow",
  "clap",
  "dat-parser",
+ "fixtures",
  "tables-generator",
  "utils",
 ]

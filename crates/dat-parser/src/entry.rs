@@ -461,6 +461,27 @@ mod tests {
         assert_eq!(got_ec.into_iter().collect::<Vec<_>>(), vec!["1.1.1.1", "2.7.11.1"]);
     }
 
+    /// A component's recommended name wins over the protein's own. Every EC number of the entry is
+    /// kept, wherever it is listed.
+    #[test]
+    fn test_parse_description_field_of_a_polyprotein() {
+        let lines = _raw_str_to_strings(vec![
+            "DE   RecName: Full=The whole protein;",
+            "DE            EC=1.1.1.1;",
+            "DE   Contains:",
+            "DE     RecName: Full=The component;",
+            "DE   Includes:",
+            "DE     RecName: Full=The domain;",
+            "DE              EC=2.7.11.1;",
+            "OX   NCBI_TaxID=1;",
+        ]);
+
+        let (name, ec) = parse_description_field(&lines, &mut 0);
+
+        assert_eq!(name, "The component");
+        assert_eq!(ec.into_iter().collect::<Vec<_>>(), vec!["1.1.1.1", "2.7.11.1"]);
+    }
+
     #[test]
     fn test_parse_taxon_id() {
         let want = "654924";
@@ -532,34 +553,6 @@ mod tests {
         let got = parse_sequence(&lines, &mut 43);
         assert_eq!(got, want);
     }
-
-    // #[test]
-    // fn test_read_until_metadata() {
-    //     let want = "Alanine racemase";
-    //     let mut line = String::from(format!(
-    //         "RecName: Full={want} {{ECO:0000255|HAMAP-Rule:MF_01201}};"
-    //     ));
-    //     let got = read_until_metadata(&line, ORGANISM_RECOMMENDED_NAME_PREFIX_LEN);
-    //     assert_eq!(got, want);
-    // }
-    //
-    // #[test]
-    // fn test_read_until_metadata_with_bracket() {
-    //     let want = "Alanine racemase{text between brackets}";
-    //     let mut line = String::from(format!(
-    //         "RecName: Full={want} {{ECO:0000255|HAMAP-Rule:MF_01201}};"
-    //     ));
-    //     let target = read_until_metadata(&line, ORGANISM_RECOMMENDED_NAME_PREFIX_LEN);
-    //     assert_eq!(target, want);
-    // }
-    //
-    // #[test]
-    // fn test_read_until_metadata_none() {
-    //     let want = "Recommended Name";
-    //     let mut line = String::from(format!("RecName: Full={want};"));
-    //     let target = read_until_metadata(&line, ORGANISM_RECOMMENDED_NAME_PREFIX_LEN);
-    //     assert_eq!(target, want);
-    // }
 
     #[test]
     fn test_parse_entry() {
