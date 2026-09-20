@@ -127,7 +127,9 @@ mkdir -p "${BUILD_DIR}"/{suffix-array,tables,temp}
 
 generate_tables "$BUILD_DIR"
 
-INDEX_DIR="${SCRATCH_DIR:?}/unipept-index"
+# Under a directory of its own, because clone_repo removes it first and SCRATCH_DIR is a place the
+# operator also keeps work in.
+INDEX_DIR="${SCRATCH_DIR:?}/unipept-build/unipept-index"
 INDEX_COMMIT=$(clone_repo "$INDEX_REPO" "$INDEX_DIR")
 log "Cloned unipept-index at ${INDEX_COMMIT}."
 
