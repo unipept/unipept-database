@@ -14,7 +14,11 @@ source "${HERE}/lib.sh"
 trap errorAndExit ERR
 trap 'exit 2' USR1
 
-# The settings only this script has. lib.sh holds the two both other scripts have.
+read_conf
+
+# The settings only this script has. lib.sh holds the two both other scripts have. After read_conf
+# rather than before: a UNIPROT_VERSION in deploy.conf is the release clone.sh fetches, not the one
+# to check, so it takes no part here.
 
 # Which database to check. Empty means the newest one under OUTPUT_DIR.
 UNIPROT_VERSION=
@@ -22,8 +26,6 @@ UNIPROT_VERSION=
 # A directory to check instead of one under OUTPUT_DIR. It is the directory the API is pointed at,
 # so the index files are directly inside it.
 INDEX_DIR=
-
-read_conf
 
 usage() {
     cat <<'USAGE'
@@ -61,7 +63,8 @@ parse_arguments() {
 latest_version() {
     local newest='' candidate
 
-    for candidate in "${OUTPUT_DIR}"/uniprot-*; do
+    # shellcheck disable=SC2231 # DATABASE_GLOB is a glob, and has to expand
+    for candidate in "${OUTPUT_DIR}"/${DATABASE_GLOB}; do
         [ -d "$candidate" ] && newest="$candidate"
     done
 

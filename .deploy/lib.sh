@@ -49,25 +49,23 @@ PIPELINE_TABLES=(uniprot_entries "${DATASTORE_TABLES[@]}")
 
 # What the API needs under the directory it is pointed at, relative to it. The same list as
 # INDEX_FILES in unipept-api/.deploy/lib.sh: that repository starts a service against this layout
-# and this one produces it, so the two have to agree. A change here is a change there.
-readonly INDEX_FILES="
-.version
-sa.bin
-proteins.bin
-mapping.bin
-datastore/sampledata.json
-datastore/ec_numbers.tsv
-datastore/go_terms.tsv
-datastore/interpro_entries.tsv
-datastore/proteomes.tsv
-datastore/lineages.tsv
-datastore/taxons.tsv
-"
+# and this one produces it, so the two have to agree. A change here is a change there. The tables
+# come from DATASTORE_TABLES, so one fill_datastore writes is one this checks.
+INDEX_FILES=(.version sa.bin proteins.bin mapping.bin datastore/sampledata.json)
+for datastore_table in "${DATASTORE_TABLES[@]}"; do
+    INDEX_FILES+=("datastore/${datastore_table}.tsv")
+done
+unset datastore_table
+readonly INDEX_FILES
 
 # What the API opens when it is there and runs without. Searches are slower without it.
-readonly OPTIONAL_INDEX_FILES="
-kmer_table.bin
-"
+readonly OPTIONAL_INDEX_FILES=(kmer_table.bin)
+
+# What a finished database is called under OUTPUT_DIR, as a glob. Narrow on purpose: a swap that
+# was interrupted leaves a uniprot-<version>.replaced beside it, and an operator may keep a copy
+# under another suffix, and neither is a database to pick as the newest.
+# shellcheck disable=SC2034 # read by the scripts that source this file
+readonly DATABASE_GLOB='uniprot-[0-9][0-9][0-9][0-9]-[0-9][0-9]'
 
 # The script's own process, captured before any subshell can shadow it. A die inside a command
 # substitution only ends that subshell, and the caller then reports the same failure a second time
@@ -101,25 +99,43 @@ check_loader_deps() {
 # Reports every index file that is missing, empty or unreadable, rather than the first, and returns
 # non-zero if any of them was. An empty file passes the API's own readable check and fails the
 # service later, so the test here is on content.
+#
+# Readable means readable by whoever runs this. Run it as the user the API runs as: root reads
+# everything, so as root an unreadable file passes.
 check_index() {
-    local index="$1" relative missing=0
+    local index="$1" relative missing=0 hidden=''
 
     [ -d "$index" ] || { echo "FAIL ${index} is not a directory" 1>&2; return 1; }
 
-    for relative in $INDEX_FILES; do
-        if [ ! -e "${index}/${relative}" ]; then
+    # A directory that cannot be entered hides the files in it, which would read as missing and
+    # send the operator to rebuild rather than to fix a permission. It is named once, and what is
+    # in it is not reported again.
+    if [ ! -r "$index" ] || [ ! -x "$index" ]; then
+        echo "FAIL ${index} is not readable" 1>&2
+        return 1
+    fi
+    if [ -d "${index}/datastore" ] && { [ ! -r "${index}/datastore" ] || [ ! -x "${index}/datastore" ]; }; then
+        echo "FAIL datastore/ is not readable" 1>&2
+        missing=1
+        hidden=datastore/
+    fi
+
+    for relative in "${INDEX_FILES[@]}"; do
+        if [ -n "$hidden" ] && [[ "$relative" == "$hidden"* ]]; then
+            continue
+        elif [ ! -e "${index}/${relative}" ]; then
             echo "FAIL ${relative} is missing" 1>&2
-            missing=1
-        elif [ ! -s "${index}/${relative}" ]; then
-            echo "FAIL ${relative} is empty" 1>&2
             missing=1
         elif [ ! -r "${index}/${relative}" ]; then
             echo "FAIL ${relative} is not readable" 1>&2
             missing=1
+        elif [ ! -s "${index}/${relative}" ]; then
+            echo "FAIL ${relative} is empty" 1>&2
+            missing=1
         fi
     done
 
-    for relative in $OPTIONAL_INDEX_FILES; do
+    for relative in "${OPTIONAL_INDEX_FILES[@]}"; do
         [ -s "${index}/${relative}" ] \
             || echo "WARN ${relative} is missing; the API runs without it and searches are slower" 1>&2
     done
@@ -138,7 +154,9 @@ check_index_version() {
     name="${name##*/}"
 
     case "$name" in uniprot-*) ;; *) return 0 ;; esac
-    [ -s "${index}/.version" ] || return 0
+    # Missing, empty or unreadable is check_index's to report, and a version read from a file that
+    # cannot be read would only add a second, misleading failure.
+    { [ -s "${index}/.version" ] && [ -r "${index}/.version" ]; } || return 0
 
     version=$(tr -d '[:space:]' < "${index}/.version" | tr '.' '-')
     [ "${name#uniprot-}" = "$version" ] || {
