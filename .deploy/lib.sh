@@ -143,35 +143,58 @@ check_index() {
     return "$missing"
 }
 
+# The version a .version file holds, as YYYY-MM. The file holds YYYY.MM, which is the form the API
+# reads; the directory name has always used dashes. Prints nothing for an empty file.
+read_version() {
+    tr -d '[:space:]' < "$1" | tr '.' '-'
+}
+
+# The version a database directory is named after, as YYYY-MM, given the directory or the
+# suffix-array inside it. Fails for a directory that is not named after one.
+database_version_of() {
+    local name="${1%/}"
+
+    name="${name%/suffix-array}"
+    name="${name##*/}"
+    case "$name" in uniprot-*) echo "${name#uniprot-}" ;; *) return 1 ;; esac
+}
+
 # The directory a build writes is named after the version inside it. A pair that disagrees means
 # one of the two came from somewhere else, which is the defect that made the version a build reads
 # and the version it is called by two different things.
 check_index_version() {
-    local index="$1" name version
+    local index="$1" named version
 
-    name="${index%/}"
-    name="${name%/suffix-array}"
-    name="${name##*/}"
-
-    case "$name" in uniprot-*) ;; *) return 0 ;; esac
+    named=$(database_version_of "$index") || return 0
     # Missing, empty or unreadable is check_index's to report, and a version read from a file that
     # cannot be read would only add a second, misleading failure.
     { [ -s "${index}/.version" ] && [ -r "${index}/.version" ]; } || return 0
 
-    version=$(tr -d '[:space:]' < "${index}/.version" | tr '.' '-')
-    [ "${name#uniprot-}" = "$version" ] || {
-        echo "FAIL the directory says ${name#uniprot-} and .version says ${version}" 1>&2
+    version=$(read_version "${index}/.version")
+    [ "$named" = "$version" ] || {
+        echo "FAIL the directory says ${named} and .version says ${version}" 1>&2
         return 1
     }
 }
 
-# The UniProtKB version the pipeline wrote beside the tables, as YYYY-MM. The file holds YYYY.MM,
-# which is the form the API reads; the directory name has always used dashes.
+# The whole contract a database is held to before the API is pointed at it, reporting every
+# failure rather than the first. build.sh, clone.sh and verify.sh all check through this, so a
+# check added here is one all three make. clone.sh also sends it to the remote host, so it may only
+# call the functions above and read the lists they read.
+verify_database() {
+    local index="$1" status=0
+
+    check_index "$index" || status=1
+    check_index_version "$index" || status=1
+    return "$status"
+}
+
+# The UniProtKB version the pipeline wrote beside the tables, as YYYY-MM.
 uniprot_version_from() {
     local version_file="$1" version
 
     [ -s "$version_file" ] || die "the pipeline wrote no version in ${version_file}"
-    version=$(tr -d '[:space:]' < "$version_file" | tr '.' '-')
+    version=$(read_version "$version_file")
     [ -n "$version" ] || die "the version in ${version_file} is empty"
     echo "$version"
 }

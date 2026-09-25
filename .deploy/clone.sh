@@ -87,9 +87,7 @@ remote_latest_version() {
         || true
 
     [ -n "$newest" ] || die "found no database in ${REMOTE_OUTPUT_DIR} on ${REMOTE_ADDRESS}."
-
-    newest="${newest##*/}"
-    echo "${newest#uniprot-}"
+    database_version_of "$newest"
 }
 
 # The same checks the copy gets afterwards, run on the remote host before anything is copied. A
@@ -103,10 +101,9 @@ check_remote_database() {
 
     remote_sh bash -s <<REMOTE || die "the database on ${REMOTE_ADDRESS} is missing files the API needs, or is not the version it is named after."
 $(declare -p INDEX_FILES OPTIONAL_INDEX_FILES)
-$(declare -f check_index check_index_version)
+$(declare -f verify_database check_index check_index_version database_version_of read_version)
 status=0
-check_index '${remote_dir}/suffix-array' || status=1
-check_index_version '${remote_dir}/suffix-array' || status=1
+verify_database '${remote_dir}/suffix-array' || status=1
 [ -s '${remote_dir}/tables/uniprot_entries.tsv.lz4' ] || { echo "FAIL tables/uniprot_entries.tsv.lz4 is missing" 1>&2; status=1; }
 exit "\$status"
 REMOTE
@@ -139,8 +136,8 @@ check_database() {
             || die "the remote has a k-mer table and the copy does not"
     fi
 
-    check_index "${dir}/suffix-array" || die "the copy is missing files the API needs."
-    check_index_version "${dir}/suffix-array" || die "the copy is not the version it is named after."
+    verify_database "${dir}/suffix-array" \
+        || die "the copy is missing files the API needs, or is not the version it is named after."
 
     # Outside the index, so not in INDEX_FILES: it is what this script feeds to OpenSearch.
     [ -s "${dir}/tables/uniprot_entries.tsv.lz4" ] \

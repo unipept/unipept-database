@@ -8,9 +8,9 @@ pipeline itself lives in `pipelines/` and the loader in `opensearch/`.
 - `clone.sh` copies a finished database from another host and loads its proteins into the
   OpenSearch of this one. The build runs once; every other host clones the result.
 - `verify.sh` checks a finished database against the files the API needs. The other two make
-  the same file checks themselves before they change anything the API serves: `build.sh` before
-  it loads OpenSearch, `clone.sh` on the remote host before it copies and again on the copy. Run
-  it by hand to check a database that is already there.
+  the same checks, through the same `verify_database` in `lib.sh`, before they change anything
+  the API serves: `build.sh` before it loads OpenSearch, `clone.sh` on the remote host before it
+  copies and again on the copy. Run it by hand to check a database that is already there.
 
 ## Configuration
 

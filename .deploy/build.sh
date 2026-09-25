@@ -180,7 +180,7 @@ fill_datastore "$STAGING_DIR"
 # As soon as the layout is complete, and before anything outside the staging directory changes: the
 # load below drops and recreates the index the API queries, so a build refused after it would
 # already have replaced the proteins that serve the database it leaves in place.
-check_index "${STAGING_DIR}/suffix-array" || die "the build is missing files the API needs."
+verify_database "${STAGING_DIR}/suffix-array" || die "the build is missing files the API needs."
 
 UNIPROT_VERSION=$(uniprot_version_from "${STAGING_DIR}/tables/.version")
 log "UniProtKB version is ${UNIPROT_VERSION}."

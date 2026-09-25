@@ -69,9 +69,7 @@ latest_version() {
     done
 
     [ -n "$newest" ] || die "found no database in ${OUTPUT_DIR}."
-
-    newest="${newest##*/}"
-    echo "${newest#uniprot-}"
+    database_version_of "$newest"
 }
 
 parse_arguments "$@"
@@ -85,8 +83,7 @@ fi
 echo "Checking ${INDEX_DIR}"
 
 status=0
-check_index "$INDEX_DIR" || status=1
-check_index_version "$INDEX_DIR" || status=1
+verify_database "$INDEX_DIR" || status=1
 
 if [ -s "${INDEX_DIR}/build-info.txt" ]; then
     sed 's/^/  /' "${INDEX_DIR}/build-info.txt"
