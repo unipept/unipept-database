@@ -1,7 +1,7 @@
 # Deploying a Unipept database
 
-Two scripts build and distribute the database a Unipept API host serves. They orchestrate; the
-pipeline itself lives in `pipelines/` and the loader in `opensearch/`.
+Three scripts build, distribute and check the database a Unipept API host serves. They
+orchestrate; the pipeline itself lives in `pipelines/` and the loader in `opensearch/`.
 
 - `build.sh` builds everything on this host: the tables, the suffix array, the `datastore/` layout
   the API reads, and the proteins in OpenSearch.
@@ -15,8 +15,8 @@ pipeline itself lives in `pipelines/` and the loader in `opensearch/`.
 ## Configuration
 
 Copy `deploy.conf.example` to `deploy.conf` and edit it. A flag wins over that file, and the file
-wins over the defaults in `lib.sh` for the settings both scripts have, and in `build.sh` or
-`clone.sh` for the settings one of them has:
+wins over the defaults in `lib.sh` for the settings the scripts share, and in each script for the
+settings only it has:
 
 ```sh
 cp .deploy/deploy.conf.example .deploy/deploy.conf
