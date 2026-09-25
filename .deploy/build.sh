@@ -14,7 +14,7 @@ source "${HERE}/lib.sh"
 trap errorAndExit ERR
 trap 'exit 2' USR1
 
-# The settings only this script has. lib.sh holds the two both scripts have.
+# The settings only this script has. lib.sh holds the ones it shares.
 
 # Where the repositories are cloned and built. The tables are not built here: they go to a staging
 # directory under OUTPUT_DIR, which is the volume that has to hold the whole build.
@@ -176,6 +176,11 @@ log "Cloned unipept-index at ${INDEX_COMMIT}."
 
 build_suffix_array "$STAGING_DIR" "$INDEX_DIR"
 fill_datastore "$STAGING_DIR"
+
+# As soon as the layout is complete, and before anything outside the staging directory changes: the
+# load below drops and recreates the index the API queries, so a build refused after it would
+# already have replaced the proteins that serve the database it leaves in place.
+verify_database "${STAGING_DIR}/suffix-array" || die "the build is missing files the API needs."
 
 UNIPROT_VERSION=$(uniprot_version_from "${STAGING_DIR}/tables/.version")
 log "UniProtKB version is ${UNIPROT_VERSION}."

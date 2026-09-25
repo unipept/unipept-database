@@ -15,7 +15,7 @@ source "${HERE}/lib.sh"
 trap errorAndExit ERR
 trap 'exit 2' USR1
 
-# The settings only this script has. lib.sh holds the two both scripts have.
+# The settings only this script has. lib.sh holds the ones it shares.
 
 # The host a finished database is copied from.
 REMOTE_ADDRESS=
@@ -83,19 +83,34 @@ remote_sh() {
 # appear while one is running.
 remote_latest_version() {
     local newest
-    newest=$(remote_sh "ls -1d '${REMOTE_OUTPUT_DIR}'/uniprot-* 2> /dev/null | sort" | tail -n 1) \
+    newest=$(remote_sh "ls -1d '${REMOTE_OUTPUT_DIR}'/${DATABASE_GLOB} 2> /dev/null | sort" | tail -n 1) \
         || true
 
     [ -n "$newest" ] || die "found no database in ${REMOTE_OUTPUT_DIR} on ${REMOTE_ADDRESS}."
+    database_version_of "$newest"
+}
 
-    newest="${newest##*/}"
-    echo "${newest#uniprot-}"
+# The same checks the copy gets afterwards, run on the remote host before anything is copied. A
+# database the remote holds incomplete, or under a name its .version disagrees with, is refused here
+# rather than after hundreds of gigabytes of scp. The functions and the lists they read are sent
+# along, so both sides check against this checkout's contract.
+check_remote_database() {
+    local remote_dir="$1"
+
+    remote_sh "[ -d '${remote_dir}' ]" || die "the remote host has no ${remote_dir}"
+
+    remote_sh bash -s <<REMOTE || die "the database on ${REMOTE_ADDRESS} is missing files the API needs, or is not the version it is named after."
+$(declare -p INDEX_FILES OPTIONAL_INDEX_FILES)
+$(declare -f verify_database check_index check_index_version database_version_of read_version)
+status=0
+verify_database '${remote_dir}/suffix-array' || status=1
+[ -s '${remote_dir}/tables/uniprot_entries.tsv.lz4' ] || { echo "FAIL tables/uniprot_entries.tsv.lz4 is missing" 1>&2; status=1; }
+exit "\$status"
+REMOTE
 }
 
 copy_database() {
     local staging="$1" remote_dir="$2"
-
-    remote_sh "[ -d '${remote_dir}' ]" || die "the remote host has no ${remote_dir}"
 
     rm -rf "${staging:?}"
     mkdir -p "$staging"
@@ -110,22 +125,23 @@ copy_database() {
 # What the API needs, and the table clone.sh itself reads. A copy that stopped part way leaves
 # files that exist and are short, so the check is on content.
 check_database() {
-    local dir="$1" remote_dir="$2" file
-
-    for file in suffix-array/sa.bin suffix-array/proteins.bin suffix-array/mapping.bin \
-        suffix-array/.version tables/uniprot_entries.tsv.lz4; do
-        [ -s "${dir}/${file}" ] || die "the copied database has no ${file}"
-    done
+    local dir="$1" remote_dir="$2"
 
     # The k-mer table is an accelerator the API runs without, so a database built before build.sh
     # wrote one has none and is still worth cloning. The remote decides: one the remote has and the
-    # copy does not is a copy that lost it.
+    # copy does not is a copy that lost it. Before verify_database, whose warning that the table is
+    # optional would otherwise precede the error that says it is not.
     if remote_sh "[ -s '${remote_dir}/suffix-array/kmer_table.bin' ]"; then
         [ -s "${dir}/suffix-array/kmer_table.bin" ] \
             || die "the remote has a k-mer table and the copy does not"
-    else
-        log "The remote database has no k-mer table. Searches read the whole suffix array."
     fi
+
+    verify_database "${dir}/suffix-array" \
+        || die "the copy is missing files the API needs, or is not the version it is named after."
+
+    # Outside the index, so not in INDEX_FILES: it is what this script feeds to OpenSearch.
+    [ -s "${dir}/tables/uniprot_entries.tsv.lz4" ] \
+        || die "the copied database has no tables/uniprot_entries.tsv.lz4"
 }
 
 load_opensearch() {
@@ -158,6 +174,7 @@ fi
 # host already serves untouched.
 STAGING_DIR="${OUTPUT_DIR}/.clone"
 REMOTE_DIR="${REMOTE_OUTPUT_DIR}/uniprot-${UNIPROT_VERSION}"
+check_remote_database "$REMOTE_DIR"
 copy_database "$STAGING_DIR" "$REMOTE_DIR"
 
 COPIED_DIR="${STAGING_DIR}/uniprot-${UNIPROT_VERSION}"
