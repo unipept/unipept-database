@@ -135,6 +135,14 @@ check "an unreadable .version fails" "$?" "1"
 check_true "it is reported unreadable" said ".version is not readable"
 check_true "it is not also reported as a version mismatch" not_said ".version says"
 
+index="$(make_index "${TEMP_DIR}/unreadable-index")"
+chmod 000 "$index"
+output="$("$VERIFY" --index-dir "$index" 2>&1)"
+check "an index directory that cannot be entered fails" "$?" "1"
+check_true "the directory is reported unreadable" said "${index} is not readable"
+check "it is the only failure" "$(printf '%s\n' "$output" | grep -c '^FAIL')" "1"
+check_true "build-info.txt is not called missing" not_said "build-info.txt is missing"
+
 
 section "the directory name and .version"
 
@@ -181,6 +189,35 @@ check "no database at all is an error" "$?" "2"
 
 "$VERIFY" --index-dir "$INDEX" --uniprot-version 2026-03 > /dev/null 2>&1
 check "two ways of naming one database is an error" "$?" "2"
+
+output="$("$VERIFY" --index-dir "${TEMP_DIR}/no-such-index" 2>&1)"
+check "an index directory that is not there fails" "$?" "1"
+check_true "it is named" said "${TEMP_DIR}/no-such-index is not a directory"
+check_true "build-info.txt is not called missing" not_said "build-info.txt is missing"
+
+output="$("$VERIFY" --output-dir "$root" --uniprot-version 2030-01 2>&1)"
+check "a version that is not there fails" "$?" "1"
+check_true "the directory it looked for is named" said "uniprot-2030-01/suffix-array is not a directory"
+
+# The API is often pointed at a link that is not named after a version. There is no name to
+# compare .version with, so only the files are checked.
+ln -s "${root}/uniprot-2025-11/suffix-array" "${TEMP_DIR}/current"
+output="$("$VERIFY" --index-dir "${TEMP_DIR}/current" 2>&1)"
+check "a directory not named after a version passes" "$?" "0"
+check_true "its .version is not compared with the name" not_said ".version says"
+
+
+section "arguments"
+
+"$VERIFY" --no-such-flag > /dev/null 2>&1
+check "an unknown option is an error" "$?" "2"
+
+"$VERIFY" --index-dir > /dev/null 2>&1
+check "an option without its value is an error" "$?" "2"
+
+output="$("$VERIFY" --index-dir --output-dir "$root" 2>&1)"
+check "an option does not take the next option as its value" "$?" "2"
+check_true "the option is named" said "--index-dir requires a value"
 
 
 section "a deploy.conf that pins the version clone.sh fetches"

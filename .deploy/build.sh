@@ -14,7 +14,7 @@ source "${HERE}/lib.sh"
 trap errorAndExit ERR
 trap 'exit 2' USR1
 
-# The settings only this script has. lib.sh holds the two both scripts have.
+# The settings only this script has. lib.sh holds the ones it shares.
 
 # Where the repositories are cloned and built. The tables are not built here: they go to a staging
 # directory under OUTPUT_DIR, which is the volume that has to hold the whole build.

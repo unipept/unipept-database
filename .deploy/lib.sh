@@ -1,6 +1,6 @@
 # shellcheck shell=bash
 ################################################################################
-# Settings and helpers shared by build.sh and clone.sh. Sourced, never run.    #
+# Settings and helpers the scripts in .deploy share. Sourced, never run.       #
 ################################################################################
 
 # The directory of this file. Not HERE, which belongs to the script that sources it.
@@ -14,8 +14,8 @@ source "${DEPLOY_DIR}/../pipelines/lib/common.sh"
 #                                   Settings                                   #
 ################################################################################
 
-# The settings both scripts have. Each script adds the ones only it uses, and calls read_conf once
-# all of them have a default.
+# The settings more than one script has. Each script adds the ones only it uses, and calls read_conf
+# once all of them have a default.
 
 # Where the finished databases are written, one directory per UniProtKB version.
 # shellcheck disable=SC2034 # read by the scripts that source this file
@@ -175,8 +175,7 @@ database_version_of() {
 }
 
 # The directory a build writes is named after the version inside it. A pair that disagrees means
-# one of the two came from somewhere else, which is the defect that made the version a build reads
-# and the version it is called by two different things.
+# one of the two came from somewhere else.
 check_index_version() {
     local index="$1" named version
 

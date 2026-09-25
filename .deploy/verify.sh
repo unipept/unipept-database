@@ -16,9 +16,9 @@ trap 'exit 2' USR1
 
 read_conf
 
-# The settings only this script has. lib.sh holds the two both other scripts have. After read_conf
-# rather than before: a UNIPROT_VERSION in deploy.conf is the release clone.sh fetches, not the one
-# to check, so it takes no part here.
+# The settings only this script has. lib.sh holds the ones it shares. After read_conf rather than
+# before: a UNIPROT_VERSION in deploy.conf is the release clone.sh fetches, not the one to check,
+# so it takes no part here.
 
 # Which database to check. Empty means the newest one under OUTPUT_DIR.
 UNIPROT_VERSION=
@@ -86,9 +86,10 @@ echo "Checking ${INDEX_DIR}"
 status=0
 verify_database "$INDEX_DIR" || status=1
 
+# Only in a directory it could look in: check_index has already said why it could not.
 if [ -s "${INDEX_DIR}/build-info.txt" ]; then
     sed 's/^/  /' "${INDEX_DIR}/build-info.txt"
-else
+elif [ -d "$INDEX_DIR" ] && [ -x "$INDEX_DIR" ]; then
     echo "WARN build-info.txt is missing; nothing records what this database was built from" 1>&2
 fi
 

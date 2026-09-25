@@ -15,7 +15,7 @@ source "${HERE}/lib.sh"
 trap errorAndExit ERR
 trap 'exit 2' USR1
 
-# The settings only this script has. lib.sh holds the two both scripts have.
+# The settings only this script has. lib.sh holds the ones it shares.
 
 # The host a finished database is copied from.
 REMOTE_ADDRESS=
@@ -129,7 +129,7 @@ check_database() {
 
     # The k-mer table is an accelerator the API runs without, so a database built before build.sh
     # wrote one has none and is still worth cloning. The remote decides: one the remote has and the
-    # copy does not is a copy that lost it. Before check_index, whose warning that the table is
+    # copy does not is a copy that lost it. Before verify_database, whose warning that the table is
     # optional would otherwise precede the error that says it is not.
     if remote_sh "[ -s '${remote_dir}/suffix-array/kmer_table.bin' ]"; then
         [ -s "${dir}/suffix-array/kmer_table.bin" ] \
