@@ -13,7 +13,7 @@
 #   3. Install the pinned version, and hold it so an unrelated upgrade cannot move it.
 #   4. Write the configuration this instance needs, keeping a copy of what was there and the data
 #      and log paths it named.
-#   5. Write the heap size, which is the one number a host has to decide.
+#   5. Write the heap size.
 #   6. Enable and start the service, restarting it only when something above changed, and wait
 #      for it to answer.
 #
@@ -39,9 +39,11 @@ source "${HERE}/version.sh"
 
 # The heap OpenSearch takes, and the one number a host decides. Deliberately small: this host also
 # serves the API, which holds the index resident, and unipept-api/.deploy sizes that against the
-# memory it can see. Heap taken here is memory that sizing does not know about. Empty keeps what
-# the host already has, and a host that has nothing gets DEFAULT_HEAP, so a rerun without --heap
-# does not undo the one it was provisioned with.
+# memory it can see. Heap taken here is memory that sizing does not know about. The README and
+# deploy.conf.example point here rather than repeat this.
+#
+# Empty keeps what the host already has, and a host that has nothing gets DEFAULT_HEAP, so a rerun
+# without --heap does not undo the one it was provisioned with.
 OPENSEARCH_HEAP=
 readonly DEFAULT_HEAP=4g
 
@@ -254,6 +256,28 @@ start_opensearch() {
     log "OpenSearch is up."
 }
 
+# One node holds no replica, so an index that asks for one stays yellow, and cluster health then
+# says nothing about whether this host is well. uniprot_entries asks for none itself; this is for
+# every other index. Cluster settings, so through the API once the node is up.
+#
+# The default covers every index created from now on, hidden ones included, which an index
+# template does not. The query insights plugin asks for a replica for its top_queries-* indices
+# whatever the default says, so its exporter to a local index is turned off: the top queries stay
+# available from the plugin's API, in memory. The indices already there are set to none as well.
+# Measured on 2.19.0, where these leave a fresh node green.
+single_node_settings() {
+    local url="$1"
+
+    curl -sSf -o /dev/null -X PUT "${url}/_cluster/settings" -H 'Content-Type: application/json' \
+        -d '{"persistent":{"cluster.default_number_of_replicas":0,"search.insights.top_queries.exporter.type":"none"}}' \
+        || die "could not set the cluster settings a single node needs at ${url}."
+    curl -sSf -o /dev/null -X PUT "${url}/_all/_settings?expand_wildcards=all" -H 'Content-Type: application/json' \
+        -d '{"index":{"number_of_replicas":0}}' \
+        || die "could not remove the replicas of the indices already at ${url}."
+
+    log "Set every index to hold no replica, as a single node has nowhere to put one."
+}
+
 parse_arguments "$@"
 
 [ "$(id -u)" -eq 0 ] || die "run this as root. It is the only step that needs it."
@@ -267,5 +291,6 @@ add_repository
 install_opensearch
 write_config
 start_opensearch
+single_node_settings "$(ready_url)"
 
 log "The host is ready. Load the proteins with opensearch/load.sh, or let .deploy/build.sh do it."

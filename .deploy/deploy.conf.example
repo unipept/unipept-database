@@ -20,9 +20,8 @@ OUTPUT_DIR=/mnt/data
 #REMOTE_ADDRESS=selma.ugent.be
 #LOCAL_SSH_KEY=/home/unipept/.ssh/id_unipept
 
-# opensearch/install.sh: the heap the instance takes. The one number a host decides, kept low
-# because the API on this host holds its index resident.
-#OPENSEARCH_HEAP=4g
+# opensearch/install.sh: the heap the instance takes. See OPENSEARCH_HEAP there for why it is low.
+#OPENSEARCH_HEAP=8g
 
 # Uncomment to depart from the defaults.
 #DATABASE_SOURCES=swissprot,trembl

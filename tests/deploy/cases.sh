@@ -264,10 +264,10 @@ case "\$1" in
     restart) touch "${WORK}/opensearch-active" ;;
 esac
 STUB
-    # The instance: answers at once, and records where it was asked.
+    # The instance: answers at once, and records each request.
     cat > "${INSTALL_STUBS}/curl" <<STUB
 #!/usr/bin/env bash
-printf '%s\n' "\${*: -1}" >> "${WORK}/curl-calls"
+printf '%s\n' "\$*" >> "${WORK}/curl-calls"
 STUB
     printf '#!/usr/bin/env bash\nexit 0\n' > "${INSTALL_STUBS}/gpg"
     chmod +x "${INSTALL_STUBS}"/*
@@ -309,7 +309,10 @@ check_true "the data path the package set is kept" grep -qx 'path.data: /var/lib
 check_true "and the log path" grep -qx 'path.logs: /var/log/opensearch' "$CONFIG"
 check_true "the heap defaults to 4g" grep -qx -- '-Xmx4g' "$HEAP"
 check_true "the service is restarted" grep -qx 'restart opensearch' /work/systemctl-calls
-check "it waits on the address it configured" "$(tail -n 1 /work/curl-calls)" "http://127.0.0.1:9200/_cluster/health"
+check_true "it waits on the address it configured" grep -qF 'http://127.0.0.1:9200/_cluster/health' /work/curl-calls
+check_true "new indices default to no replica" grep -qF '"cluster.default_number_of_replicas":0' /work/curl-calls
+check_true "the plugin's replicated indices are not written" grep -qF '"search.insights.top_queries.exporter.type":"none"' /work/curl-calls
+check_true "the indices already there lose theirs" grep -qF '/_all/_settings?expand_wildcards=all' /work/curl-calls
 
 
 section "install.sh a second time"
@@ -379,12 +382,13 @@ forget_calls
 install_opensearch --bind 10.0.0.5 --port 9201
 check "it succeeds" "$?" "0"
 check_true "the port is configured" grep -qx 'http.port: 9201' "$CONFIG"
-check "it waits on the bind address and port" "$(tail -n 1 /work/curl-calls)" "http://10.0.0.5:9201/_cluster/health"
+check_true "it waits on the bind address and port" grep -qF 'http://10.0.0.5:9201/_cluster/health' /work/curl-calls
+check_true "and sets the cluster there" grep -qF 'http://10.0.0.5:9201/_cluster/settings' /work/curl-calls
 
 forget_calls
 install_opensearch --bind 0.0.0.0
 check "a wildcard bind succeeds" "$?" "0"
-check "it waits on the loopback address" "$(tail -n 1 /work/curl-calls)" "http://127.0.0.1:9200/_cluster/health"
+check_true "it waits on the loopback address" grep -qF 'http://127.0.0.1:9200/_cluster/health' /work/curl-calls
 
 
 summary

@@ -33,10 +33,13 @@ The instance binds to localhost and runs with the security plugin off, which is 
 and the API both expect. That pair is only safe while nothing outside the host can reach it, so
 change the bind address only together with turning the security plugin back on.
 
-The heap is the one number a host decides, and it defaults low. This host also serves the API,
-which holds the index resident, and `unipept-api/.deploy` sizes that against the memory it can
-see: heap taken here is memory that sizing does not know about. A later run without `--heap`
-keeps the heap the host already has.
+The heap is the one number a host decides, and it defaults low; `OPENSEARCH_HEAP` in the script
+says why. A later run without `--heap` keeps the heap the host already has.
+
+Every index is set to hold no replica, since a single node has nowhere to put one and a replica
+it cannot place keeps the cluster yellow. That includes the query insights plugin's
+`top_queries-*` indices, which it would otherwise create with one, so its exporter to a local
+index is off.
 
 ## Configuration
 
