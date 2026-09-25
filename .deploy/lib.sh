@@ -104,7 +104,8 @@ check_loader_deps() {
 
 # build.sh and clone.sh write what the API serves, so they run as the user the API reads as. Run as
 # root, they leave a database owned by root: one the next run as DEPLOY_USER cannot replace, and
-# one whose readability check passes only because root reads everything.
+# one whose readability check passes only because root reads everything. verify.sh writes nothing,
+# but its check is that same readability check, so it refuses root for that reason alone.
 refuse_root() {
     [ "$(id -u)" -ne 0 ] \
         || die "do not run this as root. Run it as ${DEPLOY_USER}, for example: sudo -iu ${DEPLOY_USER}. Only .deploy/opensearch/install.sh needs root."
@@ -114,8 +115,8 @@ refuse_root() {
 # non-zero if any of them was. An empty file passes the API's own readable check and fails the
 # service later, so the test here is on content.
 #
-# Readable means readable by whoever runs this. Run it as the user the API runs as: root reads
-# everything, so as root an unreadable file passes.
+# Readable means readable by whoever runs this. Root reads everything, so as root an unreadable
+# file would pass: every script that calls this refuses root first.
 check_index() {
     local index="$1" relative missing=0 hidden=''
 

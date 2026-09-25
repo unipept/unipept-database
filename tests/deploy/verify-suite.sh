@@ -15,6 +15,13 @@ source "${HERE}/../../.deploy/lib.sh"
 
 VERIFY="${HERE}/../../.deploy/verify.sh"
 
+# verify.sh refuses root, because root reads everything and its check is whether the API can read
+# the files. The container suite checks that refusal; here there is nothing else to run.
+if [ "$(id -u)" -eq 0 ]; then
+    echo "SKIP running as root, which verify.sh refuses"
+    exit 0
+fi
+
 TEMP_DIR="$(mktemp -d)"
 # The permission cases take access away, and rm cannot clear what it cannot enter.
 trap 'chmod -R u+rwx "${TEMP_DIR}" 2>/dev/null; rm -rf "${TEMP_DIR}"' EXIT
@@ -108,31 +115,25 @@ done
 
 section "files that are there and cannot be read"
 
-# Root reads everything, so these only mean something as another user. That is also how the check
-# is meant to be run: as the user the API runs as.
-if [ "$(id -u)" -eq 0 ]; then
-    echo "  SKIP running as root, which can read any file"
-else
-    index="$(make_index "${TEMP_DIR}/unreadable-file")"
-    chmod 000 "${index}/sa.bin"
-    output="$("$VERIFY" --index-dir "$index" 2>&1)"
-    check "an unreadable file fails" "$?" "1"
-    check_true "it is reported unreadable" said "sa.bin is not readable"
+index="$(make_index "${TEMP_DIR}/unreadable-file")"
+chmod 000 "${index}/sa.bin"
+output="$("$VERIFY" --index-dir "$index" 2>&1)"
+check "an unreadable file fails" "$?" "1"
+check_true "it is reported unreadable" said "sa.bin is not readable"
 
-    index="$(make_index "${TEMP_DIR}/unreadable-dir")"
-    chmod 000 "${index}/datastore"
-    output="$("$VERIFY" --index-dir "$index" 2>&1)"
-    check "an unreadable datastore fails" "$?" "1"
-    check_true "the directory is reported unreadable" said "datastore/ is not readable"
-    check_true "its tables are not reported missing" not_said "is missing"
+index="$(make_index "${TEMP_DIR}/unreadable-dir")"
+chmod 000 "${index}/datastore"
+output="$("$VERIFY" --index-dir "$index" 2>&1)"
+check "an unreadable datastore fails" "$?" "1"
+check_true "the directory is reported unreadable" said "datastore/ is not readable"
+check_true "its tables are not reported missing" not_said "is missing"
 
-    index="$(make_index "${TEMP_DIR}/unreadable-version")"
-    chmod 000 "${index}/.version"
-    output="$("$VERIFY" --index-dir "$index" 2>&1)"
-    check "an unreadable .version fails" "$?" "1"
-    check_true "it is reported unreadable" said ".version is not readable"
-    check_true "it is not also reported as a version mismatch" not_said ".version says"
-fi
+index="$(make_index "${TEMP_DIR}/unreadable-version")"
+chmod 000 "${index}/.version"
+output="$("$VERIFY" --index-dir "$index" 2>&1)"
+check "an unreadable .version fails" "$?" "1"
+check_true "it is reported unreadable" said ".version is not readable"
+check_true "it is not also reported as a version mismatch" not_said ".version says"
 
 
 section "the directory name and .version"

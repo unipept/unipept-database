@@ -120,7 +120,7 @@ chown -R "${DEPLOY}:" "$WORK"
 setup_sshd
 
 
-section "build.sh and clone.sh as root"
+section "build.sh, clone.sh and verify.sh as root"
 
 "${CHECKOUT}/.deploy/build.sh" --output-dir /work/as-root --scratch-dir /work/scratch > /work/last-output 2>&1
 check "build.sh refuses" "$?" "2"
@@ -130,6 +130,10 @@ check_true "before it writes anything" test ! -e /work/as-root
 "${CHECKOUT}/.deploy/clone.sh" --remote-address localhost --local-ssh-key "${DEPLOY_HOME}/.ssh/id_test" \
     --output-dir /work/as-root > /work/last-output 2>&1
 check "clone.sh refuses" "$?" "2"
+check_true "it names the user to run as" grep -q "Run it as ${DEPLOY}" /work/last-output
+
+"${CHECKOUT}/.deploy/verify.sh" --index-dir /work > /work/last-output 2>&1
+check "verify.sh refuses" "$?" "2"
 check_true "it names the user to run as" grep -q "Run it as ${DEPLOY}" /work/last-output
 
 
@@ -142,7 +146,7 @@ check "the build succeeds" "$?" "0"
 check_true "the database is named after the version the pipeline wrote" \
     test -d "${OUT}/uniprot-2026-03"
 check_true "verify.sh passes on it" \
-    "${CHECKOUT}/.deploy/verify.sh" --index-dir "${OUT}/uniprot-2026-03/suffix-array"
+    as_deployer "${CHECKOUT}/.deploy/verify.sh" --index-dir "${OUT}/uniprot-2026-03/suffix-array"
 check_true "the staging directory is gone" test ! -d "${OUT}/.build"
 check_true "the entries table is kept for clone.sh" \
     test -s "${OUT}/uniprot-2026-03/tables/uniprot_entries.tsv.lz4"
@@ -215,7 +219,7 @@ check_true "the older one is left alone" test ! -d "${LOCAL}/uniprot-2025-11"
 check_true "the copy lands where the script looks for it" \
     test -s "${LOCAL}/uniprot-2026-03/suffix-array/sa.bin"
 check_true "verify.sh passes on the copy" \
-    "${CHECKOUT}/.deploy/verify.sh" --index-dir "${LOCAL}/uniprot-2026-03/suffix-array"
+    as_deployer "${CHECKOUT}/.deploy/verify.sh" --index-dir "${LOCAL}/uniprot-2026-03/suffix-array"
 check_true "the staging directory is gone" test ! -d "${LOCAL}/.clone"
 
 clone --remote-output-dir "$REMOTE" --output-dir "$LOCAL" --uniprot-version 2025-11
