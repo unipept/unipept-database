@@ -119,6 +119,9 @@ setup_sshd() {
     ssh-keyscan -H localhost >> /root/.ssh/known_hosts 2>/dev/null
 }
 
+# For check_true, which runs a command rather than evaluating an expression.
+not() { ! "$@"; }
+
 build() {
     "${CHECKOUT}/.deploy/build.sh" "$@" > /work/last-output 2>&1
 }
@@ -187,10 +190,13 @@ section "a build whose tables are empty"
 printf '\nprintf "" | lz4 -c > "${OUT}/taxons.tsv.lz4"\n' >> "${CHECKOUT}/pipelines/suffix-array/build.sh"
 EMPTY_OUT=/work/data-empty
 mkdir -p "$EMPTY_OUT"
+rm -f /work/loader-calls
 build --output-dir "$EMPTY_OUT" --scratch-dir /work/scratch
 check "it stops" "$?" "2"
 check_true "the empty table is named" grep -q 'datastore/taxons.tsv is empty' /work/last-output
 check_true "no database is put in place" test ! -d "${EMPTY_OUT}/uniprot-2026-03"
+# The loader drops and recreates the index the API queries, so a refused build must not reach it.
+check_true "the proteins OpenSearch serves are left alone" test ! -s /work/loader-calls
 git -C "$CHECKOUT" checkout -q -- pipelines/suffix-array/build.sh
 
 
@@ -202,10 +208,13 @@ mkdir -p "$REMOTE" "$LOCAL"
 cp -r "${OUT}/uniprot-2026-03" "${REMOTE}/uniprot-2026-03"
 cp -r "${OUT}/uniprot-2026-03" "${REMOTE}/uniprot-2025-11"
 printf '2025.11\n' > "${REMOTE}/uniprot-2025-11/suffix-array/.version"
+# What an interrupted swap leaves behind on the remote. It sorts after the database it replaced.
+cp -r "${OUT}/uniprot-2026-03" "${REMOTE}/uniprot-2026-03.replaced"
 
 clone --remote-output-dir "$REMOTE" --output-dir "$LOCAL" --opensearch-url http://stub:9200
 check "the clone succeeds" "$?" "0"
 check_true "the newest release on the remote is the one taken" test -d "${LOCAL}/uniprot-2026-03"
+check_true "a leftover beside it is not taken for a release" test ! -e "${LOCAL}/uniprot-2026-03.replaced"
 check_true "the older one is left alone" test ! -d "${LOCAL}/uniprot-2025-11"
 check_true "the copy lands where the script looks for it" \
     test -s "${LOCAL}/uniprot-2026-03/suffix-array/sa.bin"
@@ -227,11 +236,26 @@ check_true "the release is named" grep -q 'uniprot-2030-01' /work/last-output
 clone --remote-output-dir /work/nothing-here --output-dir "$LOCAL"
 check "a remote with no database stops" "$?" "2"
 
+# An scp that loses the k-mer table on the way, which the remote has.
+cat > "${STUBS}/scp" <<SCP
+#!/usr/bin/env bash
+/usr/bin/scp "\$@" || exit
+rm -f ${LOCAL}/.clone/*/suffix-array/kmer_table.bin
+SCP
+chmod +x "${STUBS}/scp"
+clone --remote-output-dir "$REMOTE" --output-dir "$LOCAL" --replace
+check "a copy that lost the k-mer table stops" "$?" "2"
+check_true "it says the copy lost it" grep -q 'the remote has a k-mer table and the copy does not' /work/last-output
+check_true "it does not first call the table optional" not grep -q 'WARN kmer_table.bin' /work/last-output
+check_true "the database that was there is kept" test -s "${LOCAL}/uniprot-2026-03/suffix-array/kmer_table.bin"
+rm "${STUBS}/scp"
+
 rm "${REMOTE}/uniprot-2026-03/suffix-array/mapping.bin"
-rm -rf "${LOCAL}/uniprot-2026-03"
+rm -rf "${LOCAL}/uniprot-2026-03" "${LOCAL}/.clone"
 clone --remote-output-dir "$REMOTE" --output-dir "$LOCAL"
 check "an incomplete database on the remote stops" "$?" "2"
-check_true "the missing file is named" grep -q 'mapping.bin' /work/last-output
+check_true "the missing file is named" grep -q 'mapping.bin is missing' /work/last-output
+check_true "it stops before copying anything" test ! -e "${LOCAL}/.clone"
 check_true "nothing is put in place" test ! -d "${LOCAL}/uniprot-2026-03"
 
 
