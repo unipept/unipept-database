@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
 #
-# Prepares a host to hold the proteins: installs OpenSearch, configures it for the one instance
-# this host runs, and starts it. Run once per host, as root. Run it with --help for the options.
+# Prepares a host to build, clone and hold a Unipept database: the user that owns the databases,
+# the tools build.sh and clone.sh run, and the OpenSearch instance the proteins are loaded into.
+# Run as root. Run it with --help for the options.
+#
+# This is the only step that needs root. Afterwards DEPLOY_USER owns OUTPUT_DIR and has every tool
+# it needs, so build.sh and clone.sh run as that user without sudo, as the API's deploy does.
 #
 # For the Ubuntu 24.04 LTS the servers run: it installs through apt and starts through systemd.
 #
@@ -9,13 +13,19 @@
 #
 # Flow:
 #   1. Check that this runs as root on a host with apt and systemd.
-#   2. Add the OpenSearch APT repository, unless it is already there.
-#   3. Install the pinned version, and hold it so an unrelated upgrade cannot move it.
-#   4. Write the configuration this instance needs, keeping a copy of what was there and the data
+#   2. Create DEPLOY_USER, or give an account that already exists a login shell: clone.sh copies
+#      over ssh as that user, and sshd needs a shell to run a remote command.
+#   3. Install the tools build.sh and clone.sh use, the ones not installed already.
+#   4. Create OUTPUT_DIR owned by DEPLOY_USER, and hand it the databases a run as root left.
+#   5. Add the OpenSearch APT repository, unless it is already there.
+#   6. Install the pinned version, and hold it so an unrelated upgrade cannot move it.
+#   7. Write the configuration this instance needs, keeping a copy of what was there and the data
 #      and log paths it named.
-#   5. Write the heap size.
-#   6. Enable and start the service, restarting it only when something above changed, and wait
+#   8. Write the heap size.
+#   9. Enable and start the service, restarting it only when something above changed, and wait
 #      for it to answer.
+#  10. Set every index to hold no replica.
+#  11. Say what is left to do as DEPLOY_USER.
 #
 # A second run with the same settings changes nothing and restarts nothing.
 
@@ -63,6 +73,18 @@ OPENSEARCH_READY_TIMEOUT=180
 
 read_conf
 
+# What build.sh and clone.sh run, by package: git, cmake and a C toolchain for the index build,
+# lz4, pv, pigz, gawk, unzip, uuidgen, xmllint and curl for the pipeline, python3-requests for the
+# loader, ssh and scp for the clone, and gnupg for the OpenSearch repository's key below. The Rust
+# toolchain is not here: the repository pins its own through rust-toolchain.toml, which rustup,
+# installed as DEPLOY_USER, follows.
+readonly TOOL_PACKAGES=(
+    git cmake build-essential curl ca-certificates gnupg
+    lz4 pv pigz gawk unzip uuid-runtime libxml2-utils
+    python3 python3-requests
+    openssh-client
+)
+
 readonly APT_LIST=/etc/apt/sources.list.d/opensearch-2.x.list
 readonly APT_KEYRING=/usr/share/keyrings/opensearch-keyring.gpg
 readonly CONFIG_FILE=/etc/opensearch/opensearch.yml
@@ -84,6 +106,8 @@ Installs and configures the OpenSearch instance this host loads its proteins int
   --port PORT              the port it listens on
   --data-dir DIR           where it keeps its data; default what the configuration names
   --log-dir DIR            where it writes its logs; default what the configuration names
+  --user USER              who builds, clones and owns the databases
+  --output-dir DIR         where the databases are, handed to that user
   --help                   print this message
 
 A flag wins over .deploy/deploy.conf, which wins over the defaults in this script.
@@ -98,6 +122,8 @@ parse_arguments() {
             --port) need_value "$1" "${2-}"; OPENSEARCH_PORT="$2"; shift 2 ;;
             --data-dir) need_value "$1" "${2-}"; OPENSEARCH_DATA_DIR="$2"; shift 2 ;;
             --log-dir) need_value "$1" "${2-}"; OPENSEARCH_LOG_DIR="$2"; shift 2 ;;
+            --user) need_value "$1" "${2-}"; DEPLOY_USER="$2"; shift 2 ;;
+            --output-dir) need_value "$1" "${2-}"; OUTPUT_DIR="$2"; shift 2 ;;
             --help) usage; exit 0 ;;
             *) die "unknown option '$1'" ;;
         esac
@@ -126,6 +152,72 @@ write_if_changed() {
     fi
     printf '%s\n' "$content" > "$target"
     CHANGED=true
+}
+
+# The user build.sh and clone.sh run as. A home, because rustup and the ssh key live in it. A real
+# shell, because clone.sh runs commands on the remote host over ssh as this user, and sshd runs a
+# remote command through the login shell: nologin answers and runs nothing. The API's install makes
+# the same account the same way, so the two can run in either order.
+ensure_user() {
+    if id "$DEPLOY_USER" > /dev/null 2>&1; then
+        case "$(getent passwd "$DEPLOY_USER" | cut -d: -f7)" in
+            *nologin | *false)
+                usermod --shell /bin/bash "$DEPLOY_USER"
+                log "Gave ${DEPLOY_USER} a login shell, for ssh." ;;
+        esac
+    else
+        useradd --create-home --shell /bin/bash "$DEPLOY_USER"
+        log "Created the ${DEPLOY_USER} user."
+    fi
+}
+
+# Only the packages that are missing, so a second run does not reach apt at all.
+install_tools() {
+    local package missing=()
+
+    for package in "${TOOL_PACKAGES[@]}"; do
+        [ "$(dpkg-query --showformat='${db:Status-Status}' --show "$package" 2> /dev/null)" = installed ] \
+            || missing+=("$package")
+    done
+
+    if [ "${#missing[@]}" -eq 0 ]; then
+        log "The tools build.sh and clone.sh use are installed."
+        return
+    fi
+
+    log "Installing ${missing[*]}."
+    apt-get update -qq
+    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "${missing[@]}"
+}
+
+# The directory the databases are written to, owned by DEPLOY_USER so a build or a clone creates
+# and renames in it without root. Only the directory itself and what build.sh and clone.sh write in
+# it change owner: OUTPUT_DIR is often a volume that holds other things, OpenSearch's data among
+# them, whose owners are not this script's to change.
+prepare_output_dir() {
+    local entry
+
+    if [ ! -d "$OUTPUT_DIR" ]; then
+        install -d -m 0755 -o "$DEPLOY_USER" -g "$DEPLOY_USER" "$OUTPUT_DIR"
+        log "Created ${OUTPUT_DIR} for ${DEPLOY_USER}."
+        return
+    fi
+
+    [ "$(stat -c %U "$OUTPUT_DIR")" = "$DEPLOY_USER" ] || {
+        chown "${DEPLOY_USER}:" "$OUTPUT_DIR"
+        log "Gave ${OUTPUT_DIR} to ${DEPLOY_USER}."
+    }
+
+    # What an earlier run as root left: databases the next run could not replace, and staging
+    # directories it could not remove. A database is a few dozen files, so this is quick.
+    # shellcheck disable=SC2231 # DATABASE_GLOB is a glob, and has to expand
+    for entry in "$OUTPUT_DIR"/${DATABASE_GLOB} "${OUTPUT_DIR}/.build" "${OUTPUT_DIR}/.clone"; do
+        [ -e "$entry" ] || continue
+        if [ -n "$(find "$entry" ! -user "$DEPLOY_USER" -print -quit)" ]; then
+            chown -R "${DEPLOY_USER}:" "$entry"
+            log "Gave ${entry} to ${DEPLOY_USER}."
+        fi
+    done
 }
 
 add_repository() {
@@ -284,6 +376,15 @@ parse_arguments "$@"
 checkdep apt-get
 checkdep dpkg-query
 checkdep systemctl
+checkdep getent
+checkdep useradd
+checkdep usermod
+
+ensure_user
+install_tools
+prepare_output_dir
+
+# Installed with the tools above.
 checkdep curl
 checkdep gpg
 
@@ -293,4 +394,11 @@ write_config
 start_opensearch
 single_node_settings "$(ready_url)"
 
-log "The host is ready. Load the proteins with opensearch/load.sh, or let .deploy/build.sh do it."
+cat >&2 <<EOF
+
+Still to do on this host, as ${DEPLOY_USER} (sudo -iu ${DEPLOY_USER}), none of it as root:
+  1. Clone unipept-database, and run .deploy/build.sh and .deploy/clone.sh from that clone.
+  2. To build: install Rust with rustup (https://rustup.rs); the repository pins the toolchain.
+  3. To clone from another host: an ssh key in ~/.ssh that ${DEPLOY_USER} on that host accepts.
+EOF
+log "The host is ready."

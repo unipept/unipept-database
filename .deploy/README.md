@@ -18,7 +18,19 @@ pipeline itself lives in `pipelines/` and the loader in `opensearch/`.
 sudo .deploy/opensearch/install.sh --heap 8g
 ```
 
-Installs and configures the OpenSearch instance this host loads its proteins into, and starts it.
+This is the only step that needs root. It prepares everything the other scripts need, so they
+run without sudo:
+
+- the `unipept` user (`DEPLOY_USER`), who builds, clones and owns the databases. The API on this
+  host runs as the same user, and its own install creates it the same way, in either order;
+- the tools `build.sh` and `clone.sh` run, installed through apt when they are missing;
+- `OUTPUT_DIR`, owned by that user. Databases and staging directories an earlier run as root left
+  there are handed over too; nothing else in the directory changes owner;
+- the OpenSearch instance this host loads its proteins into, configured and started.
+
+It ends with what is left to do as `unipept`: clone this repository, install Rust with rustup for
+a build, and add an ssh key for a clone.
+
 Run it as root, once per host or again after changing a setting: a run that changes nothing
 restarts nothing. It pins a version and holds it, also on a host that already had that version,
 so an unrelated `apt-get upgrade` cannot move a host onto a release nothing has been tested
@@ -57,10 +69,16 @@ disagree with the scripts.
 
 ## Running a build
 
+As `unipept`, from a clone of this repository that `unipept` owns:
+
 ```sh
+sudo -iu unipept
 .deploy/build.sh
 .deploy/clone.sh --remote-address selma.ugent.be --local-ssh-key ~/.ssh/id_unipept
 ```
+
+Both refuse to run as root. A database written by root is one the next run as `unipept` cannot
+replace, and one whose check that the API can read it passes only because root reads everything.
 
 The result is `${OUTPUT_DIR}/uniprot-<version>/suffix-array/`, which holds `sa.bin`,
 `proteins.bin`, `mapping.bin`, `.version`, `datastore/` and `build-info.txt`. That directory is

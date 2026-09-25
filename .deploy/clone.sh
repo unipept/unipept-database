@@ -155,6 +155,7 @@ load_opensearch() {
 }
 
 parse_arguments "$@"
+refuse_root
 
 [ -n "$OUTPUT_DIR" ] || die "--output-dir requires a value."
 

@@ -5,6 +5,9 @@
 #
 # What is real here: build.sh and clone.sh themselves, git, ssh and scp. What is stood in for: the
 # pipeline, sa-builder and the OpenSearch loader, each of which has a suite of its own.
+#
+# The cases run as root, which setting up sshd and install.sh need. build.sh and clone.sh run as
+# DEPLOY, as on a host, and refuse root.
 
 set -uo pipefail
 
@@ -17,6 +20,8 @@ readonly WORK=/work
 readonly CHECKOUT="${WORK}/checkout"
 readonly INDEX_REPO="${WORK}/unipept-index"
 readonly STUBS="${WORK}/stubs"
+readonly DEPLOY=unipept
+readonly DEPLOY_HOME=/home/unipept
 
 export PATH="${STUBS}:${PATH}"
 
@@ -72,45 +77,66 @@ setup_stubs() {
 }
 
 # An sshd on this container, so clone.sh reaches a "remote host" through a real ssh and a real scp.
+# The remote host is this container, reached as DEPLOY, which is who clone.sh logs in as on a
+# real one too.
 setup_sshd() {
-    mkdir -p /run/sshd /root/.ssh
+    mkdir -p /run/sshd
     ssh-keygen -A > /dev/null 2>&1
-    ssh-keygen -q -t ed25519 -N '' -f /root/.ssh/id_test
-    cat /root/.ssh/id_test.pub > /root/.ssh/authorized_keys
-    chmod 600 /root/.ssh/authorized_keys
-
-    printf 'PermitRootLogin prohibit-password\n' >> /etc/ssh/sshd_config
     /usr/sbin/sshd
+
+    as_deployer mkdir -p "${DEPLOY_HOME}/.ssh"
+    as_deployer ssh-keygen -q -t ed25519 -N '' -f "${DEPLOY_HOME}/.ssh/id_test"
+    as_deployer cp "${DEPLOY_HOME}/.ssh/id_test.pub" "${DEPLOY_HOME}/.ssh/authorized_keys"
 
     # clone.sh runs ssh without StrictHostKeyChecking=no, as it does on a real host, so the key has
     # to be known before it runs.
-    ssh-keyscan -H localhost >> /root/.ssh/known_hosts 2>/dev/null
+    ssh-keyscan -H localhost 2>/dev/null | as_deployer tee -a "${DEPLOY_HOME}/.ssh/known_hosts" > /dev/null
 }
 
 # For check_true, which runs a command rather than evaluating an expression.
 not() { ! "$@"; }
 
+# Keeps PATH, so the stand-ins in STUBS come first for DEPLOY too.
+as_deployer() {
+    runuser -u "$DEPLOY" -- "$@"
+}
+
 build() {
-    "${CHECKOUT}/.deploy/build.sh" "$@" > /work/last-output 2>&1
+    as_deployer "${CHECKOUT}/.deploy/build.sh" "$@" > /work/last-output 2>&1
 }
 
 clone() {
-    "${CHECKOUT}/.deploy/clone.sh" \
-        --remote-address localhost --remote-user root --remote-port 22 \
-        --local-ssh-key /root/.ssh/id_test "$@" > /work/last-output 2>&1
+    as_deployer "${CHECKOUT}/.deploy/clone.sh" \
+        --remote-address localhost --remote-user "$DEPLOY" --remote-port 22 \
+        --local-ssh-key "${DEPLOY_HOME}/.ssh/id_test" "$@" > /work/last-output 2>&1
 }
 
 mkdir -p "$WORK"
 setup_stubs
 make_index_repo "$INDEX_REPO" "$WORK"
 setup_checkout
+# Everything the scripts write lands under WORK, and git refuses a repository another user owns.
+chown -R "${DEPLOY}:" "$WORK"
 setup_sshd
+
+
+section "build.sh and clone.sh as root"
+
+"${CHECKOUT}/.deploy/build.sh" --output-dir /work/as-root --scratch-dir /work/scratch > /work/last-output 2>&1
+check "build.sh refuses" "$?" "2"
+check_true "it names the user to run as" grep -q "Run it as ${DEPLOY}" /work/last-output
+check_true "before it writes anything" test ! -e /work/as-root
+
+"${CHECKOUT}/.deploy/clone.sh" --remote-address localhost --local-ssh-key "${DEPLOY_HOME}/.ssh/id_test" \
+    --output-dir /work/as-root > /work/last-output 2>&1
+check "clone.sh refuses" "$?" "2"
+check_true "it names the user to run as" grep -q "Run it as ${DEPLOY}" /work/last-output
 
 
 section "a clean build"
 
 OUT=/work/data
-mkdir -p "$OUT"
+as_deployer mkdir -p "$OUT"
 build --output-dir "$OUT" --scratch-dir /work/scratch --opensearch-url http://stub:9200
 check "the build succeeds" "$?" "0"
 check_true "the database is named after the version the pipeline wrote" \
@@ -129,10 +155,12 @@ check "the proteins were loaded" \
 
 check "build-info.txt records this checkout" \
     "$(grep '^unipept-database:' "${OUT}/uniprot-2026-03/suffix-array/build-info.txt" | awk '{print $2}')" \
-    "$(git -C "$CHECKOUT" rev-parse HEAD)"
+    "$(as_deployer git -C "$CHECKOUT" rev-parse HEAD)"
 check "build-info.txt records the index it cloned" \
     "$(grep '^unipept-index:' "${OUT}/uniprot-2026-03/suffix-array/build-info.txt" | awk '{print $2}')" \
-    "$(git -C "$INDEX_REPO" rev-parse HEAD)"
+    "$(as_deployer git -C "$INDEX_REPO" rev-parse HEAD)"
+check "the database belongs to the user the API reads as" \
+    "$(find "${OUT}/uniprot-2026-03" ! -user "$DEPLOY" | wc -l)" "0"
 
 
 section "a build of a version that is already there"
@@ -157,7 +185,7 @@ section "a build whose tables are empty"
 # shellcheck disable=SC2016 # OUT belongs to the stub pipeline, and expands when it runs
 printf '\nprintf "" | lz4 -c > "${OUT}/taxons.tsv.lz4"\n' >> "${CHECKOUT}/pipelines/suffix-array/build.sh"
 EMPTY_OUT=/work/data-empty
-mkdir -p "$EMPTY_OUT"
+as_deployer mkdir -p "$EMPTY_OUT"
 rm -f /work/loader-calls
 build --output-dir "$EMPTY_OUT" --scratch-dir /work/scratch
 check "it stops" "$?" "2"
@@ -165,14 +193,14 @@ check_true "the empty table is named" grep -q 'datastore/taxons.tsv is empty' /w
 check_true "no database is put in place" test ! -d "${EMPTY_OUT}/uniprot-2026-03"
 # The loader drops and recreates the index the API queries, so a refused build must not reach it.
 check_true "the proteins OpenSearch serves are left alone" test ! -s /work/loader-calls
-git -C "$CHECKOUT" checkout -q -- pipelines/suffix-array/build.sh
+as_deployer git -C "$CHECKOUT" checkout -q -- pipelines/suffix-array/build.sh
 
 
 section "cloning over a real ssh and scp"
 
 REMOTE=/work/remote
 LOCAL=/work/local
-mkdir -p "$REMOTE" "$LOCAL"
+as_deployer mkdir -p "$REMOTE" "$LOCAL"
 cp -r "${OUT}/uniprot-2026-03" "${REMOTE}/uniprot-2026-03"
 cp -r "${OUT}/uniprot-2026-03" "${REMOTE}/uniprot-2025-11"
 printf '2025.11\n' > "${REMOTE}/uniprot-2025-11/suffix-array/.version"
@@ -237,20 +265,34 @@ readonly HEAP=/etc/opensearch/jvm.options.d/heap.options
 setup_install_stubs() {
     mkdir -p "$INSTALL_STUBS"
 
-    # What dpkg knows about the package, kept as a "status version" line and nothing when it never
-    # was. Answers in the format it is asked for, as dpkg-query does.
+    # What dpkg knows: OpenSearch's status and version as a "status version" line in dpkg-state, and
+    # every other package installed as a line in dpkg-installed. Nothing when it never was. Answers
+    # in the format it is asked for, as dpkg-query does.
     cat > "${INSTALL_STUBS}/dpkg-query" <<'STUB'
 #!/usr/bin/env bash
-[ -s /work/dpkg-state ] || exit 1
-read -r status version < /work/dpkg-state
+package="${*: -1}"
+if [ "$package" = opensearch ]; then
+    [ -s /work/dpkg-state ] || exit 1
+    read -r status version < /work/dpkg-state
+else
+    grep -qx -- "$package" /work/dpkg-installed 2> /dev/null || exit 1
+    status=installed version=1
+fi
 format="${1#--showformat=}"
 format="${format//'${db:Status-Status}'/$status}"
 printf '%s' "${format//'${Version}'/$version}"
 STUB
-    cat > "${INSTALL_STUBS}/apt-get" <<STUB
+    cat > "${INSTALL_STUBS}/apt-get" <<'STUB'
 #!/usr/bin/env bash
-printf '%s\n' "\$*" >> "${WORK}/apt-calls"
-case "\$*" in *install*) echo "installed 2.19.0" > "${DPKG_STATE}" ;; esac
+printf '%s\n' "$*" >> /work/apt-calls
+[ "$1" = install ] || exit 0
+for arg in "${@:2}"; do
+    case "$arg" in
+        -*) ;;
+        opensearch=*) echo "installed ${arg#opensearch=}" > /work/dpkg-state ;;
+        *) echo "$arg" >> /work/dpkg-installed ;;
+    esac
+done
 STUB
     cat > "${INSTALL_STUBS}/apt-mark" <<STUB
 #!/usr/bin/env bash
@@ -304,6 +346,7 @@ install_opensearch
 check "it succeeds" "$?" "0"
 check_true "the pinned version is installed" grep -q 'install .*opensearch=2.19.0' /work/apt-calls
 check_true "and held" grep -qx 'hold opensearch' /work/apt-calls
+check_true "the tools build.sh and clone.sh use are installed" grep -q 'install .*python3-requests' /work/apt-calls
 check_true "the packaged configuration is kept" grep -q 'my-application' "${CONFIG}.dist"
 check_true "the data path the package set is kept" grep -qx 'path.data: /var/lib/opensearch' "$CONFIG"
 check_true "and the log path" grep -qx 'path.logs: /var/log/opensearch' "$CONFIG"
@@ -389,6 +432,35 @@ forget_calls
 install_opensearch --bind 0.0.0.0
 check "a wildcard bind succeeds" "$?" "0"
 check_true "it waits on the loopback address" grep -qF 'http://127.0.0.1:9200/_cluster/health' /work/curl-calls
+
+
+
+section "install.sh prepares the user the databases belong to"
+
+packaged_host
+forget_calls
+install_opensearch --user deployer2 --output-dir /work/out2
+check "it succeeds" "$?" "0"
+check_true "the user is created" id deployer2
+check "with a login shell, for ssh" "$(getent passwd deployer2 | cut -d: -f7)" "/bin/bash"
+check "the output directory is theirs" "$(stat -c %U /work/out2)" "deployer2"
+check_true "tools already there are not installed again" not grep -q 'install .*python3-requests' /work/apt-calls
+
+useradd --shell /usr/sbin/nologin deployer3
+install_opensearch --user deployer3 --output-dir /work/out3
+check "an account without a shell succeeds" "$?" "0"
+check "it is given one" "$(getent passwd deployer3 | cut -d: -f7)" "/bin/bash"
+
+# What a run of build.sh as root left, beside what OUTPUT_DIR also holds and is not this script's.
+mkdir -p /work/out4/uniprot-2026-03/suffix-array /work/out4/.build /work/out4/opensearch-data
+touch /work/out4/uniprot-2026-03/suffix-array/sa.bin /work/out4/opensearch-data/node
+install_opensearch --user "$DEPLOY" --output-dir /work/out4
+check "an output directory root owns succeeds" "$?" "0"
+check "it is handed over" "$(stat -c %U /work/out4)" "$DEPLOY"
+check "and the database in it" "$(stat -c %U /work/out4/uniprot-2026-03/suffix-array/sa.bin)" "$DEPLOY"
+check "and the staging directory" "$(stat -c %U /work/out4/.build)" "$DEPLOY"
+check "what else is there keeps its owner" "$(stat -c %U /work/out4/opensearch-data/node)" "root"
+check_true "it says what is left to do as that user" grep -q "as ${DEPLOY} (sudo -iu ${DEPLOY})" /work/last-output
 
 
 summary

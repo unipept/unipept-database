@@ -8,3 +8,7 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends \
       bash ca-certificates curl git lz4 openssh-client openssh-server pv python3 python3-requests \
  && rm -rf /var/lib/apt/lists/*
+
+# The user build.sh and clone.sh run as on a host, which .deploy/opensearch/install.sh creates
+# there. They refuse root.
+RUN useradd --create-home --shell /bin/bash unipept
