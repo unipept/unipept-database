@@ -76,10 +76,12 @@ jobs:
         run: tests/run-tests.sh shell
 
   build:
-    # pipelines/suffix-array/build.sh end to end, with every source replaced by a local file.
-    name: Build suite
+    # pipelines/suffix-array/build.sh end to end, with every source replaced by a local file, and
+    # then .deploy/build.sh over that same pipeline. One job, so the second reuses what the first
+    # compiled rather than installing Rust and building the workspace again on another runner.
+    name: Build and seam suites
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     env:
       RUSTUP_TOOLCHAIN: stable
 
@@ -93,12 +95,50 @@ jobs:
       - name: Cache cargo dependencies
         uses: Swatinem/rust-cache@v2
 
+      # python3-requests because .deploy/build.sh checks the loader's dependencies before it
+      # starts, even though the seam suite stands the loader in.
       - name: Install the pipeline's tools
-        run: sudo apt-get update && sudo apt-get install -y gawk lz4 pigz pv libxml2-utils zip unzip uuid-runtime
+        run: sudo apt-get update && sudo apt-get install -y gawk lz4 pigz pv libxml2-utils zip unzip uuid-runtime python3-requests
 
       # Actions starts steps with SIGPIPE ignored; luz relies on its default action.
       - name: Run the build suite
         run: env --default-signal=PIPE tests/run-tests.sh build
+
+      # .deploy/build.sh over the real pipeline. The container suite stubs the pipeline, so this is
+      # what holds the contract between the two. Even when the one above failed, so one run
+      # reports both.
+      - name: Run the seam suite
+        if: ${{ !cancelled() }}
+        run: env --default-signal=PIPE tests/run-tests.sh seam
+
+  deploy:
+    # .deploy/build.sh, clone.sh and opensearch/install.sh in a container, over a real ssh and scp.
+    name: Deploy suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      # Through the Actions cache, so the image's apt layer is only rebuilt when the Dockerfile
+      # changes. The suite is told the image is there and does not build it again.
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build the deploy test image
+        uses: docker/build-push-action@v7
+        with:
+          context: tests/deploy
+          tags: unipept-deploy-test
+          load: true
+          cache-from: type=gha,scope=deploy-test
+          cache-to: type=gha,scope=deploy-test,mode=max
+
+      - name: Run the deploy suite
+        env:
+          DEPLOY_TEST_IMAGE_BUILT: 'true'
+        run: tests/run-tests.sh deploy
 
   opensearch:
     # opensearch/load.sh against a real OpenSearch in a container.

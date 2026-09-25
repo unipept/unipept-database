@@ -25,6 +25,12 @@ OUTPUT_DIR=/mnt/data
 # shellcheck disable=SC2034 # read by the scripts that source this file
 OPENSEARCH_URL=http://localhost:9200
 
+# Who builds, clones and owns the databases. The API on this host runs as the same user, which is
+# what makes every file a build writes one the API can read. opensearch/install.sh creates it and
+# gives it OUTPUT_DIR; after that, nothing here needs root.
+# shellcheck disable=SC2034 # read by the scripts that source this file
+DEPLOY_USER=unipept
+
 # What this host decides. Read after the defaults, so it wins over them, and before the arguments
 # are parsed, so a flag wins over both.
 DEPLOY_CONF="${DEPLOY_DIR}/deploy.conf"
@@ -93,15 +99,24 @@ check_loader_deps() {
     checkdep pv
     checkdep python3
     python3 -c "import requests" > /dev/null 2>&1 \
-        || die "the OpenSearch loader requires the requests package: pip install -r ${DEPLOY_DIR}/../opensearch/requirements.txt"
+        || die "the OpenSearch loader requires the requests package. .deploy/opensearch/install.sh installs it, as python3-requests."
+}
+
+# build.sh and clone.sh write what the API serves, so they run as the user the API reads as. Run as
+# root, they leave a database owned by root: one the next run as DEPLOY_USER cannot replace, and
+# one whose readability check passes only because root reads everything. verify.sh writes nothing,
+# but its check is that same readability check, so it refuses root for that reason alone.
+refuse_root() {
+    [ "$(id -u)" -ne 0 ] \
+        || die "do not run this as root. Run it as ${DEPLOY_USER}, for example: sudo -iu ${DEPLOY_USER}. Only .deploy/opensearch/install.sh needs root."
 }
 
 # Reports every index file that is missing, empty or unreadable, rather than the first, and returns
 # non-zero if any of them was. An empty file passes the API's own readable check and fails the
 # service later, so the test here is on content.
 #
-# Readable means readable by whoever runs this. Run it as the user the API runs as: root reads
-# everything, so as root an unreadable file passes.
+# Readable means readable by whoever runs this. Root reads everything, so as root an unreadable
+# file would pass: every script that calls this refuses root first.
 check_index() {
     local index="$1" relative missing=0 hidden=''
 

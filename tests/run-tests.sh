@@ -8,15 +8,16 @@
 #   run-tests.sh build      pipelines/suffix-array/build.sh end to end, offline
 #   run-tests.sh opensearch opensearch/load.sh, against a real OpenSearch
 #   run-tests.sh verify     .deploy/verify.sh against a fixture index
+#   run-tests.sh deploy     .deploy/build.sh, clone.sh and opensearch/install.sh, in a container
+#   run-tests.sh seam       .deploy/build.sh over the real pipeline, offline
 
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# shellcheck source=../pipelines/lib/common.sh
-source "${HERE}/../pipelines/lib/common.sh"
-
-heading() { printf '\n\033[1m%s\033[0m\n' "$*"; }
+# heading and checkdep.
+# shellcheck source=lib.sh
+source "${HERE}/lib.sh"
 
 for tool in uuidgen mktemp install; do
     checkdep "$tool"
@@ -46,11 +47,20 @@ suite_verify() {
     "${HERE}/deploy/verify-suite.sh" || status=1
 }
 
+suite_deploy() {
+    "${HERE}/deploy/build-suite.sh" || status=1
+}
+
+suite_seam() {
+    heading "deploy over the real pipeline"
+    "${HERE}/deploy/pipeline-suite.sh" || status=1
+}
+
 status=0
 
 case ${1:-all} in
-    all) suite_lz; suite_shell; suite_verify; suite_build; suite_opensearch ;;
-    lz | shell | verify | build | opensearch) "suite_${1}" ;;
+    all) suite_lz; suite_shell; suite_verify; suite_build; suite_seam; suite_deploy; suite_opensearch ;;
+    lz | shell | verify | build | seam | deploy | opensearch) "suite_${1}" ;;
     *) echo "unknown suite '${1}'" >&2; exit 1 ;;
 esac
 

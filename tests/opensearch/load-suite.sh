@@ -12,14 +12,17 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "${HERE}/../.." && pwd)"
 
 readonly IMAGE=unipept-opensearch-test-client
-readonly OPENSEARCH_IMAGE=opensearchproject/opensearch:2.19.0
+# The version the hosts run, from where .deploy/opensearch/install.sh pins it.
+# shellcheck source=../../.deploy/opensearch/version.sh
+source "${REPO}/.deploy/opensearch/version.sh"
+readonly OPENSEARCH_IMAGE="opensearchproject/opensearch:${OPENSEARCH_VERSION}"
 readonly NETWORK=unipept-opensearch-test
 readonly SERVER=unipept-opensearch-test-server
 
-log() { printf '\n\033[1m%s\033[0m\n' "$*"; }
+# shellcheck source=../lib.sh
+source "${HERE}/../lib.sh"
 
-command -v docker > /dev/null || { echo "docker is not installed" >&2; exit 1; }
-docker info > /dev/null 2>&1 || { echo "the Docker daemon is not running" >&2; exit 1; }
+require_docker
 
 cleanup() {
     docker rm -f "$SERVER" > /dev/null 2>&1
@@ -28,10 +31,10 @@ cleanup() {
 trap cleanup EXIT
 cleanup
 
-log "Building the client image"
+heading "Building the client image"
 docker build -q -t "$IMAGE" "$HERE" > /dev/null
 
-log "Starting OpenSearch"
+heading "Starting OpenSearch"
 docker network create "$NETWORK" > /dev/null
 docker run -d --name "$SERVER" --network "$NETWORK" \
     -e discovery.type=single-node \
@@ -49,9 +52,9 @@ then
     docker logs "$SERVER" 2>&1 | tail -20 >&2
     exit 1
 fi
-log "OpenSearch came up in $((SECONDS - started)) seconds"
+heading "OpenSearch came up in $((SECONDS - started)) seconds"
 
-log "OpenSearch suite: opensearch/load.sh"
+heading "OpenSearch suite: opensearch/load.sh"
 docker run --rm --network "$NETWORK" \
     -v "${REPO}:/repo:ro" \
     -e OPENSEARCH_URL="http://${SERVER}:9200" \
