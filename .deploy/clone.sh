@@ -83,7 +83,7 @@ remote_sh() {
 # appear while one is running.
 remote_latest_version() {
     local newest
-    newest=$(remote_sh "ls -1d '${REMOTE_OUTPUT_DIR}'/uniprot-* 2> /dev/null | sort" | tail -n 1) \
+    newest=$(remote_sh "ls -1d '${REMOTE_OUTPUT_DIR}'/${DATABASE_GLOB} 2> /dev/null | sort" | tail -n 1) \
         || true
 
     [ -n "$newest" ] || die "found no database in ${REMOTE_OUTPUT_DIR} on ${REMOTE_ADDRESS}."
@@ -92,10 +92,28 @@ remote_latest_version() {
     echo "${newest#uniprot-}"
 }
 
-copy_database() {
-    local staging="$1" remote_dir="$2"
+# The same checks the copy gets afterwards, run on the remote host before anything is copied. A
+# database the remote holds incomplete, or under a name its .version disagrees with, is refused here
+# rather than after hundreds of gigabytes of scp. The functions and the lists they read are sent
+# along, so both sides check against this checkout's contract.
+check_remote_database() {
+    local remote_dir="$1"
 
     remote_sh "[ -d '${remote_dir}' ]" || die "the remote host has no ${remote_dir}"
+
+    remote_sh bash -s <<REMOTE || die "the database on ${REMOTE_ADDRESS} is missing files the API needs, or is not the version it is named after."
+$(declare -p INDEX_FILES OPTIONAL_INDEX_FILES)
+$(declare -f check_index check_index_version)
+status=0
+check_index '${remote_dir}/suffix-array' || status=1
+check_index_version '${remote_dir}/suffix-array' || status=1
+[ -s '${remote_dir}/tables/uniprot_entries.tsv.lz4' ] || { echo "FAIL tables/uniprot_entries.tsv.lz4 is missing" 1>&2; status=1; }
+exit "\$status"
+REMOTE
+}
+
+copy_database() {
+    local staging="$1" remote_dir="$2"
 
     rm -rf "${staging:?}"
     mkdir -p "$staging"
@@ -112,20 +130,21 @@ copy_database() {
 check_database() {
     local dir="$1" remote_dir="$2"
 
+    # The k-mer table is an accelerator the API runs without, so a database built before build.sh
+    # wrote one has none and is still worth cloning. The remote decides: one the remote has and the
+    # copy does not is a copy that lost it. Before check_index, whose warning that the table is
+    # optional would otherwise precede the error that says it is not.
+    if remote_sh "[ -s '${remote_dir}/suffix-array/kmer_table.bin' ]"; then
+        [ -s "${dir}/suffix-array/kmer_table.bin" ] \
+            || die "the remote has a k-mer table and the copy does not"
+    fi
+
     check_index "${dir}/suffix-array" || die "the copy is missing files the API needs."
     check_index_version "${dir}/suffix-array" || die "the copy is not the version it is named after."
 
     # Outside the index, so not in INDEX_FILES: it is what this script feeds to OpenSearch.
     [ -s "${dir}/tables/uniprot_entries.tsv.lz4" ] \
         || die "the copied database has no tables/uniprot_entries.tsv.lz4"
-
-    # The k-mer table is an accelerator the API runs without, so a database built before build.sh
-    # wrote one has none and is still worth cloning. The remote decides: one the remote has and the
-    # copy does not is a copy that lost it.
-    if remote_sh "[ -s '${remote_dir}/suffix-array/kmer_table.bin' ]"; then
-        [ -s "${dir}/suffix-array/kmer_table.bin" ] \
-            || die "the remote has a k-mer table and the copy does not"
-    fi
 }
 
 load_opensearch() {
@@ -158,6 +177,7 @@ fi
 # host already serves untouched.
 STAGING_DIR="${OUTPUT_DIR}/.clone"
 REMOTE_DIR="${REMOTE_OUTPUT_DIR}/uniprot-${UNIPROT_VERSION}"
+check_remote_database "$REMOTE_DIR"
 copy_database "$STAGING_DIR" "$REMOTE_DIR"
 
 COPIED_DIR="${STAGING_DIR}/uniprot-${UNIPROT_VERSION}"
