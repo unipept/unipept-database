@@ -17,10 +17,13 @@ source "${HERE}/../lib.sh"
 
 require_docker
 
-heading "Building the deploy test image"
-# Without -e, a failed build would otherwise go on to run the cases in whatever image was built
-# before, and pass against it.
-docker build -q -t "$IMAGE" "$HERE" > /dev/null || { echo "the deploy test image did not build" >&2; exit 1; }
+# CI builds the image beforehand through a layer cache, and says so.
+if [ "${DEPLOY_TEST_IMAGE_BUILT:-}" != true ]; then
+    heading "Building the deploy test image"
+    # Without -e, a failed build would otherwise go on to run the cases in whatever image was built
+    # before, and pass against it.
+    docker build -q -t "$IMAGE" "$HERE" > /dev/null || { echo "the deploy test image did not build" >&2; exit 1; }
+fi
 
 heading "Deploy suite: build.sh and clone.sh"
 docker run --rm -v "${REPO}:/repo:ro" "$IMAGE" bash /repo/tests/deploy/cases.sh
