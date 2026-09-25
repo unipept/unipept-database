@@ -201,6 +201,29 @@ check_true "the proteins OpenSearch serves are left alone" test ! -s /work/loade
 as_deployer git -C "$CHECKOUT" checkout -q -- pipelines/suffix-array/build.sh
 
 
+section "a build whose pipeline fails"
+
+printf 'do not lose me\n' > "${OUT}/uniprot-2026-03/marker"
+rm -f /work/loader-calls
+
+printf '\nexit 1\n' >> "${CHECKOUT}/pipelines/suffix-array/build.sh"
+build --output-dir "$OUT" --scratch-dir /work/scratch --replace
+check "a pipeline that exits non-zero stops it" "$?" "2"
+check_true "the database that was there is kept" test -f "${OUT}/uniprot-2026-03/marker"
+check_true "nothing is loaded" test ! -s /work/loader-calls
+as_deployer git -C "$CHECKOUT" checkout -q -- pipelines/suffix-array/build.sh
+
+# shellcheck disable=SC2016 # OUT belongs to the stub pipeline, and expands when it runs
+printf '\nrm "${OUT}/proteomes.tsv.lz4"\n' >> "${CHECKOUT}/pipelines/suffix-array/build.sh"
+build --output-dir "$OUT" --scratch-dir /work/scratch --replace
+check "a pipeline that leaves out a table stops it" "$?" "2"
+check_true "the table is named" grep -q 'the pipeline wrote no proteomes.tsv.lz4' /work/last-output
+check_true "the database that was there is kept" test -f "${OUT}/uniprot-2026-03/marker"
+check_true "nothing is loaded" test ! -s /work/loader-calls
+as_deployer git -C "$CHECKOUT" checkout -q -- pipelines/suffix-array/build.sh
+rm "${OUT}/uniprot-2026-03/marker"
+
+
 section "a build whose load fails"
 
 # The load is the last step before the swap, so a load that fails is the latest a build can fail
@@ -380,7 +403,15 @@ STUB
 printf '%s\n' "\$*" >> "${WORK}/curl-calls"
 [ ! -e "${WORK}/curl-fails" ] || exit 7
 STUB
-    printf '#!/usr/bin/env bash\nexit 0\n' > "${INSTALL_STUBS}/gpg"
+    # Writes the keyring it is asked for, as gpg --dearmor -o does.
+    cat > "${INSTALL_STUBS}/gpg" <<'STUB'
+#!/usr/bin/env bash
+cat > /dev/null
+while [ $# -gt 0 ]; do
+    [ "$1" != -o ] || touch "$2"
+    shift
+done
+STUB
     chmod +x "${INSTALL_STUBS}"/*
 
     # The repository is already configured, so add_repository has nothing to fetch.
@@ -517,6 +548,49 @@ check_true "it names both versions" grep -q 'OpenSearch 2.18.0 is installed and 
 check_true "it installs nothing over it" not grep -q 'install .*opensearch=' /work/apt-calls
 check_true "the configuration is left as it was" cmp -s "$CONFIG" /work/config-before
 check_true "the service is not touched" not grep -q 'restart' /work/systemctl-calls
+
+
+section "install.sh refuses what it cannot do"
+
+forget_calls
+PATH="${INSTALL_STUBS}:${PATH}" as_deployer "${CHECKOUT}/.deploy/opensearch/install.sh" > /work/last-output 2>&1
+check "as another user than root it stops" "$?" "2"
+check_true "it says to run it as root" grep -q 'run this as root' /work/last-output
+check_true "before it changes anything" not grep -q . /work/apt-calls
+
+for arguments in "--heap 8" "--heap 8gb" "--port 92OO" "--heap" "--heap --port 9200" "--no-such-flag"; do
+    # shellcheck disable=SC2086 # each is several words on purpose
+    install_opensearch $arguments
+    check "'${arguments}' is refused" "$?" "2"
+done
+check_true "before it changes anything" not grep -q . /work/apt-calls
+
+packaged_host
+mkdir -p /work/hand-data
+printf 'path.data: /work/hand-data\npath.logs: /work/no-such-logs\n' > "$CONFIG"
+cp "$CONFIG" /work/config-before
+install_opensearch
+check "a log path that is not there stops it" "$?" "2"
+check_true "the path is named" grep -q '/work/no-such-logs' /work/last-output
+check_true "the configuration is left as it was" cmp -s "$CONFIG" /work/config-before
+
+
+section "install.sh adds the OpenSearch repository"
+
+packaged_host
+rm -f /usr/share/keyrings/opensearch-keyring.gpg /etc/apt/sources.list.d/opensearch-2.x.list
+forget_calls
+install_opensearch
+check "it succeeds" "$?" "0"
+check_true "the signing key is fetched" grep -qF 'https://artifacts.opensearch.org/publickeys/opensearch.pgp' /work/curl-calls
+check_true "the list is signed by it" \
+    grep -qF 'deb [signed-by=/usr/share/keyrings/opensearch-keyring.gpg] https://artifacts.opensearch.org/releases/bundle/opensearch/2.x/apt stable main' \
+    /etc/apt/sources.list.d/opensearch-2.x.list
+
+forget_calls
+install_opensearch
+check "a second run succeeds" "$?" "0"
+check_true "and does not fetch the key again" not grep -q 'opensearch.pgp' /work/curl-calls
 
 
 section "install.sh waits where the instance listens"
