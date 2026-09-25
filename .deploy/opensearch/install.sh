@@ -33,8 +33,9 @@ trap 'exit 2' USR1
 # The settings only this script has.
 
 # The version every host runs. Pinned, and held in apt afterwards, so a host cannot drift onto a
-# release nothing has been tested against. tests/opensearch/load-suite.sh runs the same one.
-OPENSEARCH_VERSION=2.19.0
+# release nothing has been tested against.
+# shellcheck source=version.sh
+source "${HERE}/version.sh"
 
 # The heap OpenSearch takes, and the one number a host decides. Deliberately small: this host also
 # serves the API, which holds the index resident, and unipept-api/.deploy sizes that against the

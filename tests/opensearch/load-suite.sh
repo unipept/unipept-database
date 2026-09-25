@@ -12,7 +12,10 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "${HERE}/../.." && pwd)"
 
 readonly IMAGE=unipept-opensearch-test-client
-readonly OPENSEARCH_IMAGE=opensearchproject/opensearch:2.19.0
+# The version the hosts run, from where .deploy/opensearch/install.sh pins it.
+# shellcheck source=../../.deploy/opensearch/version.sh
+source "${REPO}/.deploy/opensearch/version.sh"
+readonly OPENSEARCH_IMAGE="opensearchproject/opensearch:${OPENSEARCH_VERSION}"
 readonly NETWORK=unipept-opensearch-test
 readonly SERVER=unipept-opensearch-test-server
 
