@@ -112,7 +112,7 @@ jobs:
         run: env --default-signal=PIPE tests/run-tests.sh seam
 
   deploy:
-    # .deploy/build.sh and clone.sh in a container, over a real ssh and scp.
+    # .deploy/build.sh, clone.sh and opensearch/install.sh in a container, over a real ssh and scp.
     name: Deploy suite
     runs-on: ubuntu-latest
     timeout-minutes: 20

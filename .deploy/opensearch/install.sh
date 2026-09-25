@@ -263,7 +263,7 @@ install_opensearch() {
 }
 
 # So an unrelated `apt-get upgrade` cannot move the instance onto an untested release. On every
-# run, not only after an install: a host that already had the pinned version was never held.
+# run, not only after an install: a host that already had the pinned version may not be held yet.
 hold_opensearch() {
     apt-mark hold opensearch > /dev/null
 }
@@ -287,8 +287,8 @@ write_config() {
     [ -d "$OPENSEARCH_DATA_DIR" ] || die "the data directory ${OPENSEARCH_DATA_DIR} does not exist."
     [ -d "$OPENSEARCH_LOG_DIR" ] || die "the log directory ${OPENSEARCH_LOG_DIR} does not exist."
 
-    # Explicitly rather than with cp -n, which coreutils 9.4 on Ubuntu 24.04 warns about on every
-    # run, and which says nothing about whether it copied.
+    # The configuration the package shipped, kept once. Never one this script wrote, and never over
+    # a copy that is already there.
     if [ -f "$CONFIG_FILE" ] && ! grep -qxF "$MARKER" "$CONFIG_FILE" \
         && [ ! -e "${CONFIG_FILE}.dist" ]; then
         cp "$CONFIG_FILE" "${CONFIG_FILE}.dist"

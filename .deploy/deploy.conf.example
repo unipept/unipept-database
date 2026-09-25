@@ -1,7 +1,7 @@
 # Copy to deploy.conf beside this file and edit. deploy.conf is not in this repository.
 #
 # Only what a host has to decide is listed. Everything the scripts already default to sensibly is
-# left out, so this file cannot go stale. The defaults are in lib.sh, build.sh and clone.sh.
+# left out, so this file cannot go stale. The defaults are in lib.sh and in each script.
 #
 # A flag on the command line wins over this file, and this file wins over those defaults.
 

@@ -103,6 +103,9 @@ databases at the moment they finish.
 .deploy/verify.sh --index-dir /srv/data/uniprot-2026-03/suffix-array
 ```
 
+As `unipept`, like the other two: it checks that the files can be read by the user the API runs
+as, and as root every file can.
+
 It reports every file that is missing, empty or unreadable rather than the first, and exits
 non-zero if any of them is. A missing `kmer_table.bin` is a warning: the API runs without it and
 searches are slower. The list it checks is the one `unipept-api/.deploy/lib.sh` starts a service
@@ -115,12 +118,13 @@ tell. It is written after the proteins are loaded, so a directory that has one i
 
 ## What a host needs
 
-Both scripts need `lz4`, `pv`, and Python with `requests` (`opensearch/requirements.txt`) for the
-OpenSearch loader, and an OpenSearch instance at `OPENSEARCH_URL`.
+`install.sh` installs all of it but Rust. For reference, or for a host prepared another way:
 
-`build.sh` also needs `git`, `cmake` and a Rust toolchain for its own work, plus what the pipeline
-checks for when it starts: `curl`, `uuidgen`, `pigz`, `gawk` and `xmllint`. `clone.sh` needs `ssh`
-and `scp`, and none of the build tools.
+- `build.sh` and `clone.sh` both need `lz4`, `pv`, and Python with `requests` for the OpenSearch
+  loader, and an OpenSearch instance at `OPENSEARCH_URL`.
+- `build.sh` also needs `git`, `cmake` and a Rust toolchain, and the pipeline needs `curl`,
+  `uuidgen`, `pigz`, `gawk`, `unzip` and `xmllint`.
+- `clone.sh` needs `ssh` and `scp`, and none of the build tools.
 
 `SCRATCH_DIR` holds the unipept-index clone and its cargo target, a few gigabytes. The build
 itself, tables and temporary files included, goes under `OUTPUT_DIR`, so that is the volume to

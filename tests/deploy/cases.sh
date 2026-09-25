@@ -3,11 +3,12 @@
 # The deploy cases. Runs inside the container build-suite.sh starts, with the repository at /repo
 # read-only and everything this writes under /work.
 #
-# What is real here: build.sh and clone.sh themselves, git, ssh and scp. What is stood in for: the
-# pipeline, sa-builder and the OpenSearch loader, each of which has a suite of its own.
+# What is real here: build.sh, clone.sh, verify.sh and install.sh themselves, git, ssh and scp. What
+# is stood in for: the pipeline, sa-builder and the OpenSearch loader, each of which has a suite of
+# its own, and the apt, dpkg, systemd and instance install.sh drives.
 #
-# The cases run as root, which setting up sshd and install.sh need. build.sh and clone.sh run as
-# DEPLOY, as on a host, and refuse root.
+# The cases run as root, which setting up sshd and install.sh need. build.sh, clone.sh and verify.sh
+# run as DEPLOY, as on a host, and refuse root.
 
 set -uo pipefail
 
@@ -436,7 +437,6 @@ forget_calls
 install_opensearch --bind 0.0.0.0
 check "a wildcard bind succeeds" "$?" "0"
 check_true "it waits on the loopback address" grep -qF 'http://127.0.0.1:9200/_cluster/health' /work/curl-calls
-
 
 
 section "install.sh prepares the user the databases belong to"

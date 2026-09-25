@@ -11,7 +11,8 @@
 # sa-builder and the OpenSearch loader stay stand-ins: each has a suite of its own, and building a
 # real index is unipept-index's work and hours of it.
 #
-# Needs cargo, GNU sed and coreutils, gawk, lz4, pigz, pv, xmllint, zip and unzip.
+# Needs cargo, GNU sed and coreutils, gawk, lz4, pigz, pv, uuidgen, xmllint, zip and unzip, and
+# python3 with requests, which build.sh checks for the loader before it starts.
 
 set -uo pipefail
 

@@ -8,7 +8,7 @@
 #   run-tests.sh build      pipelines/suffix-array/build.sh end to end, offline
 #   run-tests.sh opensearch opensearch/load.sh, against a real OpenSearch
 #   run-tests.sh verify     .deploy/verify.sh against a fixture index
-#   run-tests.sh deploy     .deploy/build.sh and clone.sh, in a container
+#   run-tests.sh deploy     .deploy/build.sh, clone.sh and opensearch/install.sh, in a container
 #   run-tests.sh seam       .deploy/build.sh over the real pipeline, offline
 
 set -uo pipefail
