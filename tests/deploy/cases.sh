@@ -10,6 +10,8 @@ set -uo pipefail
 
 # shellcheck source=../lib.sh
 source /repo/tests/lib.sh
+# shellcheck source=stubs.sh
+source /repo/tests/deploy/stubs.sh
 
 readonly WORK=/work
 readonly CHECKOUT="${WORK}/checkout"
@@ -48,15 +50,8 @@ done
 printf '%s\n' "${STUB_UNIPROT_VERSION:-2026.03}" > "${OUT}/.version"
 PIPELINE
 
-    # The loader: records that it was called, on what. tests/run-tests.sh opensearch covers the
-    # real one against a real OpenSearch.
-    cat > "${CHECKOUT}/opensearch/load.sh" <<'LOADER'
-#!/usr/bin/env bash
-set -eo pipefail
-printf '%s\n' "$*" >> /work/loader-calls
-LOADER
-
-    chmod +x "${CHECKOUT}/pipelines/suffix-array/build.sh" "${CHECKOUT}/opensearch/load.sh"
+    make_loader "${CHECKOUT}/opensearch/load.sh" /work/loader-calls
+    chmod +x "${CHECKOUT}/pipelines/suffix-array/build.sh"
 
     # Through the configuration file, which is how a host sets this, so the suite covers that path
     # too. It also keeps the run offline: without it build.sh clones unipept-index from GitHub.
@@ -64,35 +59,7 @@ LOADER
 
     git -C "$CHECKOUT" init -q
     printf '.deploy/deploy.conf\n' > "${CHECKOUT}/.gitignore"
-    git -C "$CHECKOUT" add -A
-    git -C "$CHECKOUT" -c user.email=t@example.com -c user.name=t commit -qm "the checkout under test"
-}
-
-# A repository build.sh clones for sa-builder. A real clone of a real repository, over a path
-# rather than the network, so clone_repo and the commit it records are the real ones.
-setup_index_repo() {
-    rm -rf "${INDEX_REPO:?}"
-    mkdir -p "${INDEX_REPO}/target/release"
-
-    printf '[package]\nname = "stand-in"\n' > "${INDEX_REPO}/Cargo.toml"
-    cat > "${INDEX_REPO}/target/release/sa-builder" <<'SA'
-#!/usr/bin/env bash
-set -eo pipefail
-prev=''
-for arg in "$@"; do
-    case "$prev" in
-        --output-sa | --output-proteins | --output-mapping | --output-kmer-table)
-            printf 'binary\n' > "$arg" ;;
-    esac
-    prev="$arg"
-done
-printf '%s\n' "$*" >> /work/sa-builder-calls
-SA
-    chmod +x "${INDEX_REPO}/target/release/sa-builder"
-
-    git -C "$INDEX_REPO" init -q
-    git -C "$INDEX_REPO" add -A
-    git -C "$INDEX_REPO" -c user.email=t@example.com -c user.name=t commit -qm "stand-in index"
+    commit_all "$CHECKOUT" "the checkout under test"
 }
 
 # cargo and cmake are only checked for and called; building the index is not what is under test.
@@ -135,7 +102,7 @@ clone() {
 
 mkdir -p "$WORK"
 setup_stubs
-setup_index_repo
+make_index_repo "$INDEX_REPO" "$WORK"
 setup_checkout
 setup_sshd
 

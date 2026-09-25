@@ -18,14 +18,11 @@ set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "${HERE}/../.." && pwd)"
 FIXTURES="${REPO}/crates/fixtures/data"
-SOURCES="${REPO}/tests/pipelines/sources"
 
 # shellcheck source=../lib.sh
 source "${HERE}/../lib.sh"
-
-# checkdep lives here, not in tests/lib.sh.
-# shellcheck source=../../pipelines/lib/common.sh
-source "${REPO}/pipelines/lib/common.sh"
+# shellcheck source=stubs.sh
+source "${HERE}/stubs.sh"
 
 sed --version > /dev/null 2>&1 || { echo "this suite needs GNU sed first on PATH" >&2; exit 1; }
 checkdep cargo
@@ -57,64 +54,17 @@ setup_tree() {
         ln -s "${REPO}/${path}" "${TREE}/${path}"
     done
 
-    cat > "${TREE}/opensearch/load.sh" <<LOADER
-#!/usr/bin/env bash
-set -eo pipefail
-printf '%s\n' "\$*" >> "${WORK}/loader-calls"
-LOADER
-    chmod +x "${TREE}/opensearch/load.sh"
+    make_loader "${TREE}/opensearch/load.sh" "${WORK}/loader-calls"
 
     printf 'INDEX_REPO=%s\n' "$INDEX_REPO" > "${TREE}/.deploy/deploy.conf"
 }
 
-# What build.sh clones for sa-builder. The stand-in keeps the file it was handed, so the suite can
-# look at the columns build.sh cut out of the real uniprot_entries table.
-setup_index_repo() {
-    mkdir -p "${INDEX_REPO}/target/release" "${INDEX_REPO}/src"
-
-    # A crate cargo can really build, because build.sh runs the real cargo on it before it reaches
-    # sa-builder. The binary below is committed beside it and is what actually runs.
-    printf '[package]\nname = "stand-in"\nversion = "0.0.0"\nedition = "2021"\n' \
-        > "${INDEX_REPO}/Cargo.toml"
-    printf 'fn main() {}\n' > "${INDEX_REPO}/src/main.rs"
-
-    cat > "${INDEX_REPO}/target/release/sa-builder" <<SA
-#!/usr/bin/env bash
-set -eo pipefail
-prev=''
-for arg in "\$@"; do
-    case "\$prev" in
-        --database-file) cp "\$arg" "${WORK}/proteins-given-to-sa-builder.tsv" ;;
-        --output-sa | --output-proteins | --output-mapping | --output-kmer-table)
-            printf 'binary\n' > "\$arg" ;;
-    esac
-    prev="\$arg"
-done
-printf '%s\n' "\$*" >> "${WORK}/sa-builder-calls"
-SA
-    chmod +x "${INDEX_REPO}/target/release/sa-builder"
-
-    git -C "$INDEX_REPO" init -q
-    git -C "$INDEX_REPO" add -A
-    git -C "$INDEX_REPO" -c user.email=t@example.com -c user.name=t commit -qm "stand-in index"
-}
-
 setup_tree
-setup_index_repo
+make_index_repo "$INDEX_REPO" "$WORK"
 
-# Every source the pipeline downloads, pointed at the corpus. The same set
-# tests/pipelines/build-suite.sh uses.
-gzip -c "${FIXTURES}/uniprot_sprot.dat" > "${WORK}/uniprot_sprot.dat.gz" || exit 1
-(cd "${FIXTURES}" && zip -q "${WORK}/taxdmp.zip" names.dmp nodes.dmp) || exit 1
-
-export UNIPEPT_SWISSPROT_URL="file://${WORK}/uniprot_sprot.dat.gz"
-export UNIPEPT_TAXDMP_URL="file://${WORK}/taxdmp.zip"
-export UNIPEPT_RELEASE_METALINK_URL="file://${SOURCES}/RELEASE.metalink"
-export UNIPEPT_EC_CLASS_URL="file://${SOURCES}/enzclass.txt"
-export UNIPEPT_EC_NUMBER_URL="file://${SOURCES}/enzyme.dat"
-export UNIPEPT_GO_TERM_URL="file://${SOURCES}/go-basic.obo"
-export UNIPEPT_INTERPRO_URL="file://${SOURCES}/entry.list"
-export UNIPEPT_REFERENCE_PROTEOME_URL="file://${SOURCES}/reference_proteomes.tsv"
+# Every source the pipeline downloads, pointed at the corpus, as tests/pipelines/build-suite.sh
+# does.
+use_fixture_sources "$WORK" || exit 1
 
 mkdir -p "$OUT"
 "${TREE}/.deploy/build.sh" \

@@ -13,14 +13,9 @@ set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "${HERE}/../.." && pwd)"
 FIXTURES="${REPO}/crates/fixtures/data"
-SOURCES="${HERE}/sources"
 
 # shellcheck source=../lib.sh
 source "${HERE}/../lib.sh"
-
-# checkdep lives here, not in tests/lib.sh.
-# shellcheck source=../../pipelines/lib/common.sh
-source "${REPO}/pipelines/lib/common.sh"
 
 sed --version > /dev/null 2>&1 || { echo "the build suite needs GNU sed first on PATH" >&2; exit 1; }
 checkdep gawk
@@ -30,17 +25,7 @@ checkdep unzip
 WORK="$(mktemp -d)"
 trap 'rm -rf "${WORK}"' EXIT
 
-gzip -c "${FIXTURES}/uniprot_sprot.dat" > "${WORK}/uniprot_sprot.dat.gz" || exit 1
-(cd "${FIXTURES}" && zip -q "${WORK}/taxdmp.zip" names.dmp nodes.dmp) || exit 1
-
-export UNIPEPT_SWISSPROT_URL="file://${WORK}/uniprot_sprot.dat.gz"
-export UNIPEPT_TAXDMP_URL="file://${WORK}/taxdmp.zip"
-export UNIPEPT_RELEASE_METALINK_URL="file://${SOURCES}/RELEASE.metalink"
-export UNIPEPT_EC_CLASS_URL="file://${SOURCES}/enzclass.txt"
-export UNIPEPT_EC_NUMBER_URL="file://${SOURCES}/enzyme.dat"
-export UNIPEPT_GO_TERM_URL="file://${SOURCES}/go-basic.obo"
-export UNIPEPT_INTERPRO_URL="file://${SOURCES}/entry.list"
-export UNIPEPT_REFERENCE_PROTEOME_URL="file://${SOURCES}/reference_proteomes.tsv"
+use_fixture_sources "$WORK" || exit 1
 
 "${REPO}/pipelines/suffix-array/build.sh" --database-sources swissprot \
     --output-dir "${WORK}/output" --temp-dir "${WORK}/temp" > "${WORK}/build.log" 2>&1

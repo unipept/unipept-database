@@ -15,10 +15,9 @@ set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# shellcheck source=../pipelines/lib/common.sh
-source "${HERE}/../pipelines/lib/common.sh"
-
-heading() { printf '\n\033[1m%s\033[0m\n' "$*"; }
+# heading and checkdep.
+# shellcheck source=lib.sh
+source "${HERE}/lib.sh"
 
 for tool in uuidgen mktemp install; do
     checkdep "$tool"
