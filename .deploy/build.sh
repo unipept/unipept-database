@@ -177,6 +177,11 @@ log "Cloned unipept-index at ${INDEX_COMMIT}."
 build_suffix_array "$STAGING_DIR" "$INDEX_DIR"
 fill_datastore "$STAGING_DIR"
 
+# As soon as the layout is complete, and before anything outside the staging directory changes: the
+# load below drops and recreates the index the API queries, so a build refused after it would
+# already have replaced the proteins that serve the database it leaves in place.
+check_index "${STAGING_DIR}/suffix-array" || die "the build is missing files the API needs."
+
 UNIPROT_VERSION=$(uniprot_version_from "${STAGING_DIR}/tables/.version")
 log "UniProtKB version is ${UNIPROT_VERSION}."
 
@@ -189,9 +194,6 @@ load_opensearch "$STAGING_DIR"
 
 # After the load, so a directory that carries this file is one whose proteins are in OpenSearch.
 write_build_info "${STAGING_DIR}/suffix-array" "$UNIPROT_VERSION" "$DATABASE_COMMIT" "$INDEX_COMMIT"
-
-# Before the swap, so a build that produced an incomplete layout never replaces a whole one.
-check_index "${STAGING_DIR}/suffix-array" || die "the build is missing files the API needs."
 
 swap_into_place "$STAGING_DIR" "$BUILD_DIR"
 
