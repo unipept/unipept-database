@@ -19,8 +19,15 @@ sudo .deploy/opensearch/install.sh --heap 8g
 ```
 
 Installs and configures the OpenSearch instance this host loads its proteins into, and starts it.
-Run once per host, as root. It pins a version and holds it, so an unrelated `apt-get upgrade`
-cannot move a host onto a release nothing has been tested against.
+Run it as root, once per host or again after changing a setting: a run that changes nothing
+restarts nothing. It pins a version and holds it, also on a host that already had that version,
+so an unrelated `apt-get upgrade` cannot move a host onto a release nothing has been tested
+against.
+
+It keeps the data and log paths the existing configuration names, so a host set up by hand with
+its data on another volume keeps it there. `--data-dir` and `--log-dir` point the configuration
+elsewhere; they do not move what is already there. It waits for the instance on the address and
+port it configured.
 
 The instance binds to localhost and runs with the security plugin off, which is what the loader
 and the API both expect. That pair is only safe while nothing outside the host can reach it, so
@@ -28,7 +35,8 @@ change the bind address only together with turning the security plugin back on.
 
 The heap is the one number a host decides, and it defaults low. This host also serves the API,
 which holds the index resident, and `unipept-api/.deploy` sizes that against the memory it can
-see: heap taken here is memory that sizing does not know about.
+see: heap taken here is memory that sizing does not know about. A later run without `--heap`
+keeps the heap the host already has.
 
 ## Configuration
 

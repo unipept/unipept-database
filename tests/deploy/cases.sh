@@ -22,9 +22,10 @@ export PATH="${STUBS}:${PATH}"
 # real repository is read-only, and the point is to replace the expensive parts.
 setup_checkout() {
     rm -rf "${CHECKOUT:?}"
-    mkdir -p "${CHECKOUT}"/{.deploy,pipelines/lib,pipelines/suffix-array,opensearch,assets}
+    mkdir -p "${CHECKOUT}"/{.deploy/opensearch,pipelines/lib,pipelines/suffix-array,opensearch,assets}
 
     cp /repo/.deploy/*.sh "${CHECKOUT}/.deploy/"
+    cp /repo/.deploy/opensearch/*.sh "${CHECKOUT}/.deploy/opensearch/"
     cp /repo/pipelines/lib/common.sh "${CHECKOUT}/pipelines/lib/"
     printf '{"sample":true}\n' > "${CHECKOUT}/assets/sampledata.json"
 
@@ -257,6 +258,166 @@ check "an incomplete database on the remote stops" "$?" "2"
 check_true "the missing file is named" grep -q 'mapping.bin is missing' /work/last-output
 check_true "it stops before copying anything" test ! -e "${LOCAL}/.clone"
 check_true "nothing is put in place" test ! -d "${LOCAL}/uniprot-2026-03"
+
+
+# install.sh, against stand-ins for apt, dpkg, systemd and the instance itself. What is real is the
+# script and the files it writes under /etc/opensearch, which this container is free to change.
+readonly INSTALL_STUBS="${WORK}/install-stubs"
+readonly DPKG_STATE="${WORK}/dpkg-state"
+readonly CONFIG=/etc/opensearch/opensearch.yml
+readonly HEAP=/etc/opensearch/jvm.options.d/heap.options
+
+setup_install_stubs() {
+    mkdir -p "$INSTALL_STUBS"
+
+    # What dpkg knows about the package, kept as a "status version" line and nothing when it never
+    # was. Answers in the format it is asked for, as dpkg-query does.
+    cat > "${INSTALL_STUBS}/dpkg-query" <<'STUB'
+#!/usr/bin/env bash
+[ -s /work/dpkg-state ] || exit 1
+read -r status version < /work/dpkg-state
+format="${1#--showformat=}"
+format="${format//'${db:Status-Status}'/$status}"
+printf '%s' "${format//'${Version}'/$version}"
+STUB
+    cat > "${INSTALL_STUBS}/apt-get" <<STUB
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >> "${WORK}/apt-calls"
+case "\$*" in *install*) echo "installed 2.19.0" > "${DPKG_STATE}" ;; esac
+STUB
+    cat > "${INSTALL_STUBS}/apt-mark" <<STUB
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >> "${WORK}/apt-calls"
+STUB
+    cat > "${INSTALL_STUBS}/systemctl" <<STUB
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >> "${WORK}/systemctl-calls"
+case "\$1" in
+    is-active) [ -e "${WORK}/opensearch-active" ] ;;
+    restart) touch "${WORK}/opensearch-active" ;;
+esac
+STUB
+    # The instance: answers at once, and records where it was asked.
+    cat > "${INSTALL_STUBS}/curl" <<STUB
+#!/usr/bin/env bash
+printf '%s\n' "\${*: -1}" >> "${WORK}/curl-calls"
+STUB
+    printf '#!/usr/bin/env bash\nexit 0\n' > "${INSTALL_STUBS}/gpg"
+    chmod +x "${INSTALL_STUBS}"/*
+
+    # The repository is already configured, so add_repository has nothing to fetch.
+    mkdir -p /usr/share/keyrings /etc/apt/sources.list.d
+    touch /usr/share/keyrings/opensearch-keyring.gpg /etc/apt/sources.list.d/opensearch-2.x.list
+}
+
+# A host as the package leaves it: its own configuration, naming its own data and log paths.
+packaged_host() {
+    rm -rf /etc/opensearch "${WORK}"/{apt-calls,systemctl-calls,curl-calls,opensearch-active} "$DPKG_STATE"
+    mkdir -p /etc/opensearch /var/lib/opensearch /var/log/opensearch
+    printf 'cluster.name: my-application\npath.data: /var/lib/opensearch\npath.logs: /var/log/opensearch\n' > "$CONFIG"
+}
+
+forget_calls() {
+    rm -f "${WORK}"/{apt-calls,systemctl-calls,curl-calls}
+    touch "${WORK}"/{apt-calls,systemctl-calls,curl-calls}
+}
+
+install_opensearch() {
+    PATH="${INSTALL_STUBS}:${PATH}" "${CHECKOUT}/.deploy/opensearch/install.sh" "$@" > /work/last-output 2>&1
+}
+
+setup_install_stubs
+
+
+section "install.sh on a fresh host"
+
+packaged_host
+forget_calls
+install_opensearch
+check "it succeeds" "$?" "0"
+check_true "the pinned version is installed" grep -q 'install .*opensearch=2.19.0' /work/apt-calls
+check_true "and held" grep -qx 'hold opensearch' /work/apt-calls
+check_true "the packaged configuration is kept" grep -q 'my-application' "${CONFIG}.dist"
+check_true "the data path the package set is kept" grep -qx 'path.data: /var/lib/opensearch' "$CONFIG"
+check_true "and the log path" grep -qx 'path.logs: /var/log/opensearch' "$CONFIG"
+check_true "the heap defaults to 4g" grep -qx -- '-Xmx4g' "$HEAP"
+check_true "the service is restarted" grep -qx 'restart opensearch' /work/systemctl-calls
+check "it waits on the address it configured" "$(tail -n 1 /work/curl-calls)" "http://127.0.0.1:9200/_cluster/health"
+
+
+section "install.sh a second time"
+
+cp "$CONFIG" /work/config-before
+forget_calls
+install_opensearch
+check "it succeeds" "$?" "0"
+check_true "nothing is installed" not grep -q 'install' /work/apt-calls
+check_true "the configuration is unchanged" cmp -s "$CONFIG" /work/config-before
+check_true "the running service is not restarted" not grep -q 'restart' /work/systemctl-calls
+
+
+section "install.sh keeps the heap a host was given"
+
+forget_calls
+install_opensearch --heap 8g
+check "--heap succeeds" "$?" "0"
+check_true "the heap is 8g" grep -qx -- '-Xmx8g' "$HEAP"
+check_true "the change restarts the service" grep -qx 'restart opensearch' /work/systemctl-calls
+
+forget_calls
+install_opensearch
+check "a run without --heap succeeds" "$?" "0"
+check_true "the heap is still 8g" grep -qx -- '-Xmx8g' "$HEAP"
+check_true "nothing is restarted" not grep -q 'restart' /work/systemctl-calls
+
+
+section "install.sh on a host set up by hand"
+
+packaged_host
+mkdir -p /work/hand/data /work/hand/logs
+printf 'cluster.name: by-hand\npath.data: /work/hand/data\npath.logs: /work/hand/logs\n' > "$CONFIG"
+echo "installed 2.19.0" > "$DPKG_STATE"
+touch "${WORK}/opensearch-active"
+forget_calls
+install_opensearch
+check "it succeeds" "$?" "0"
+check_true "nothing is installed" not grep -q 'install' /work/apt-calls
+check_true "the version it already has is held" grep -qx 'hold opensearch' /work/apt-calls
+check_true "its data path is kept" grep -qx 'path.data: /work/hand/data' "$CONFIG"
+check_true "and its log path" grep -qx 'path.logs: /work/hand/logs' "$CONFIG"
+
+packaged_host
+printf 'path.data: /work/no-such-volume\n' > "$CONFIG"
+cp "$CONFIG" /work/config-before
+install_opensearch
+check "a data path that is not there stops it" "$?" "2"
+check_true "the path is named" grep -q '/work/no-such-volume' /work/last-output
+check_true "the configuration is left as it was" cmp -s "$CONFIG" /work/config-before
+
+
+section "install.sh where the package was removed and not purged"
+
+packaged_host
+echo "config-files 2.18.0" > "$DPKG_STATE"
+forget_calls
+install_opensearch
+check "it installs rather than stopping" "$?" "0"
+check_true "the pinned version is installed" grep -q 'install .*opensearch=2.19.0' /work/apt-calls
+
+
+section "install.sh waits where the instance listens"
+
+packaged_host
+forget_calls
+install_opensearch --bind 10.0.0.5 --port 9201
+check "it succeeds" "$?" "0"
+check_true "the port is configured" grep -qx 'http.port: 9201' "$CONFIG"
+check "it waits on the bind address and port" "$(tail -n 1 /work/curl-calls)" "http://10.0.0.5:9201/_cluster/health"
+
+forget_calls
+install_opensearch --bind 0.0.0.0
+check "a wildcard bind succeeds" "$?" "0"
+check "it waits on the loopback address" "$(tail -n 1 /work/curl-calls)" "http://127.0.0.1:9200/_cluster/health"
 
 
 summary
