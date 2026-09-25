@@ -128,7 +128,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Run shellcheck
-        run: shellcheck -x .deploy/*.sh .deploy/*/*.sh pipelines/*/*.sh opensearch/*.sh tests/*.sh tests/*/*.sh
+        run: shellcheck -x $(git ls-files '*.sh')
 
   docs:
     # `-D warnings` makes a broken intra-doc link fail the job.
