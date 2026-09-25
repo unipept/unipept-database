@@ -283,6 +283,21 @@ check_true "it does not first call the table optional" not grep -q 'WARN kmer_ta
 check_true "the database that was there is kept" test -s "${LOCAL}/uniprot-2026-03/suffix-array/kmer_table.bin"
 rm "${STUBS}/scp"
 
+# An ssh that fails when asked about the k-mer table, after the copy. That says nothing about the
+# table, so it must not read as a remote without one.
+cat > "${STUBS}/ssh" <<'SSH'
+#!/usr/bin/env bash
+case "$*" in *kmer_table.bin*) exit 255 ;; esac
+exec /usr/bin/ssh "$@"
+SSH
+chmod +x "${STUBS}/ssh"
+printf 'do not lose me\n' > "${LOCAL}/uniprot-2026-03/marker"
+clone --remote-output-dir "$REMOTE" --output-dir "$LOCAL" --replace
+check "an ssh that fails on the k-mer question stops it" "$?" "2"
+check_true "it says it could not ask" grep -q 'could not ask localhost whether it has a k-mer table' /work/last-output
+check_true "the database that was there is kept" test -f "${LOCAL}/uniprot-2026-03/marker"
+rm "${STUBS}/ssh" "${LOCAL}/uniprot-2026-03/marker"
+
 rm "${REMOTE}/uniprot-2026-03/suffix-array/mapping.bin"
 rm -rf "${LOCAL}/uniprot-2026-03" "${LOCAL}/.clone"
 clone --remote-output-dir "$REMOTE" --output-dir "$LOCAL"
