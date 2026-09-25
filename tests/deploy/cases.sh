@@ -456,13 +456,19 @@ check "an account without a shell succeeds" "$?" "0"
 check "it is given one" "$(getent passwd deployer3 | cut -d: -f7)" "/bin/bash"
 
 # What a run of build.sh as root left, beside what OUTPUT_DIR also holds and is not this script's.
-mkdir -p /work/out4/uniprot-2026-03/suffix-array /work/out4/.build /work/out4/opensearch-data
-touch /work/out4/uniprot-2026-03/suffix-array/sa.bin /work/out4/opensearch-data/node
+# The .replaced is what an interrupted swap leaves: the next swap removes it first, and as DEPLOY
+# could not while root owned what is in it.
+mkdir -p /work/out4/uniprot-2026-03/suffix-array /work/out4/uniprot-2025-11.replaced/suffix-array \
+    /work/out4/.build /work/out4/.clone /work/out4/opensearch-data
+touch /work/out4/uniprot-2026-03/suffix-array/sa.bin /work/out4/uniprot-2025-11.replaced/suffix-array/sa.bin \
+    /work/out4/opensearch-data/node
 install_opensearch --user "$DEPLOY" --output-dir /work/out4
 check "an output directory root owns succeeds" "$?" "0"
 check "it is handed over" "$(stat -c %U /work/out4)" "$DEPLOY"
 check "and the database in it" "$(stat -c %U /work/out4/uniprot-2026-03/suffix-array/sa.bin)" "$DEPLOY"
-check "and the staging directory" "$(stat -c %U /work/out4/.build)" "$DEPLOY"
+check "and the staging directories" "$(stat -c %U /work/out4/.build):$(stat -c %U /work/out4/.clone)" "${DEPLOY}:${DEPLOY}"
+check "and what an interrupted swap left" \
+    "$(stat -c %U /work/out4/uniprot-2025-11.replaced/suffix-array/sa.bin)" "$DEPLOY"
 check "what else is there keeps its owner" "$(stat -c %U /work/out4/opensearch-data/node)" "root"
 check_true "it says what is left to do as that user" grep -q "as ${DEPLOY} (sudo -iu ${DEPLOY})" /work/last-output
 

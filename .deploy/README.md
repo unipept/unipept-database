@@ -24,8 +24,8 @@ run without sudo:
 - the `unipept` user (`DEPLOY_USER`), who builds, clones and owns the databases. The API on this
   host runs as the same user, and its own install creates it the same way, in either order;
 - the tools `build.sh` and `clone.sh` run, installed through apt when they are missing;
-- `OUTPUT_DIR`, owned by that user. Databases and staging directories an earlier run as root left
-  there are handed over too; nothing else in the directory changes owner;
+- `OUTPUT_DIR`, owned by that user. Databases, staging directories and interrupted swaps an
+  earlier run as root left there are handed over too; nothing else in the directory changes owner;
 - the OpenSearch instance this host loads its proteins into, configured and started.
 
 It ends with what is left to do as `unipept`: clone this repository, install Rust with rustup for

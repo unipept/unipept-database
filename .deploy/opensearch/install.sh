@@ -209,9 +209,11 @@ prepare_output_dir() {
     }
 
     # What an earlier run as root left: databases the next run could not replace, and staging
-    # directories it could not remove. A database is a few dozen files, so this is quick.
+    # directories and the leftover of an interrupted swap, which it could not remove. A database is
+    # a few dozen files, so this is quick.
     # shellcheck disable=SC2231 # DATABASE_GLOB is a glob, and has to expand
-    for entry in "$OUTPUT_DIR"/${DATABASE_GLOB} "${OUTPUT_DIR}/.build" "${OUTPUT_DIR}/.clone"; do
+    for entry in "$OUTPUT_DIR"/${DATABASE_GLOB} "$OUTPUT_DIR"/${DATABASE_GLOB}.replaced \
+        "${OUTPUT_DIR}/.build" "${OUTPUT_DIR}/.clone"; do
         [ -e "$entry" ] || continue
         if [ -n "$(find "$entry" ! -user "$DEPLOY_USER" -print -quit)" ]; then
             chown -R "${DEPLOY_USER}:" "$entry"
