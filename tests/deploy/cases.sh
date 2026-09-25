@@ -201,6 +201,20 @@ check_true "the proteins OpenSearch serves are left alone" test ! -s /work/loade
 as_deployer git -C "$CHECKOUT" checkout -q -- pipelines/suffix-array/build.sh
 
 
+section "a build whose load fails"
+
+# The load is the last step before the swap, so a load that fails is the latest a build can fail
+# and still leave what the API serves alone.
+printf '#!/usr/bin/env bash\nexit 1\n' > "${CHECKOUT}/opensearch/load.sh"
+printf 'do not lose me\n' > "${OUT}/uniprot-2026-03/marker"
+build --output-dir "$OUT" --scratch-dir /work/scratch --replace
+check "it stops" "$?" "2"
+check_true "the database that was there is kept" test -f "${OUT}/uniprot-2026-03/marker"
+check_true "the build is not marked complete" test ! -e "${OUT}/.build/suffix-array/build-info.txt"
+as_deployer git -C "$CHECKOUT" checkout -q -- opensearch/load.sh
+rm "${OUT}/uniprot-2026-03/marker"
+
+
 section "cloning over a real ssh and scp"
 
 REMOTE=/work/remote
@@ -212,8 +226,13 @@ printf '2025.11\n' > "${REMOTE}/uniprot-2025-11/suffix-array/.version"
 # What an interrupted swap leaves behind on the remote. It sorts after the database it replaced.
 cp -r "${OUT}/uniprot-2026-03" "${REMOTE}/uniprot-2026-03.replaced"
 
+rm -f /work/loader-calls
 clone --remote-output-dir "$REMOTE" --output-dir "$LOCAL" --opensearch-url http://stub:9200
 check "the clone succeeds" "$?" "0"
+check "the proteins were loaded once" "$(grep -c -- '--uniprot-entries' /work/loader-calls)" "1"
+check_true "from the copy, before it is put in place" \
+    grep -qF -- "--opensearch-url http://stub:9200 --uniprot-entries ${LOCAL}/.clone/uniprot-2026-03/tables/uniprot_entries.tsv.lz4" \
+    /work/loader-calls
 check_true "the newest release on the remote is the one taken" test -d "${LOCAL}/uniprot-2026-03"
 check_true "a leftover beside it is not taken for a release" test ! -e "${LOCAL}/uniprot-2026-03.replaced"
 check_true "the older one is left alone" test ! -d "${LOCAL}/uniprot-2025-11"
@@ -237,6 +256,19 @@ check_true "the release is named" grep -q 'uniprot-2030-01' /work/last-output
 clone --remote-output-dir /work/nothing-here --output-dir "$LOCAL"
 check "a remote with no database stops" "$?" "2"
 
+clone --remote-output-dir "$REMOTE" --output-dir "$LOCAL"
+check "a version that is already here stops" "$?" "2"
+check_true "it says how to replace it" grep -q -- '--replace' /work/last-output
+check_true "it stops before copying anything" test ! -e "${LOCAL}/.clone"
+
+printf '#!/usr/bin/env bash\nexit 1\n' > "${CHECKOUT}/opensearch/load.sh"
+printf 'do not lose me\n' > "${LOCAL}/uniprot-2026-03/marker"
+clone --remote-output-dir "$REMOTE" --output-dir "$LOCAL" --replace
+check "a load that fails stops the clone" "$?" "2"
+check_true "the database that was there is kept" test -f "${LOCAL}/uniprot-2026-03/marker"
+as_deployer git -C "$CHECKOUT" checkout -q -- opensearch/load.sh
+rm "${LOCAL}/uniprot-2026-03/marker"
+
 # An scp that loses the k-mer table on the way, which the remote has.
 cat > "${STUBS}/scp" <<SCP
 #!/usr/bin/env bash
@@ -258,6 +290,22 @@ check "an incomplete database on the remote stops" "$?" "2"
 check_true "the missing file is named" grep -q 'mapping.bin is missing' /work/last-output
 check_true "it stops before copying anything" test ! -e "${LOCAL}/.clone"
 check_true "nothing is put in place" test ! -d "${LOCAL}/uniprot-2026-03"
+
+# The version check runs on the remote through the functions clone.sh sends along, so this is what
+# fails if one it needs is not sent.
+printf '2024.01\n' > "${REMOTE}/uniprot-2025-11/suffix-array/.version"
+clone --remote-output-dir "$REMOTE" --output-dir "$LOCAL" --uniprot-version 2025-11 --replace
+check "a remote database whose .version disagrees with its name stops" "$?" "2"
+check_true "both versions are named" grep -q 'the directory says 2025-11 and .version says 2024-01' /work/last-output
+check_true "it stops before copying anything" test ! -e "${LOCAL}/.clone"
+check "the copy already here is kept" "$(cat "${LOCAL}/uniprot-2025-11/suffix-array/.version")" "2025.11"
+printf '2025.11\n' > "${REMOTE}/uniprot-2025-11/suffix-array/.version"
+
+rm "${REMOTE}/uniprot-2025-11/tables/uniprot_entries.tsv.lz4"
+clone --remote-output-dir "$REMOTE" --output-dir "$LOCAL" --uniprot-version 2025-11 --replace
+check "a remote database without its entries table stops" "$?" "2"
+check_true "the table is named" grep -q 'tables/uniprot_entries.tsv.lz4 is missing' /work/last-output
+check_true "it stops before copying anything" test ! -e "${LOCAL}/.clone"
 
 
 # install.sh, against stand-ins for apt, dpkg, systemd and the instance itself. What is real is the
@@ -311,10 +359,11 @@ case "\$1" in
     restart) touch "${WORK}/opensearch-active" ;;
 esac
 STUB
-    # The instance: answers at once, and records each request.
+    # The instance: records each request, and answers at once unless curl-fails is there.
     cat > "${INSTALL_STUBS}/curl" <<STUB
 #!/usr/bin/env bash
 printf '%s\n' "\$*" >> "${WORK}/curl-calls"
+[ ! -e "${WORK}/curl-fails" ] || exit 7
 STUB
     printf '#!/usr/bin/env bash\nexit 0\n' > "${INSTALL_STUBS}/gpg"
     chmod +x "${INSTALL_STUBS}"/*
@@ -374,6 +423,24 @@ check_true "the configuration is unchanged" cmp -s "$CONFIG" /work/config-before
 check_true "the running service is not restarted" not grep -q 'restart' /work/systemctl-calls
 
 
+section "install.sh where the service is down"
+
+rm -f "${WORK}/opensearch-active"
+forget_calls
+install_opensearch
+check "it succeeds" "$?" "0"
+check_true "the service is started, though nothing changed" grep -qx 'restart opensearch' /work/systemctl-calls
+
+touch "${WORK}/curl-fails"
+forget_calls
+install_opensearch
+check "an instance that does not answer stops it" "$?" "2"
+check_true "it says where it waited and where to look" \
+    grep -q 'did not answer at http://127.0.0.1:9200 .* journalctl -u opensearch' /work/last-output
+check_true "it sets nothing on an instance that is not there" not grep -q '_settings' /work/curl-calls
+rm "${WORK}/curl-fails"
+
+
 section "install.sh keeps the heap a host was given"
 
 forget_calls
@@ -421,6 +488,20 @@ forget_calls
 install_opensearch
 check "it installs rather than stopping" "$?" "0"
 check_true "the pinned version is installed" grep -q 'install .*opensearch=2.19.0' /work/apt-calls
+
+
+section "install.sh where another version is installed"
+
+packaged_host
+echo "installed 2.18.0" > "$DPKG_STATE"
+cp "$CONFIG" /work/config-before
+forget_calls
+install_opensearch
+check "it stops" "$?" "2"
+check_true "it names both versions" grep -q 'OpenSearch 2.18.0 is installed and this script pins 2.19.0' /work/last-output
+check_true "it installs nothing over it" not grep -q 'install .*opensearch=' /work/apt-calls
+check_true "the configuration is left as it was" cmp -s "$CONFIG" /work/config-before
+check_true "the service is not touched" not grep -q 'restart' /work/systemctl-calls
 
 
 section "install.sh waits where the instance listens"
