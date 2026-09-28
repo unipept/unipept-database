@@ -42,12 +42,13 @@ run without sudo:
   earlier run as root left there are handed over too; nothing else in the directory changes owner;
 - the scripts a host runs, in `/opt/unipept-database`: `bin/` with `clone.sh`, `load.sh`,
   `verify.sh` and `prune.sh`, what they call beside it, `etc/deploy.conf`, written once from the
-  example and then the host's to edit, and `INSTALLED`, which names the commit they came from. A
-  host takes a newer version by running `install.sh` again from a clone of it;
+  example and then root's to edit, since `install.sh` reads it as root, and `INSTALLED`, which names
+  the commit they came from. A host takes a newer version by running `install.sh` again from a clone
+  of it;
 - the OpenSearch instance this host loads its proteins into, configured and started.
 
-It ends with what is left to do as `unipept`: fill in `deploy.conf`, add an ssh key for a clone,
-and for a build, clone this repository and install Rust with rustup.
+It ends with what is left to do: fill in `deploy.conf` as root, then as `unipept` add an ssh key for
+a clone, and for a build, clone this repository and install Rust with rustup.
 
 Run it as root, once per host or again after changing a setting: a run that changes nothing
 restarts nothing. It pins a version and holds it, also on a host that already had that version,
@@ -195,10 +196,13 @@ Every version stays on a host until this removes it, its directory and its OpenS
 together, so going back to one is a switch rather than a build or a copy. A closed index costs no
 memory; what old versions cost is disk.
 
-It keeps the version the API queries, which is the one the `uniprot_entries` alias points at, every
-newer version, since those are loaded ahead of a switch still to come, and the `--keep` newest ones
-older than it. The old index kept at a host's first switch, `uniprot_entries-legacy`, counts as the
-oldest. Without an alias it removes nothing, since which version the API queries is then not known.
+What the API serves is two things, which can be on different versions for a while: the proteins,
+through the `uniprot_entries` alias, and the files, through `INDEX_LOCATION` in the API's
+environment file, which it reads where the API runs on the host. `--activate` moves only the first.
+It keeps both versions, every version newer than the older of the two, since those are loaded ahead
+of a switch still to come, and the `--keep` newest ones older than that. The old index kept at a
+host's first switch, `uniprot_entries-legacy`, counts as the oldest. Without an alias, or with an
+environment file it cannot read or that names no version, it removes nothing.
 
 `load.sh` warns when OpenSearch's disk is past its low watermark, 85% unless the cluster sets
 another. At 95% OpenSearch makes every index read-only, and a load running then fails part way, so

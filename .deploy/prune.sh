@@ -7,13 +7,17 @@
 # its memory, and keeps every version's data, so going back to one is a switch and not a rebuild.
 # What that costs is disk, which is what this gives back.
 #
-# Kept, whatever --keep says:
-#   - the version the API queries, which is the one the uniprot_entries alias points at;
-#   - every version newer than that one, which is loaded ahead of a switch still to come;
-#   - the --keep newest versions older than it, to go back to.
+# What the API serves is two things, which can be on different versions for a while: the proteins,
+# through the uniprot_entries alias, and the files, through INDEX_LOCATION in the API's environment
+# file on a host that runs the API. load.sh --activate moves only the first. Kept, whatever --keep
+# says:
+#   - the version of each, and every version newer than the older of the two, which is loaded ahead
+#     of a switch still to come;
+#   - the --keep newest versions older than that, to go back to.
 # The old index a host had before versioned indices, uniprot_entries-legacy, counts as the oldest.
 #
-# Without an alias there is no telling which version the API queries, so nothing is removed.
+# Without an alias, or with an environment file that cannot be read or names no version, there is
+# no telling what the API serves, so nothing is removed.
 
 set -eo pipefail
 set -o errtrace
@@ -28,18 +32,19 @@ source "${HERE}/../opensearch/lib.sh"
 trap errorAndExit ERR
 trap 'exit 2' USR1
 
-# The OpenSearch instance the indices are in.
-OPENSEARCH_URL=http://localhost:9200
-
-read_conf
-
-# The settings only this script has.
+# The settings only this script has, before read_conf, so deploy.conf can set them.
 
 # How many versions older than the one the API queries to keep. Required: removing is not undone.
 KEEP=
 
 # Whether to only say what would be removed.
 DRY_RUN=false
+
+# Where the API on this host keeps INDEX_LOCATION, which unipept-api's install puts there. A host
+# without it runs no API, and only the alias says what is served.
+API_ENV_FILE=${API_ENV_FILE:-/opt/unipept-api/etc/unipept-api.env}
+
+read_conf
 
 usage() {
     cat <<'USAGE'
@@ -92,9 +97,23 @@ refuse_root
 require_opensearch
 
 active_index=$(alias_target)
-ACTIVE=$(version_of_index "$active_index")
-[ -n "$ACTIVE" ] \
+QUERIED=$(version_of_index "$active_index")
+[ -n "$QUERIED" ] \
     || die "${ALIAS} is not an alias for a version's index, so which version the API queries is not known. Nothing is removed."
+
+SERVED=''
+if [ -e "$API_ENV_FILE" ]; then
+    [ -r "$API_ENV_FILE" ] || die "cannot read ${API_ENV_FILE}, so which files the API reads is not known. Nothing is removed."
+    location=$(sed -n 's/^INDEX_LOCATION=//p' "$API_ENV_FILE" | tail -n 1)
+    SERVED=$(database_version_of "$location") \
+        || die "INDEX_LOCATION in ${API_ENV_FILE} is '${location}', which names no version, so which files the API reads is not known. Nothing is removed."
+fi
+
+# The older of the two: what is kept is counted from there. legacy is older than any version.
+ACTIVE="$QUERIED"
+if [ -n "$SERVED" ] && [[ "${SERVED/legacy/0000-00}" < "${QUERIED/legacy/0000-00}" ]]; then
+    ACTIVE="$SERVED"
+fi
 
 # Every version this host holds anything of, files or index, newest first. legacy sorts last,
 # because it predates every versioned one.
@@ -110,8 +129,8 @@ versions=$(
     } | sed 's/^legacy$/0000-00 legacy/; s/^\([0-9-]*\)$/\1 \1/' | sort -u -r -k1,1 | awk '{ print $2 }'
 )
 
-# Newer than the active one is kept, being loaded ahead of a switch; the active one is kept; and
-# of those older, the first KEEP.
+# Newer than the older of what is served is kept: the other of the two, or loaded ahead of a switch.
+# That one is kept, and of those older, the first KEEP.
 keep=' '
 remove=''
 seen_active=false
@@ -130,7 +149,7 @@ for version in $versions; do
     fi
 done
 
-log "The API queries ${active_index}. Keeping:${keep% }"
+log "The API queries ${active_index}${SERVED:+ and reads the files of ${SERVED}}. Keeping:${keep% }"
 if [ -z "$remove" ]; then
     log "Nothing to remove."
     exit 0
