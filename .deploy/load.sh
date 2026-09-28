@@ -119,6 +119,8 @@ verify_database "${DATABASE_DIR}/suffix-array" \
     || die "${DATABASE_DIR} is missing files the API needs, or is not the version it is named after."
 [ -s "$ENTRIES" ] || die "${DATABASE_DIR} has no tables/uniprot_entries.tsv.lz4 to load."
 
+warn_opensearch_disk "$OPENSEARCH_URL"
+
 log "Started loading UniProtKB ${UNIPROT_VERSION} into ${INDEX_NAME} at ${OPENSEARCH_URL}."
 loader_arguments=(--opensearch-url "$OPENSEARCH_URL" --uniprot-entries "$ENTRIES" --index-name "$INDEX_NAME")
 [ -z "$SKIP_ROWS" ] || loader_arguments+=(--skip "$SKIP_ROWS")

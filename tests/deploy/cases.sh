@@ -371,6 +371,36 @@ check_true "that one is loaded, from the row given" \
     /work/loader-calls
 
 
+section "load.sh warns when OpenSearch's disk is past its watermark"
+
+# A curl that answers the two questions warn_opensearch_disk asks, for a node at DISK_PERCENT with
+# its low watermark at 90%. The loader is a stand-in and makes no request of its own.
+cat > "${STUBS}/curl" <<'CURL'
+#!/usr/bin/env bash
+case "$*" in
+    *_cat/allocation*) echo "$(cat /work/disk-percent)" ;;
+    *watermark*) echo '{"defaults":{"cluster.routing.allocation.disk.watermark.low":"90%"}}' ;;
+    *) exit 7 ;;
+esac
+CURL
+chmod +x "${STUBS}/curl"
+
+echo 93 > /work/disk-percent
+rm -f /work/loader-calls
+load_proteins --output-dir "$OUT"
+check "past it, the load still runs" "$?" "0"
+check_true "and it warns, with the watermark the cluster set" grep -q "93% full, past its 90% watermark" /work/last-output
+check_true "naming what gives the space back" grep -q 'prune.sh --keep' /work/last-output
+
+echo 42 > /work/disk-percent
+load_proteins --output-dir "$OUT"
+check_true "below it there is no warning" not grep -q 'watermark' /work/last-output
+rm "${STUBS}/curl" /work/disk-percent
+
+load_proteins --output-dir "$OUT" --opensearch-url http://stub:9200
+check_true "an OpenSearch that cannot be asked gives no warning" not grep -q 'watermark' /work/last-output
+
+
 section "load.sh refuses a database it cannot load"
 
 rm -f /work/loader-calls
