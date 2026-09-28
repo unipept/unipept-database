@@ -3,12 +3,12 @@
 # The deploy cases. Runs inside the container build-suite.sh starts, with the repository at /repo
 # read-only and everything this writes under /work.
 #
-# What is real here: build.sh, clone.sh, verify.sh and install.sh themselves, git, ssh and scp. What
-# is stood in for: the pipeline, sa-builder and the OpenSearch loader, each of which has a suite of
-# its own, and the apt, dpkg, systemd and instance install.sh drives.
+# What is real here: build.sh, clone.sh, load.sh, verify.sh and install.sh themselves, git, ssh and
+# scp. What is stood in for: the pipeline, sa-builder and the OpenSearch loader, each of which has a
+# suite of its own, and the apt, dpkg, systemd and instance install.sh drives.
 #
-# The cases run as root, which setting up sshd and install.sh need. build.sh, clone.sh and verify.sh
-# run as DEPLOY, as on a host, and refuse root.
+# The cases run as root, which setting up sshd and install.sh need. build.sh, clone.sh, load.sh and
+# verify.sh run as DEPLOY, as on a host, and refuse root.
 
 set -uo pipefail
 
@@ -112,6 +112,10 @@ clone() {
         --local-ssh-key "${DEPLOY_HOME}/.ssh/id_test" "$@" > /work/last-output 2>&1
 }
 
+load_proteins() {
+    as_deployer "${CHECKOUT}/.deploy/load.sh" "$@" > /work/last-output 2>&1
+}
+
 mkdir -p "$WORK"
 setup_stubs
 make_index_repo "$INDEX_REPO" "$WORK"
@@ -121,7 +125,7 @@ chown -R "${DEPLOY}:" "$WORK"
 setup_sshd
 
 
-section "build.sh, clone.sh and verify.sh as root"
+section "build.sh, clone.sh, load.sh and verify.sh as root"
 
 "${CHECKOUT}/.deploy/build.sh" --output-dir /work/as-root --scratch-dir /work/scratch > /work/last-output 2>&1
 check "build.sh refuses" "$?" "2"
@@ -133,6 +137,10 @@ check_true "before it writes anything" test ! -e /work/as-root
 check "clone.sh refuses" "$?" "2"
 check_true "it names the user to run as" grep -q "Run it as ${DEPLOY}" /work/last-output
 
+"${CHECKOUT}/.deploy/load.sh" --output-dir /work > /work/last-output 2>&1
+check "load.sh refuses" "$?" "2"
+check_true "it names the user to run as" grep -q "Run it as ${DEPLOY}" /work/last-output
+
 "${CHECKOUT}/.deploy/verify.sh" --index-dir /work > /work/last-output 2>&1
 check "verify.sh refuses" "$?" "2"
 check_true "it names the user to run as" grep -q "Run it as ${DEPLOY}" /work/last-output
@@ -142,21 +150,23 @@ section "a clean build"
 
 OUT=/work/data
 as_deployer mkdir -p "$OUT"
-build --output-dir "$OUT" --scratch-dir /work/scratch --opensearch-url http://stub:9200
+rm -f /work/loader-calls
+build --output-dir "$OUT" --scratch-dir /work/scratch
 check "the build succeeds" "$?" "0"
 check_true "the database is named after the version the pipeline wrote" \
     test -d "${OUT}/uniprot-2026-03"
 check_true "verify.sh passes on it" \
     as_deployer "${CHECKOUT}/.deploy/verify.sh" --index-dir "${OUT}/uniprot-2026-03/suffix-array"
 check_true "the staging directory is gone" test ! -d "${OUT}/.build"
-check_true "the entries table is kept for clone.sh" \
+check_true "the entries table is kept for load.sh and clone.sh" \
     test -s "${OUT}/uniprot-2026-03/tables/uniprot_entries.tsv.lz4"
 check_true "the k-mer table is built" \
     test -s "${OUT}/uniprot-2026-03/suffix-array/kmer_table.bin"
 check "sa-builder was asked for the k-mer table" \
     "$(grep -c -- '--output-kmer-table' /work/sa-builder-calls)" "1"
-check "the proteins were loaded" \
-    "$(grep -c -- '--uniprot-entries' /work/loader-calls)" "1"
+# Loading is load.sh's, which is what lets a load that fails be rerun without building again.
+check_true "nothing is loaded into OpenSearch" test ! -e /work/loader-calls
+check_true "it says how to load it" grep -qF '.deploy/load.sh --uniprot-version 2026-03' /work/last-output
 
 check "build-info.txt records this checkout" \
     "$(grep '^unipept-database:' "${OUT}/uniprot-2026-03/suffix-array/build-info.txt" | awk '{print $2}')" \
@@ -191,26 +201,21 @@ section "a build whose tables are empty"
 printf '\nprintf "" | lz4 -c > "${OUT}/taxons.tsv.lz4"\n' >> "${CHECKOUT}/pipelines/suffix-array/build.sh"
 EMPTY_OUT=/work/data-empty
 as_deployer mkdir -p "$EMPTY_OUT"
-rm -f /work/loader-calls
 build --output-dir "$EMPTY_OUT" --scratch-dir /work/scratch
 check "it stops" "$?" "2"
 check_true "the empty table is named" grep -q 'datastore/taxons.tsv is empty' /work/last-output
 check_true "no database is put in place" test ! -d "${EMPTY_OUT}/uniprot-2026-03"
-# The loader drops and recreates the index the API queries, so a refused build must not reach it.
-check_true "the proteins OpenSearch serves are left alone" test ! -s /work/loader-calls
 as_deployer git -C "$CHECKOUT" checkout -q -- pipelines/suffix-array/build.sh
 
 
 section "a build whose pipeline fails"
 
 printf 'do not lose me\n' > "${OUT}/uniprot-2026-03/marker"
-rm -f /work/loader-calls
 
 printf '\nexit 1\n' >> "${CHECKOUT}/pipelines/suffix-array/build.sh"
 build --output-dir "$OUT" --scratch-dir /work/scratch --replace
 check "a pipeline that exits non-zero stops it" "$?" "2"
 check_true "the database that was there is kept" test -f "${OUT}/uniprot-2026-03/marker"
-check_true "nothing is loaded" test ! -s /work/loader-calls
 as_deployer git -C "$CHECKOUT" checkout -q -- pipelines/suffix-array/build.sh
 
 # shellcheck disable=SC2016 # OUT belongs to the stub pipeline, and expands when it runs
@@ -219,22 +224,8 @@ build --output-dir "$OUT" --scratch-dir /work/scratch --replace
 check "a pipeline that leaves out a table stops it" "$?" "2"
 check_true "the table is named" grep -q 'the pipeline wrote no proteomes.tsv.lz4' /work/last-output
 check_true "the database that was there is kept" test -f "${OUT}/uniprot-2026-03/marker"
-check_true "nothing is loaded" test ! -s /work/loader-calls
-as_deployer git -C "$CHECKOUT" checkout -q -- pipelines/suffix-array/build.sh
-rm "${OUT}/uniprot-2026-03/marker"
-
-
-section "a build whose load fails"
-
-# The load is the last step before the swap, so a load that fails is the latest a build can fail
-# and still leave what the API serves alone.
-printf '#!/usr/bin/env bash\nexit 1\n' > "${CHECKOUT}/opensearch/load.sh"
-printf 'do not lose me\n' > "${OUT}/uniprot-2026-03/marker"
-build --output-dir "$OUT" --scratch-dir /work/scratch --replace
-check "it stops" "$?" "2"
-check_true "the database that was there is kept" test -f "${OUT}/uniprot-2026-03/marker"
 check_true "the build is not marked complete" test ! -e "${OUT}/.build/suffix-array/build-info.txt"
-as_deployer git -C "$CHECKOUT" checkout -q -- opensearch/load.sh
+as_deployer git -C "$CHECKOUT" checkout -q -- pipelines/suffix-array/build.sh
 rm "${OUT}/uniprot-2026-03/marker"
 
 
@@ -250,12 +241,10 @@ printf '2025.11\n' > "${REMOTE}/uniprot-2025-11/suffix-array/.version"
 cp -r "${OUT}/uniprot-2026-03" "${REMOTE}/uniprot-2026-03.replaced"
 
 rm -f /work/loader-calls
-clone --remote-output-dir "$REMOTE" --output-dir "$LOCAL" --opensearch-url http://stub:9200
+clone --remote-output-dir "$REMOTE" --output-dir "$LOCAL"
 check "the clone succeeds" "$?" "0"
-check "the proteins were loaded once" "$(grep -c -- '--uniprot-entries' /work/loader-calls)" "1"
-check_true "from the copy, before it is put in place" \
-    grep -qF -- "--opensearch-url http://stub:9200 --uniprot-entries ${LOCAL}/.clone/uniprot-2026-03/tables/uniprot_entries.tsv.lz4" \
-    /work/loader-calls
+check_true "nothing is loaded into OpenSearch" test ! -e /work/loader-calls
+check_true "it says how to load it" grep -qF '.deploy/load.sh --uniprot-version 2026-03' /work/last-output
 check_true "the newest release on the remote is the one taken" test -d "${LOCAL}/uniprot-2026-03"
 check_true "a leftover beside it is not taken for a release" test ! -e "${LOCAL}/uniprot-2026-03.replaced"
 check_true "the older one is left alone" test ! -d "${LOCAL}/uniprot-2025-11"
@@ -283,14 +272,6 @@ clone --remote-output-dir "$REMOTE" --output-dir "$LOCAL"
 check "a version that is already here stops" "$?" "2"
 check_true "it says how to replace it" grep -q -- '--replace' /work/last-output
 check_true "it stops before copying anything" test ! -e "${LOCAL}/.clone"
-
-printf '#!/usr/bin/env bash\nexit 1\n' > "${CHECKOUT}/opensearch/load.sh"
-printf 'do not lose me\n' > "${LOCAL}/uniprot-2026-03/marker"
-clone --remote-output-dir "$REMOTE" --output-dir "$LOCAL" --replace
-check "a load that fails stops the clone" "$?" "2"
-check_true "the database that was there is kept" test -f "${LOCAL}/uniprot-2026-03/marker"
-as_deployer git -C "$CHECKOUT" checkout -q -- opensearch/load.sh
-rm "${LOCAL}/uniprot-2026-03/marker"
 
 # An scp that loses the k-mer table on the way, which the remote has.
 cat > "${STUBS}/scp" <<SCP
@@ -344,6 +325,76 @@ clone --remote-output-dir "$REMOTE" --output-dir "$LOCAL" --uniprot-version 2025
 check "a remote database without its entries table stops" "$?" "2"
 check_true "the table is named" grep -q 'tables/uniprot_entries.tsv.lz4 is missing' /work/last-output
 check_true "it stops before copying anything" test ! -e "${LOCAL}/.clone"
+
+
+section "load.sh"
+
+# A second database beside the one built above, so which one is loaded is a real choice.
+as_deployer cp -r "${OUT}/uniprot-2026-03" "${OUT}/uniprot-2025-11"
+printf '2025.11\n' > "${OUT}/uniprot-2025-11/suffix-array/.version"
+
+rm -f /work/loader-calls
+load_proteins --output-dir "$OUT" --opensearch-url http://stub:9200
+check "it succeeds" "$?" "0"
+check "the loader is called once" "$(grep -c -- '--uniprot-entries' /work/loader-calls)" "1"
+check_true "with the newest database, at the instance named" \
+    grep -qxF -- "--opensearch-url http://stub:9200 --uniprot-entries ${OUT}/uniprot-2026-03/tables/uniprot_entries.tsv.lz4" \
+    /work/loader-calls
+
+rm -f /work/loader-calls
+load_proteins --output-dir "$OUT" --uniprot-version 2025-11 --skip 500
+check "an older one can be named, and a load continued" "$?" "0"
+check_true "that one is loaded, from the row given" \
+    grep -qF -- "--uniprot-entries ${OUT}/uniprot-2025-11/tables/uniprot_entries.tsv.lz4 --skip 500" /work/loader-calls
+
+
+section "load.sh refuses a database it cannot load"
+
+rm -f /work/loader-calls
+
+load_proteins --output-dir "$OUT" --uniprot-version 2030-01
+check "a version that is not there stops it" "$?" "2"
+check_true "the directory is named" grep -q 'uniprot-2030-01' /work/last-output
+
+load_proteins --output-dir /work/nothing-here
+check "no database at all stops it" "$?" "2"
+
+# The loader drops the index the API queries before it writes the new one, so a database the API
+# cannot serve is refused before it is reached.
+rm "${OUT}/uniprot-2025-11/suffix-array/mapping.bin"
+load_proteins --output-dir "$OUT" --uniprot-version 2025-11
+check "a database that fails verification stops it" "$?" "2"
+check_true "the missing file is named" grep -q 'mapping.bin is missing' /work/last-output
+as_deployer cp "${OUT}/uniprot-2026-03/suffix-array/mapping.bin" "${OUT}/uniprot-2025-11/suffix-array/"
+
+printf '2024.01\n' > "${OUT}/uniprot-2025-11/suffix-array/.version"
+load_proteins --output-dir "$OUT" --uniprot-version 2025-11
+check "a database that is not the version it is named after stops it" "$?" "2"
+printf '2025.11\n' > "${OUT}/uniprot-2025-11/suffix-array/.version"
+
+rm "${OUT}/uniprot-2025-11/tables/uniprot_entries.tsv.lz4"
+load_proteins --output-dir "$OUT" --uniprot-version 2025-11
+check "a database without its entries table stops it" "$?" "2"
+check_true "the table is named" grep -q 'has no tables/uniprot_entries.tsv.lz4' /work/last-output
+
+for arguments in "--skip many" "--skip" "--no-such-flag"; do
+    # shellcheck disable=SC2086 # each is several words on purpose
+    load_proteins --output-dir "$OUT" $arguments
+    check "'${arguments}' is refused" "$?" "2"
+done
+
+check_true "none of these reaches the loader" test ! -e /work/loader-calls
+
+
+section "load.sh whose loader fails"
+
+printf '#!/usr/bin/env bash\nexit 1\n' > "${CHECKOUT}/opensearch/load.sh"
+load_proteins --output-dir "$OUT"
+check "it stops" "$?" "2"
+check_true "it does not say it finished" not grep -q 'Finished loading' /work/last-output
+check_true "the database is left in place, to load again" test -s "${OUT}/uniprot-2026-03/tables/uniprot_entries.tsv.lz4"
+as_deployer git -C "$CHECKOUT" checkout -q -- opensearch/load.sh
+rm -rf "${OUT}/uniprot-2025-11"
 
 
 # install.sh, against stand-ins for apt, dpkg, systemd and the instance itself. What is real is the
@@ -446,7 +497,7 @@ install_opensearch
 check "it succeeds" "$?" "0"
 check_true "the pinned version is installed" grep -q 'install .*opensearch=2.19.0' /work/apt-calls
 check_true "and held" grep -qx 'hold opensearch' /work/apt-calls
-check_true "the tools build.sh and clone.sh use are installed" grep -q 'install .*python3-requests' /work/apt-calls
+check_true "the tools build.sh, clone.sh and load.sh use are installed" grep -q 'install .*python3-requests' /work/apt-calls
 check_true "the packaged configuration is kept" grep -q 'my-application' "${CONFIG}.dist"
 check_true "the data path the package set is kept" grep -qx 'path.data: /var/lib/opensearch' "$CONFIG"
 check_true "and the log path" grep -qx 'path.logs: /var/log/opensearch' "$CONFIG"

@@ -21,10 +21,6 @@ source "${DEPLOY_DIR}/../pipelines/lib/common.sh"
 # shellcheck disable=SC2034 # read by the scripts that source this file
 OUTPUT_DIR=/mnt/data
 
-# The OpenSearch instance the proteins are loaded into.
-# shellcheck disable=SC2034 # read by the scripts that source this file
-OPENSEARCH_URL=http://localhost:9200
-
 # Who builds, clones and owns the databases. The API on this host runs as the same user, which is
 # what makes every file a build writes one the API can read. opensearch/install.sh creates it and
 # gives it OUTPUT_DIR; after that, nothing here needs root.
@@ -92,20 +88,11 @@ need_value() {
     { [ -n "$value" ] && [[ "$value" != --* ]]; } || die "${flag} requires a value."
 }
 
-# What opensearch/load.sh needs. Checked before the work starts: the load is the last step of a
-# build that takes days, and load.sh only reports a missing package once it is reached.
-check_loader_deps() {
-    checkdep lz4
-    checkdep pv
-    checkdep python3
-    python3 -c "import requests" > /dev/null 2>&1 \
-        || die "the OpenSearch loader requires the requests package. .deploy/opensearch/install.sh installs it, as python3-requests."
-}
-
 # build.sh and clone.sh write what the API serves, so they run as the user the API reads as. Run as
 # root, they leave a database owned by root: one the next run as DEPLOY_USER cannot replace, and
-# one whose readability check passes only because root reads everything. verify.sh writes nothing,
-# but its check is that same readability check, so it refuses root for that reason alone.
+# one whose readability check passes only because root reads everything. verify.sh and load.sh
+# write nothing there, but both check through that same readability check, so they refuse root
+# for that reason alone.
 refuse_root() {
     [ "$(id -u)" -ne 0 ] \
         || die "do not run this as root. Run it as ${DEPLOY_USER}, for example: sudo -iu ${DEPLOY_USER}. Only .deploy/opensearch/install.sh needs root."
@@ -174,6 +161,20 @@ database_version_of() {
     case "$name" in uniprot-*) echo "${name#uniprot-}" ;; *) return 1 ;; esac
 }
 
+# The newest database under OUTPUT_DIR, as YYYY-MM. The glob expands in order, so the last one
+# that is a directory is the newest.
+latest_version() {
+    local newest='' candidate
+
+    # shellcheck disable=SC2231 # DATABASE_GLOB is a glob, and has to expand
+    for candidate in "${OUTPUT_DIR}"/${DATABASE_GLOB}; do
+        [ -d "$candidate" ] && newest="$candidate"
+    done
+
+    [ -n "$newest" ] || die "found no database in ${OUTPUT_DIR}."
+    database_version_of "$newest"
+}
+
 # The directory a build writes is named after the version inside it. A pair that disagrees means
 # one of the two came from somewhere else.
 check_index_version() {
@@ -192,9 +193,9 @@ check_index_version() {
 }
 
 # The whole contract a database is held to before the API is pointed at it, reporting every
-# failure rather than the first. build.sh, clone.sh and verify.sh all check through this, so a
-# check added here is one all three make. clone.sh also sends it to the remote host, so it may only
-# call the functions above and read the lists they read.
+# failure rather than the first. build.sh, clone.sh, load.sh and verify.sh all check through this,
+# so a check added here is one all four make. clone.sh also sends it to the remote host, so it may
+# only call the functions above and read the lists they read.
 verify_database() {
     local index="$1" status=0
 

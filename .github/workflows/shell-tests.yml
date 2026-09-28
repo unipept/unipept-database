@@ -95,10 +95,8 @@ jobs:
       - name: Cache cargo dependencies
         uses: Swatinem/rust-cache@v2
 
-      # python3-requests because .deploy/build.sh checks the loader's dependencies before it
-      # starts, even though the seam suite stands the loader in.
       - name: Install the pipeline's tools
-        run: sudo apt-get update && sudo apt-get install -y gawk lz4 pigz pv libxml2-utils zip unzip uuid-runtime python3-requests
+        run: sudo apt-get update && sudo apt-get install -y gawk lz4 pigz pv libxml2-utils zip unzip uuid-runtime
 
       # Actions starts steps with SIGPIPE ignored; luz relies on its default action.
       - name: Run the build suite
@@ -112,7 +110,8 @@ jobs:
         run: env --default-signal=PIPE tests/run-tests.sh seam
 
   deploy:
-    # .deploy/build.sh, clone.sh and opensearch/install.sh in a container, over a real ssh and scp.
+    # .deploy/build.sh, clone.sh, load.sh and opensearch/install.sh in a container, over a real
+    # ssh and scp.
     name: Deploy suite
     runs-on: ubuntu-latest
     timeout-minutes: 20
