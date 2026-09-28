@@ -841,7 +841,9 @@ row_says() {
 printf 'OUTPUT_DIR=%s\n' "$OUT" > /opt/unipept-database/etc/deploy.conf
 make_server a /work/a-data
 make_server b /work/b-data
-printf 'a localhost /work/server-a\nb localhost /work/server-b\n' > /work/servers.conf
+# The two servers most cases distribute to.
+reset_servers() { printf 'a localhost /work/server-a\nb localhost /work/server-b\n' > /work/servers.conf; }
+reset_servers
 
 
 section "distribute.sh to servers that have nothing"
@@ -904,7 +906,7 @@ printf '#!/usr/bin/env bash\nexit 1\n' > /work/server-c/opensearch/load.sh
 distribute --uniprot-version 2026-03
 check "a load that fails fails the run" "$?" "1"
 check_true "and is reported, after the copy" row_says c copied failed "the load failed"
-printf 'a localhost /work/server-a\nb localhost /work/server-b\n' > /work/servers.conf
+reset_servers
 
 
 section "what distribute.sh refuses before touching a server"
@@ -924,7 +926,7 @@ check_true "before the servers that are fine are touched" not grep -q . /work/a-
 printf 'a localhost /work/server-a\na localhost /work/server-a\n' > /work/servers.conf
 distribute --uniprot-version 2026-03
 check "a server listed twice stops it" "$?" "2"
-printf 'a localhost /work/server-a\nb localhost /work/server-b\n' > /work/servers.conf
+reset_servers
 
 as_deployer "${CHECKOUT}/.deploy/distribute.sh" --servers /work/servers.conf --uniprot-version 2026-03 > /work/last-output 2>&1
 check "no --from stops it" "$?" "2"
@@ -934,7 +936,7 @@ check "a version not written YYYY-MM stops it" "$?" "2"
 printf 'a localhost /work/x;rm\n' > /work/servers.conf
 distribute --uniprot-version 2026-03
 check "an install root a shell would read more into stops it" "$?" "2"
-printf 'a localhost /work/server-a\nb localhost /work/server-b\n' > /work/servers.conf
+reset_servers
 
 
 summary

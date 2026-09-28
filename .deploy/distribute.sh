@@ -89,7 +89,7 @@ parse_arguments() {
     done
 
     [ -n "$UNIPROT_VERSION" ] || die "--uniprot-version is required."
-    [[ "$UNIPROT_VERSION" =~ ^[0-9]{4}-[0-9]{2}$ ]] || die "--uniprot-version takes YYYY-MM, not '${UNIPROT_VERSION}'."
+    valid_version "$UNIPROT_VERSION"
     [ -n "$SOURCE" ] || die "--from is required: the host that has ${UNIPROT_VERSION}. This script does not build."
 }
 
@@ -99,9 +99,10 @@ valid_root() {
     [[ "$1" =~ ^/[A-Za-z0-9_./-]*$ ]]
 }
 
-# Runs one of the installed scripts, or a command, in a host's install root, as SSH_USER. Each argument is quoted for the remote shell,
-# since some come from another host. BatchMode, so a host that asks for a password fails at once
-# rather than waiting; keepalives, so an idle hour of loading is not taken for a dead connection.
+# Runs one of the installed scripts, or a command, in a host's install root, as SSH_USER. Each
+# argument is quoted for the remote shell, since some come from another host. BatchMode, so a host
+# that asks for a password fails at once rather than waiting; keepalives, so an idle hour of loading
+# is not taken for a dead connection.
 on() {
     local host="$1" root="$2" command
     shift 2
