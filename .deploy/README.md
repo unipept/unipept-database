@@ -7,8 +7,9 @@ orchestrate; the pipeline itself lives in `pipelines/` and the loader in `opense
   layout the API reads.
 - `clone.sh` copies a finished database from another host. The build runs once; every other host
   clones the result.
-- `load.sh` loads the proteins of a database that is in place into the OpenSearch of this host.
-  It is the only one of the four that changes what the API's protein search answers.
+- `load.sh` loads the proteins of a database that is in place into the OpenSearch of this host,
+  as an index of that version beside the one the API queries. With `--activate` it then switches
+  the API to it; that is the only step that changes what the API's protein search answers.
 - `verify.sh` checks a finished database against the files the API needs. The others make the same
   checks, through the same `verify_database` in `lib.sh`: `build.sh` before it puts a build in
   place, `clone.sh` on the remote host before it copies and again on the copy, and `load.sh`
@@ -82,8 +83,9 @@ sudo -iu unipept
 .deploy/clone.sh --remote-address selma.ugent.be --local-ssh-key ~/.ssh/id_unipept
 ```
 
-Both refuse to run as root, as do `load.sh` and `verify.sh`. A database written by root is one the next run as `unipept` cannot
-replace, and one whose check that the API can read it passes only because root reads everything.
+Both refuse to run as root, as do `load.sh` and `verify.sh`. A database written by root is one the
+next run as `unipept` cannot replace, and one whose check that the API can read it passes only
+because root reads everything.
 
 The result is `${OUTPUT_DIR}/uniprot-<version>/suffix-array/`, which holds `sa.bin`,
 `proteins.bin`, `mapping.bin`, `.version`, `datastore/` and `build-info.txt`. That directory is
@@ -106,12 +108,33 @@ databases at the moment they finish.
 .deploy/load.sh                                # the newest one under OUTPUT_DIR
 .deploy/load.sh --uniprot-version 2026-03
 .deploy/load.sh --uniprot-version 2026-03 --skip 120000000   # continue a load that stopped
+.deploy/load.sh --uniprot-version 2026-03 --activate         # and switch the API to it
 ```
 
-It checks the database as `verify.sh` does, and refuses one that fails, before it drops the index
-the API queries and recreates it from `tables/uniprot_entries.tsv.lz4`. From that moment until it
-finishes, the API's protein search answers from a partial index. `--skip` passes over the rows a
-load that stopped already wrote, and keeps the index as it is.
+It checks the database as `verify.sh` does, and refuses one that fails, before it loads
+`tables/uniprot_entries.tsv.lz4` into `uniprot_entries-<version>`. The API queries
+`uniprot_entries`, which is an alias, so a load changes nothing the API answers, and a load that
+fails can be rerun at any time. `--skip` passes over the rows a load that stopped already wrote,
+and keeps the index as it is.
+
+The switch is `opensearch/activate.sh`, which `--activate` runs after the load:
+
+- it points `uniprot_entries` at the new index in one request, so the API never finds the name
+  missing, and refuses an index that is not there or holds no documents;
+- it closes the index it switched away from, which frees the memory that holds and keeps its data.
+  Going back is activating that one again, which opens it;
+- it deletes the older ones, but keeps any of a newer version than the one it activates, since
+  those are loaded ahead of a switch still to come;
+- on a host loaded before versioned indices, where `uniprot_entries` is still an index, the first
+  switch keeps that index as `uniprot_entries-legacy`, by a clone that shares its files, so there
+  is something to go back to from the start.
+
+Switching the index is only half of moving the API to a new version: its files are the other
+half, `INDEX_LOCATION` in its environment file. Until the API's rollout switches both together,
+`--activate` moves only the proteins, as a load did before.
+
+Reloading the version the alias points at is refused, because the loader drops it first and the API
+would search a partial index until it finishes. `--replace-live` does it anyway.
 
 ## Checking a database
 
