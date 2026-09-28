@@ -69,6 +69,11 @@ readonly OPTIONAL_INDEX_FILES=(kmer_table.bin)
 # shellcheck disable=SC2034 # read by the scripts that source this file
 readonly DATABASE_GLOB='uniprot-[0-9][0-9][0-9][0-9]-[0-9][0-9]'
 
+# Stops on a UniProtKB version not written YYYY-MM, the form every database directory is named in.
+valid_version() {
+    [[ "$1" =~ ^[0-9]{4}-[0-9]{2}$ ]] || die "a UniProtKB version is written YYYY-MM, not '$1'."
+}
+
 # The script's own process, captured before any subshell can shadow it. A die inside a command
 # substitution only ends that subshell, and the caller then reports the same failure a second time
 # through the ERR trap, so die signals the script itself. USR1 rather than TERM, so a real

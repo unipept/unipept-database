@@ -247,6 +247,7 @@ print_help() {
 
 # Check if all required dependencies are installed
 checkdep "lz4"
+checkdep "pv"
 parse_arguments "$@"
 
 checkdep "python3"

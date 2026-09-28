@@ -377,7 +377,7 @@ load_proteins --output-dir "$OUT" --uniprot-version 2025-11
 check "a database without its entries table stops it" "$?" "2"
 check_true "the table is named" grep -q 'has no tables/uniprot_entries.tsv.lz4' /work/last-output
 
-for arguments in "--skip many" "--skip" "--no-such-flag"; do
+for arguments in "--skip many" "--skip" "--no-such-flag" "--uniprot-version 2026-3"; do
     # shellcheck disable=SC2086 # each is several words on purpose
     load_proteins --output-dir "$OUT" $arguments
     check "'${arguments}' is refused" "$?" "2"
