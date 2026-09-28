@@ -1,4 +1,7 @@
-# Copy to deploy.conf beside this file and edit. deploy.conf is not in this repository.
+# .deploy/opensearch/install.sh writes this as etc/deploy.conf of the install it makes,
+# /opt/unipept-database/etc/deploy.conf unless --prefix says otherwise, and the scripts on the host
+# read it there; edit it as root. A clone of this repository reads a .deploy/deploy.conf of its own
+# where it has one, and otherwise this host's installed one. Neither is in this repository.
 #
 # Only what a host has to decide is listed. Everything the scripts already default to sensibly is
 # left out, so this file cannot go stale. The defaults are in lib.sh and in each script.
@@ -30,4 +33,6 @@ OUTPUT_DIR=/mnt/data
 #REMOTE_OUTPUT_DIR=/mnt/data
 
 # Each source the pipeline downloads can be read from somewhere else, a mirror or a local file.
-# The variable names and the URLs they replace are in pipelines/lib/sources.sh.
+# The variable names and the URLs they replace are in pipelines/lib/sources.sh. The pipeline runs as
+# a process of its own, so set them with export, for example:
+#export UNIPEPT_SWISSPROT_URL=file:///srv/mirror/uniprot_sprot.dat.gz

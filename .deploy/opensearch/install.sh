@@ -13,7 +13,8 @@
 # It loads nothing. opensearch/load.sh does that, here and after every build.
 #
 # Flow:
-#   1. Check that this runs as root on a host with apt and systemd.
+#   1. Check that this runs as root on a host with apt and systemd, and that the OpenSearch it has,
+#      if any, can be brought to the pinned version: nothing else is changed on a host where not.
 #   2. Create DEPLOY_USER, or give an account that already exists a login shell: clone.sh copies
 #      over ssh as that user, and sshd needs a shell to run a remote command.
 #   3. Install the tools build.sh, clone.sh and load.sh use, the ones not installed already.
@@ -21,7 +22,8 @@
 #   5. Install clone.sh, load.sh, verify.sh, prune.sh and what they call into INSTALL_ROOT, from
 #      this checkout, and write etc/deploy.conf there unless it is already there.
 #   6. Add the OpenSearch APT repository, unless it is already there.
-#   7. Install the pinned version, and hold it so an unrelated upgrade cannot move it.
+#   7. Install the pinned version, or upgrade an older one of the same major version to it, keeping
+#      the configuration this script writes, and hold it so an unrelated upgrade cannot move it.
 #   8. Write the configuration this instance needs, keeping a copy of what was there and the data
 #      and log paths it named.
 #   9. Write the heap size.
@@ -109,7 +111,9 @@ readonly TOOL_PACKAGES=(
     openssh-client
 )
 
-readonly APT_LIST=/etc/apt/sources.list.d/opensearch-2.x.list
+# OpenSearch publishes one apt repository per major version, so the one to add follows the pin.
+readonly OPENSEARCH_MAJOR="${OPENSEARCH_VERSION%%.*}"
+readonly APT_LIST="/etc/apt/sources.list.d/opensearch-${OPENSEARCH_MAJOR}.x.list"
 readonly APT_KEYRING=/usr/share/keyrings/opensearch-keyring.gpg
 readonly CONFIG_FILE=/etc/opensearch/opensearch.yml
 readonly HEAP_FILE=/etc/opensearch/jvm.options.d/heap.options
@@ -120,7 +124,9 @@ CHANGED=false
 
 usage() {
     cat <<'USAGE'
-Installs and configures the OpenSearch instance this host loads its proteins into. Run as root.
+Prepares a host to build, clone and hold a Unipept database: the user that owns the databases, the
+tools the scripts run, the scripts themselves in /opt/unipept-database, and the OpenSearch instance
+the proteins are loaded into. Run as root; it is the only step that needs it.
 
   .deploy/opensearch/install.sh [OPTIONS]
 
@@ -135,7 +141,9 @@ Installs and configures the OpenSearch instance this host loads its proteins int
   --prefix DIR             where the scripts a host runs are installed, default /opt/unipept-database
   --help                   print this message
 
-A flag wins over .deploy/deploy.conf, which wins over the defaults in this script.
+A flag wins over deploy.conf, which wins over the defaults in this script. The deploy.conf read is the
+clone's own .deploy/deploy.conf where it has one, and otherwise the install's etc/deploy.conf,
+/opt/unipept-database/etc/deploy.conf or the one under --prefix.
 USAGE
 }
 
@@ -288,34 +296,71 @@ add_repository() {
     log "Adding the OpenSearch repository."
     curl -sSfL https://artifacts.opensearch.org/publickeys/opensearch.pgp \
         | gpg --dearmor --batch --yes -o "$APT_KEYRING"
-    echo "deb [signed-by=${APT_KEYRING}] https://artifacts.opensearch.org/releases/bundle/opensearch/2.x/apt stable main" \
+    echo "deb [signed-by=${APT_KEYRING}] https://artifacts.opensearch.org/releases/bundle/opensearch/${OPENSEARCH_MAJOR}.x/apt stable main" \
         > "$APT_LIST"
 }
 
-install_opensearch() {
-    local status installed
-
-    # A package that was removed but not purged still has a version, so the status decides whether
-    # it is installed, not whether a version comes back.
-    read -r status installed < <(dpkg-query --showformat='${db:Status-Status} ${Version}' \
+# What dpkg knows of OpenSearch, as INSTALLED_STATUS and INSTALLED_VERSION. A package that was
+# removed but not purged still has a version, so it reads as not installed; one an earlier run left
+# unpacked or half-configured does not, since what is on disk is still that version.
+read_installed() {
+    INSTALLED_STATUS='' INSTALLED_VERSION=''
+    read -r INSTALLED_STATUS INSTALLED_VERSION < <(dpkg-query --showformat='${db:Status-Status} ${Version}' \
         --show opensearch 2> /dev/null) || true
-    [ "$status" = installed ] || installed=''
+    case "$INSTALLED_STATUS" in
+        '' | not-installed | config-files) INSTALLED_VERSION='' ;;
+    esac
+}
 
-    if [ "$installed" = "$OPENSEARCH_VERSION" ]; then
+# Stops on an OpenSearch the pin cannot be reached from, before anything on the host is changed.
+#
+# Raising the pin is how a host is kept patched, so an older release of the same major version is
+# upgraded later on. Not another major version: data a newer major version writes cannot be read by
+# the one before, so that upgrade cannot be undone and is a decision of its own. Nor back down, which
+# OpenSearch does not support either.
+check_installed_version() {
+    read_installed
+    [ -n "$INSTALLED_VERSION" ] || return 0
+
+    [ "${INSTALLED_VERSION%%.*}" = "$OPENSEARCH_MAJOR" ] \
+        || die "OpenSearch ${INSTALLED_VERSION} is installed and this script pins ${OPENSEARCH_VERSION}, another major version. That upgrade cannot be undone, so this does not make it; change the pin to a ${INSTALLED_VERSION%%.*}.x release to keep this host where it is."
+    ! dpkg --compare-versions "$INSTALLED_VERSION" gt "$OPENSEARCH_VERSION" \
+        || die "OpenSearch ${INSTALLED_VERSION} is installed, newer than the ${OPENSEARCH_VERSION} this script pins, and OpenSearch cannot go back. Raise the pin to ${INSTALLED_VERSION} or later."
+}
+
+install_opensearch() {
+    read_installed
+
+    if [ "$INSTALLED_STATUS" = installed ] && [ "$INSTALLED_VERSION" = "$OPENSEARCH_VERSION" ]; then
         log "OpenSearch ${OPENSEARCH_VERSION} is already installed."
         hold_opensearch
         return
     fi
-    [ -z "$installed" ] || die "OpenSearch ${installed} is installed and this script pins ${OPENSEARCH_VERSION}. Remove it or change the pin."
+
+    if [ -n "$INSTALLED_VERSION" ]; then
+        # The configuration is only rewritten after this, and a path it names that is not there
+        # stops that. Found now, before the package under a running OpenSearch is replaced, rather
+        # than after, with nothing left to restart it on the new one.
+        resolve_paths
+        log "Upgrading OpenSearch ${INSTALLED_VERSION} (${INSTALLED_STATUS}) to ${OPENSEARCH_VERSION}."
+    else
+        log "Installing OpenSearch ${OPENSEARCH_VERSION}."
+    fi
 
     apt-get update -qq
 
     # The package refuses to configure without this, and then ignores it, because the security
-    # plugin is disabled below. It is never a credential anybody uses.
-    log "Installing OpenSearch ${OPENSEARCH_VERSION}."
+    # plugin is disabled below. It is never a credential anybody uses. Held by an earlier run, so apt
+    # has to be told a change to it is meant, and reinstalled where the same version was left part
+    # way. opensearch.yml is one of the package's configuration files and this script rewrites it,
+    # so dpkg would stop to ask which to keep: the one here is kept, and written again below.
+    local reinstall=()
+    [ "$INSTALLED_VERSION" != "$OPENSEARCH_VERSION" ] || reinstall=(--reinstall)
     OPENSEARCH_INITIAL_ADMIN_PASSWORD="$(head -c 32 /dev/urandom | base64)" \
         DEBIAN_FRONTEND=noninteractive \
-        apt-get install -y -qq "opensearch=${OPENSEARCH_VERSION}"
+        apt-get install -y -qq --allow-change-held-packages "${reinstall[@]}" \
+        -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold \
+        "opensearch=${OPENSEARCH_VERSION}"
     CHANGED=true
 
     hold_opensearch
@@ -329,9 +374,11 @@ hold_opensearch() {
 
 # One instance, reachable from this host only, with the security plugin off. That combination is
 # what the loader and the API both expect, and it is only safe while the bind address is local.
-write_config() {
-    # What the host already has, unless a flag or deploy.conf says otherwise. Read before anything
-    # is written, and from a configuration this script wrote as much as from one it did not.
+# The data and log paths and the heap: what the host already has, unless a flag or deploy.conf says
+# otherwise. Read before anything is written, and from a configuration this script wrote as much as
+# from one it did not. A path that is not there would have OpenSearch fail to start, after the
+# configuration that worked has been replaced, so it stops here. Run again, it changes nothing.
+resolve_paths() {
     [ -n "$OPENSEARCH_DATA_DIR" ] || OPENSEARCH_DATA_DIR="$(setting_in "$CONFIG_FILE" path.data)"
     [ -n "$OPENSEARCH_DATA_DIR" ] || OPENSEARCH_DATA_DIR=/var/lib/opensearch
     [ -n "$OPENSEARCH_LOG_DIR" ] || OPENSEARCH_LOG_DIR="$(setting_in "$CONFIG_FILE" path.logs)"
@@ -341,10 +388,12 @@ write_config() {
     fi
     [ -n "$OPENSEARCH_HEAP" ] || OPENSEARCH_HEAP="$DEFAULT_HEAP"
 
-    # A path that is not there would have OpenSearch fail to start, after the configuration that
-    # worked has been replaced.
     [ -d "$OPENSEARCH_DATA_DIR" ] || die "the data directory ${OPENSEARCH_DATA_DIR} does not exist."
     [ -d "$OPENSEARCH_LOG_DIR" ] || die "the log directory ${OPENSEARCH_LOG_DIR} does not exist."
+}
+
+write_config() {
+    resolve_paths
 
     # The configuration the package shipped, kept once. Never one this script wrote, and never over
     # a copy that is already there.
@@ -434,10 +483,14 @@ parse_arguments "$@"
 [ "$(id -u)" -eq 0 ] || die "run this as root. It is the only step that needs it."
 checkdep apt-get
 checkdep dpkg-query
+checkdep dpkg
 checkdep systemctl
 checkdep getent
 checkdep useradd
 checkdep usermod
+
+# Before anything on the host changes, so a refused run leaves it as it was.
+check_installed_version
 
 ensure_user
 install_tools

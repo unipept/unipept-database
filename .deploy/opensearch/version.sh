@@ -4,4 +4,4 @@
 # loader against. One place, so the two cannot drift apart. Sourced, never run.
 
 # shellcheck disable=SC2034 # read by the scripts that source this file
-OPENSEARCH_VERSION=2.19.0
+OPENSEARCH_VERSION=2.19.6
