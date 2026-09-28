@@ -57,6 +57,15 @@ check_true "the unrelated index survives the load" index_exists unrelated_index
 check "every row is indexed" "$(documents_in uniprot_entries)" "3"
 
 
+section "the index has the settings the API depends on"
+# From the mapping file, under settings.index; misplaced, OpenSearch ignores them silently.
+settings="$(curl -s "${OPENSEARCH_URL}/uniprot_entries/_settings?flat_settings=true")"
+check_true "no replicas, which a single node cannot place" grep -q '"index.number_of_replicas":"0"' <<< "$settings"
+check_true "the result window the API pages within" grep -q '"index.max_result_window":"10000"' <<< "$settings"
+check_true "so the index is green" grep -q '"status":"green"' \
+    <<< "$(curl -s "${OPENSEARCH_URL}/_cluster/health/uniprot_entries")"
+
+
 section "a row of the wrong width stops the load and says where"
 write_fixture "${WORK}/short.tsv.lz4" "$(row 1 P00001 'First protein')" "$(short_row 2 P00002)"
 load "${WORK}/short.log" --uniprot-entries "${WORK}/short.tsv.lz4"

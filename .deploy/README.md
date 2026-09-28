@@ -12,6 +12,47 @@ orchestrate; the pipeline itself lives in `pipelines/` and the loader in `opense
   the API serves: `build.sh` before it loads OpenSearch, `clone.sh` on the remote host before it
   copies and again on the copy. Run it by hand to check a database that is already there.
 
+## Preparing a host
+
+```sh
+sudo .deploy/opensearch/install.sh --heap 8g
+```
+
+This is the only step that needs root. It prepares everything the other scripts need, so they
+run without sudo:
+
+- the `unipept` user (`DEPLOY_USER`), who builds, clones and owns the databases. The API on this
+  host runs as the same user, and its own install creates it the same way, in either order;
+- the tools `build.sh` and `clone.sh` run, installed through apt when they are missing;
+- `OUTPUT_DIR`, owned by that user. Databases, staging directories and interrupted swaps an
+  earlier run as root left there are handed over too; nothing else in the directory changes owner;
+- the OpenSearch instance this host loads its proteins into, configured and started.
+
+It ends with what is left to do as `unipept`: clone this repository, install Rust with rustup for
+a build, and add an ssh key for a clone.
+
+Run it as root, once per host or again after changing a setting: a run that changes nothing
+restarts nothing. It pins a version and holds it, also on a host that already had that version,
+so an unrelated `apt-get upgrade` cannot move a host onto a release nothing has been tested
+against.
+
+It keeps the data and log paths the existing configuration names, so a host set up by hand with
+its data on another volume keeps it there. `--data-dir` and `--log-dir` point the configuration
+elsewhere; they do not move what is already there. It waits for the instance on the address and
+port it configured.
+
+The instance binds to localhost and runs with the security plugin off, which is what the loader
+and the API both expect. That pair is only safe while nothing outside the host can reach it, so
+change the bind address only together with turning the security plugin back on.
+
+The heap is the one number a host decides, and it defaults low; `OPENSEARCH_HEAP` in the script
+says why. A later run without `--heap` keeps the heap the host already has.
+
+Every index is set to hold no replica, since a single node has nowhere to put one and a replica
+it cannot place keeps the cluster yellow. That includes the query insights plugin's
+`top_queries-*` indices, which it would otherwise create with one, so its exporter to a local
+index is off.
+
 ## Configuration
 
 Copy `deploy.conf.example` to `deploy.conf` and edit it. A flag wins over that file, and the file
@@ -28,10 +69,16 @@ disagree with the scripts.
 
 ## Running a build
 
+As `unipept`, from a clone of this repository that `unipept` owns:
+
 ```sh
+sudo -iu unipept
 .deploy/build.sh
 .deploy/clone.sh --remote-address selma.ugent.be --local-ssh-key ~/.ssh/id_unipept
 ```
+
+Both refuse to run as root. A database written by root is one the next run as `unipept` cannot
+replace, and one whose check that the API can read it passes only because root reads everything.
 
 The result is `${OUTPUT_DIR}/uniprot-<version>/suffix-array/`, which holds `sa.bin`,
 `proteins.bin`, `mapping.bin`, `.version`, `datastore/` and `build-info.txt`. That directory is
@@ -56,6 +103,9 @@ databases at the moment they finish.
 .deploy/verify.sh --index-dir /srv/data/uniprot-2026-03/suffix-array
 ```
 
+As `unipept`, like the other two: it checks that the files can be read by the user the API runs
+as, and as root every file can.
+
 It reports every file that is missing, empty or unreadable rather than the first, and exits
 non-zero if any of them is. A missing `kmer_table.bin` is a warning: the API runs without it and
 searches are slower. The list it checks is the one `unipept-api/.deploy/lib.sh` starts a service
@@ -68,12 +118,13 @@ tell. It is written after the proteins are loaded, so a directory that has one i
 
 ## What a host needs
 
-Both scripts need `lz4`, `pv`, and Python with `requests` (`opensearch/requirements.txt`) for the
-OpenSearch loader, and an OpenSearch instance at `OPENSEARCH_URL`.
+`install.sh` installs all of it but Rust. For reference, or for a host prepared another way:
 
-`build.sh` also needs `git`, `cmake` and a Rust toolchain for its own work, plus what the pipeline
-checks for when it starts: `curl`, `uuidgen`, `pigz`, `gawk` and `xmllint`. `clone.sh` needs `ssh`
-and `scp`, and none of the build tools.
+- `build.sh` and `clone.sh` both need `lz4`, `pv`, and Python with `requests` for the OpenSearch
+  loader, and an OpenSearch instance at `OPENSEARCH_URL`.
+- `build.sh` also needs `git`, `cmake` and a Rust toolchain, and the pipeline needs `curl`,
+  `uuidgen`, `pigz`, `gawk`, `unzip` and `xmllint`.
+- `clone.sh` needs `ssh` and `scp`, and none of the build tools.
 
 `SCRATCH_DIR` holds the unipept-index clone and its cargo target, a few gigabytes. The build
 itself, tables and temporary files included, goes under `OUTPUT_DIR`, so that is the volume to

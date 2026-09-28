@@ -130,11 +130,16 @@ check_database() {
     # The k-mer table is an accelerator the API runs without, so a database built before build.sh
     # wrote one has none and is still worth cloning. The remote decides: one the remote has and the
     # copy does not is a copy that lost it. Before verify_database, whose warning that the table is
-    # optional would otherwise precede the error that says it is not.
-    if remote_sh "[ -s '${remote_dir}/suffix-array/kmer_table.bin' ]"; then
-        [ -s "${dir}/suffix-array/kmer_table.bin" ] \
-            || die "the remote has a k-mer table and the copy does not"
-    fi
+    # optional would otherwise precede the error that says it is not. test answers 0 or 1; anything
+    # else is ssh failing, which says nothing about the table.
+    local remote_has_kmer=0
+    remote_sh "[ -s '${remote_dir}/suffix-array/kmer_table.bin' ]" || remote_has_kmer=$?
+    case "$remote_has_kmer" in
+        0) [ -s "${dir}/suffix-array/kmer_table.bin" ] \
+            || die "the remote has a k-mer table and the copy does not" ;;
+        1) ;;
+        *) die "could not ask ${REMOTE_ADDRESS} whether it has a k-mer table, so cannot tell whether the copy lost one." ;;
+    esac
 
     verify_database "${dir}/suffix-array" \
         || die "the copy is missing files the API needs, or is not the version it is named after."
@@ -155,6 +160,7 @@ load_opensearch() {
 }
 
 parse_arguments "$@"
+refuse_root
 
 [ -n "$OUTPUT_DIR" ] || die "--output-dir requires a value."
 

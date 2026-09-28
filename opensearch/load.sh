@@ -253,7 +253,7 @@ checkdep "python3"
 
 if ! python3 -c "import requests" > /dev/null 2>&1
 then
-    echo "This script requires the requests package: pip install -r ${CURRENT_LOCATION}/requirements.txt" >&2
+    echo "This script requires the requests package: apt install python3-requests on Ubuntu, or pip install -r ${CURRENT_LOCATION}/requirements.txt inside a virtual environment" >&2
     exit 6
 fi
 

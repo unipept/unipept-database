@@ -73,6 +73,7 @@ latest_version() {
 }
 
 parse_arguments "$@"
+refuse_root
 
 if [ -z "$INDEX_DIR" ]; then
     [ -n "$OUTPUT_DIR" ] || die "--output-dir requires a value."
