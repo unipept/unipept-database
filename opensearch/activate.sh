@@ -3,8 +3,8 @@
 set -eo pipefail
 
 # Points the uniprot_entries alias, the name the API queries, at one loaded index. The index it
-# pointed at before is kept, closed, so going back is another run of this script; older ones are
-# deleted.
+# pointed at before is closed, not deleted, so going back is another run of this script. Nothing is
+# deleted here at all: .deploy/prune.sh removes old versions, their indices and their files together.
 #
 # Flow:
 #   1. Check that OpenSearch answers, and that the index to activate is there, open, not empty, and
@@ -16,8 +16,6 @@ set -eo pipefail
 #      itself, and add it to the new one. OpenSearch applies the actions of one request together,
 #      so the API never finds the name missing.
 #   4. Close the index the alias left, which frees the memory it holds and keeps its data.
-#   5. Delete the other uniprot_entries-* indices, except those of a newer version than the one
-#      now active, which are loaded ahead of a switch still to come.
 
 CURRENT_LOCATION="${BASH_SOURCE%/*}"
 
@@ -43,7 +41,7 @@ trap errorAndExit ERR
 print_help() {
     echo "Usage: $0 --index-name NAME [OPTIONS]"
     echo ""
-    echo "Points the ${ALIAS} alias at NAME, closes the index it pointed at before, and deletes older ones."
+    echo "Points the ${ALIAS} alias at NAME, and closes the index it pointed at before."
     echo ""
     echo "Options:"
     echo "  --index-name        The loaded index to activate, for example ${ALIAS}-2026-03 (required)."
@@ -99,12 +97,6 @@ wait_until_ready() {
     local health
     health=$(request "waiting for $1" GET "_cluster/health/$1?wait_for_status=yellow&timeout=${READY_TIMEOUT}s")
     [[ "$health" != *'"timed_out":true'* ]] || fail "$1 was not ready within ${READY_TIMEOUT} seconds."
-}
-
-# The version in an index name, YYYY-MM, or nothing for a name that holds none.
-version_of() {
-    local version="${1#"${ALIAS}"-}"
-    [[ "$version" =~ ^[0-9]{4}-[0-9]{2}$ ]] && echo "$version"
 }
 
 parse_arguments "$@"
@@ -166,15 +158,3 @@ if [[ -n "$previous" && "$(index_status "$previous")" == open ]]; then
     request "closing ${previous}" POST "${previous}/_close" > /dev/null
     log "Closed ${previous}. Activating it again opens it."
 fi
-
-active_version=$(version_of "$INDEX_NAME") || true
-while read -r index; do
-    [[ -n "$index" && "$index" != "$INDEX_NAME" && "$index" != "$previous" ]] || continue
-    candidate_version=$(version_of "$index") || true
-    # Loaded ahead of a switch still to come.
-    if [[ -n "$candidate_version" && -n "$active_version" && "$candidate_version" > "$active_version" ]]; then
-        continue
-    fi
-    request "deleting ${index}" DELETE "$index" > /dev/null
-    log "Deleted ${index}. ${previous:-Nothing} is kept to go back to."
-done < <(curl -s "${OPENSEARCH_URL}/_cat/indices/${ALIAS}-*?h=index&expand_wildcards=all")

@@ -123,9 +123,8 @@ The switch is `opensearch/activate.sh`, which `--activate` runs after the load:
   missing. It refuses an index that is not there, holds no documents, or was not loaded to the
   end: the loader marks an index once its last row is in, and `load.sh --check` asks for that mark;
 - it closes the index it switched away from, which frees the memory that holds and keeps its data.
-  Going back is activating that one again, which opens it;
-- it deletes the older ones, but keeps any of a newer version than the one it activates, since
-  those are loaded ahead of a switch still to come;
+  Going back is activating that one again, which opens it. It deletes nothing: see
+  [Removing old versions](#removing-old-versions);
 - on a host loaded before versioned indices, where `uniprot_entries` is still an index, the first
   switch keeps that index as `uniprot_entries-legacy`, by a clone that shares its files, so there
   is something to go back to from the start.
@@ -136,6 +135,26 @@ half, `INDEX_LOCATION` in its environment file. Until the API's rollout switches
 
 Reloading the version the alias points at is refused, because the loader drops it first and the API
 would search a partial index until it finishes. `--replace-live` does it anyway.
+
+## Removing old versions
+
+```sh
+.deploy/prune.sh --keep 2 --dry-run      # what it would remove
+.deploy/prune.sh --keep 2
+```
+
+Every version stays on a host until this removes it, its directory and its OpenSearch index
+together, so going back to one is a switch rather than a build or a copy. A closed index costs no
+memory; what old versions cost is disk.
+
+It keeps the version the API queries, which is the one the `uniprot_entries` alias points at, every
+newer version, since those are loaded ahead of a switch still to come, and the `--keep` newest ones
+older than it. The old index kept at a host's first switch, `uniprot_entries-legacy`, counts as the
+oldest. Without an alias it removes nothing, since which version the API queries is then not known.
+
+`load.sh` warns when OpenSearch's disk is past its low watermark, 85% unless the cluster sets
+another. At 95% OpenSearch makes every index read-only, and a load running then fails part way, so
+the warning is the time to prune.
 
 ## Checking a database
 
