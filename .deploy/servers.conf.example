@@ -1,0 +1,17 @@
+# The API servers distribute.sh puts a database on. Copy to servers.conf beside this file and fill in
+# the real hosts; servers.conf is not in this repository.
+#
+# The same servers as the inventory in unipept-api's .deploy, laid out the same way as far as this
+# needs, but a copy of its own: each repository is deployed from its own checkout.
+#
+# checkout is where unipept-database is cloned on that server, owned by DEPLOY_USER, who
+# distribute.sh logs in as; ~ is that user's home. Everything else a server decides, where its
+# databases are and how it reaches the host it clones from, is in that checkout's
+# .deploy/deploy.conf.
+#
+# Servers are handled in the order listed.
+#
+# name   host              checkout
+patty    patty.ugent.be    ~/unipept-database
+selma    selma.ugent.be    ~/unipept-database
+rick     rick.ugent.be     ~/unipept-database

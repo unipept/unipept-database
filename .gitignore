@@ -25,3 +25,6 @@ __pycache__/
 
 # The deploy configuration of a host.
 .deploy/deploy.conf
+
+# The servers distribute.sh puts a database on.
+.deploy/servers.conf
