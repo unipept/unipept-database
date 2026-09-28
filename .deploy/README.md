@@ -133,6 +133,24 @@ stops and keeps its result in `.build/`; `--replace` lets it take the place of t
 same holds for `clone.sh`, through `${OUTPUT_DIR}/.clone/`. Both therefore need room for two
 databases at the moment they finish.
 
+Before it removes what an earlier build left in `.build/`, `build.sh` checks the host has room for
+the build, and stops, naming every problem, when it does not:
+
+- the API is running, or OpenSearch is: building the suffix array takes more memory than a host
+  that serves them has left, and the kernel kills it hours in;
+- less than 1.5 times the size of the newest database under `OUTPUT_DIR` is free on its disk, or
+  less than 1.2 times that size in memory. The previous database is the measure of the next; a
+  first build has none, and is only checked for the API and OpenSearch.
+
+Take the host out of the pool, and stop both before building:
+
+```sh
+sudo systemctl --user -M unipept@ stop unipept-api
+sudo systemctl stop opensearch
+```
+
+and start them again afterwards, OpenSearch first. `--skip-checks` builds anyway.
+
 ## Loading the proteins
 
 ```sh

@@ -29,6 +29,9 @@ INDEX_REPO=https://github.com/unipept/unipept-index.git
 # version already exists stops and keeps its own result, rather than removing what the API serves.
 REPLACE=false
 
+# Whether to build without first checking the host has room for it.
+SKIP_CHECKS=false
+
 read_conf
 
 # sa-builder settings, below read_conf because they are not a host's to change: an index built with
@@ -52,6 +55,7 @@ API reads. .deploy/load.sh then loads its proteins into OpenSearch.
   --scratch-dir DIR        where the repositories are cloned and built
   --database-sources LIST  swissprot, trembl, or both, comma separated
   --replace                replace a database of the version this build turns out to be
+  --skip-checks            build without first checking the host has room for it
   --help                   print this message
 
 A flag wins over .deploy/deploy.conf, which wins over the defaults in lib.sh and in this script.
@@ -65,6 +69,7 @@ parse_arguments() {
             --scratch-dir) need_value "$1" "${2-}"; SCRATCH_DIR="$2"; shift 2 ;;
             --database-sources) need_value "$1" "${2-}"; DATABASE_SOURCES="$2"; shift 2 ;;
             --replace) REPLACE=true; shift ;;
+            --skip-checks) SKIP_CHECKS=true; shift ;;
             --help) usage; exit 0 ;;
             *) die "unknown option '$1'" ;;
         esac
@@ -131,6 +136,80 @@ fill_datastore() {
     log "Filled the datastore."
 }
 
+# The newest database under OUTPUT_DIR, which is what the next one is sized by. Nothing when there
+# is none.
+previous_database() {
+    local candidate newest=''
+
+    # shellcheck disable=SC2231 # DATABASE_GLOB is a glob, and has to expand
+    for candidate in "${OUTPUT_DIR}"/${DATABASE_GLOB}; do
+        [ -d "$candidate" ] && newest="$candidate"
+    done
+    printf '%s\n' "$newest"
+}
+
+# A directory's size in KiB, as its files are long rather than as the disk packs them. Fails, with
+# du's own reason, on a directory it cannot measure whole.
+size_kib() {
+    local line
+    line=$(du -sk --apparent-size -- "$1") || return 1
+    echo "${line%%[[:space:]]*}"
+}
+
+gib() {
+    echo "$(( $1 / 1024 / 1024 )) GiB"
+}
+
+# Stops a build the host has no room for, before anything is removed or built. The suffix array is
+# the step that needs the most memory, and a build found out hours in, on a host whose API and
+# OpenSearch held it, when the kernel killed sa-builder. The previous database is the measure of
+# what the next one needs: 1.5 times its size free on disk, for the new database beside the old one
+# and the files the build works through, and 1.2 times its size free in memory. Every problem is
+# reported, not only the first.
+check_host() {
+    [ "$SKIP_CHECKS" != true ] || return 0
+    local problems='' previous size free available staging
+
+    grep -qsx unipept-api /proc/[0-9]*/comm \
+        && problems+=$'\n'"  The Unipept API is running, and holds memory the suffix array needs."
+    command -v systemctl > /dev/null && systemctl is-active --quiet opensearch 2> /dev/null \
+        && problems+=$'\n'"  OpenSearch is running, and holds memory the suffix array needs."
+
+    previous=$(previous_database)
+    if [ -n "$previous" ] && ! size=$(size_kib "$previous"); then
+        echo "Warning: the size of ${previous} cannot be measured, so disk and memory are not checked." 1>&2
+    elif [ -n "$previous" ]; then
+        # What the last build left in the staging directory is removed before this one starts. Left
+        # out when it cannot be measured, which only makes the check stricter.
+        staging=0
+        [ ! -d "$STAGING_DIR" ] || staging=$(size_kib "$STAGING_DIR") || staging=0
+        free=$(( $(df -Pk "$OUTPUT_DIR" | awk 'NR == 2 { print $4 }') + staging ))
+        [ "$free" -ge "$(( size * 3 / 2 ))" ] \
+            || problems+=$'\n'"  $(gib "$free") is free on disk in ${OUTPUT_DIR}, and a build needs 1.5 times the $(gib "$size") of ${previous##*/}: $(gib $(( size * 3 / 2 )))."
+        available=$(awk '/^MemAvailable:/ { print $2 }' /proc/meminfo)
+        if [ -n "$available" ]; then
+            [ "$available" -ge "$(( size * 6 / 5 ))" ] \
+                || problems+=$'\n'"  $(gib "$available") of memory is available, and a build needs 1.2 times the $(gib "$size") of ${previous##*/}: $(gib $(( size * 6 / 5 )))."
+        fi
+    fi
+
+    [ -z "$problems" ] && return 0
+    die "this host has no room for a build:${problems}
+
+Take the host out of the pool and free what is named above: remove what is not needed from
+${OUTPUT_DIR}, and stop the API and OpenSearch:
+
+  sudo systemctl --user -M ${DEPLOY_USER}@ stop unipept-api
+  sudo systemctl stop opensearch
+
+Build again, then start them, OpenSearch first, and put the host back in the pool:
+
+  sudo systemctl start opensearch
+  sudo systemctl --user -M ${DEPLOY_USER}@ start unipept-api
+
+--skip-checks builds anyway."
+}
+
 parse_arguments "$@"
 refuse_root
 
@@ -151,6 +230,10 @@ DATABASE_COMMIT=$(git -C "${HERE}/.." rev-parse HEAD 2>/dev/null || echo unknown
 # rename stays within one filesystem, and because the version it will be named after is not known
 # until the pipeline has run.
 STAGING_DIR="${OUTPUT_DIR}/.build"
+
+# Before the staging directory is removed, so a build refused here keeps what an earlier one left.
+check_host
+
 rm -rf "${STAGING_DIR:?}"
 mkdir -p "${STAGING_DIR}"/{suffix-array,tables,temp}
 

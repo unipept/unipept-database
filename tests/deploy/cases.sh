@@ -201,6 +201,61 @@ check_true "the old database is gone" test ! -f "${OUT}/uniprot-2026-03/marker"
 check_true "nothing is left beside it" test ! -e "${OUT}/uniprot-2026-03.replaced"
 
 
+section "a build checks the host has room for it"
+
+# The API and OpenSearch hold memory the suffix array needs. A process by the API's name stands in
+# for the one, and a systemctl that calls opensearch active for the other.
+CHECK_OUT=/work/data-check
+as_deployer mkdir -p "$CHECK_OUT"
+cp /bin/sleep /work/unipept-api
+/work/unipept-api 600 &
+api_pid=$!
+printf '#!/usr/bin/env bash\n[ "$*" = "is-active --quiet opensearch" ]\n' > "${STUBS}/systemctl"
+chmod +x "${STUBS}/systemctl"
+# What an earlier build left in the staging directory, which a refused build must not remove.
+as_deployer mkdir -p "${CHECK_OUT}/.build"
+as_deployer touch "${CHECK_OUT}/.build/kept"
+build --output-dir "$CHECK_OUT" --scratch-dir /work/scratch
+check "a running API and OpenSearch stop it" "$?" "2"
+check_true "naming the API" grep -q 'The Unipept API is running' /work/last-output
+check_true "and OpenSearch" grep -q 'OpenSearch is running' /work/last-output
+# Each command on a line of its own, so a line copied from the message runs as it is.
+check_true "saying how to stop the API" grep -qx "  sudo systemctl --user -M ${DEPLOY}@ stop unipept-api" /work/last-output
+check_true "and OpenSearch" grep -qx "  sudo systemctl stop opensearch" /work/last-output
+check_true "and to start them again afterwards" grep -qx "  sudo systemctl start opensearch" /work/last-output
+check_true "both of them" grep -qx "  sudo systemctl --user -M ${DEPLOY}@ start unipept-api" /work/last-output
+check_true "nothing is built" test ! -e "${CHECK_OUT}/uniprot-2026-03"
+check_true "and before what an earlier build left is removed" test -e "${CHECK_OUT}/.build/kept"
+kill "$api_pid" 2> /dev/null; wait "$api_pid" 2> /dev/null
+rm "${STUBS}/systemctl"
+
+build --output-dir "$CHECK_OUT" --scratch-dir /work/scratch
+check "with both stopped and no database before it, it builds" "$?" "0"
+
+# The previous database is the measure of the next: here one as large as no disk or memory holds,
+# as a sparse file, which takes no room but has the size.
+truncate -s 1T "${CHECK_OUT}/uniprot-2026-03/suffix-array/large"
+build --output-dir "$CHECK_OUT" --scratch-dir /work/scratch --replace
+check "a previous database the host has no room beside stops it" "$?" "2"
+check_true "for disk" grep -q 'free on disk in .* and a build needs 1.5 times' /work/last-output
+check_true "and for memory" grep -q 'of memory is available, and a build needs 1.2 times' /work/last-output
+check_true "the database that was there is kept" test -e "${CHECK_OUT}/uniprot-2026-03/suffix-array/large"
+
+# A database du cannot read to the end, as one root left behind would be: the check says it cannot
+# measure it rather than stop the build for a reason it hides.
+mkdir -m 700 "${CHECK_OUT}/uniprot-2026-03/unreadable"
+touch "${CHECK_OUT}/uniprot-2026-03/unreadable/file"
+build --output-dir "$CHECK_OUT" --scratch-dir /work/scratch
+check "a previous database it cannot measure does not stop the check" "$?" "2"
+check_true "the build goes on to find its version already there" grep -q -- '--replace' /work/last-output
+check_true "it says it was not measured" grep -q 'cannot be measured, so disk and memory are not checked' /work/last-output
+check_true "and why" grep -q 'Permission denied' /work/last-output
+rm -r "${CHECK_OUT}/uniprot-2026-03/unreadable"
+
+build --output-dir "$CHECK_OUT" --scratch-dir /work/scratch --replace --skip-checks
+check "--skip-checks builds anyway" "$?" "0"
+
+
 section "a build whose tables are empty"
 
 # An archive of an empty stream has bytes, so the table passes every check made on the .lz4 and
