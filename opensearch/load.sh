@@ -2,8 +2,13 @@
 
 set -eo pipefail
 
-# Drops and recreates the uniprot_entries index on a running OpenSearch instance, then imports the
-# proteins into it. Other indices on the instance are not touched.
+# Drops and recreates one index on a running OpenSearch instance, uniprot_entries unless
+# --index-name says otherwise, then imports the proteins into it. Other indices on the instance are
+# not touched.
+#
+# Where uniprot_entries is an alias, as opensearch/activate.sh makes it, the API queries whichever
+# index it points at. This script then loads into a versioned index beside it, and refuses to drop
+# the one the alias points at unless --replace-live says so.
 
 
 # All references to an external script should be relative to the location of this script.
@@ -31,6 +36,14 @@ UPLOAD_BATCH_SIZE=2500
 
 # The index this script drops, creates and fills. Nothing else on the instance is touched.
 INDEX_NAME="uniprot_entries"
+
+# The name the API queries, an index or an alias, and the mapping every index here is created from.
+readonly API_NAME="uniprot_entries"
+readonly MAPPING_FILE="${CURRENT_LOCATION}/mappings/uniprot_entries.json"
+
+# Whether the index the API queries through the alias may be dropped and reloaded. Off, a load
+# into it is refused: from the drop until the load finishes, the API would search a partial index.
+REPLACE_LIVE=false
 
 # Rows to pass over, to continue an upload that stopped part way. Above zero the index is kept as
 # it is, because dropping it would discard the rows being skipped.
@@ -84,10 +97,9 @@ opensearch_request() {
 ################################################################################
 # init_indices                                                                 #
 #                                                                              #
-# Clears old indices in the OpenSearch instance and recreates them using the   #
-# latest index definitions to ensure they are up-to-date. It fetches a list of #
-# the current indices, deletes them, and recreates the "uniprot_entries" index #
-# using its JSON definition file.                                              #
+# Drops INDEX_NAME and recreates it from the mapping file. Refuses a name that #
+# is the alias the API queries, and the index that alias points at unless      #
+# --replace-live is given.                                                     #
 #                                                                              #
 # Arguments:                                                                   #
 #   None                                                                       #
@@ -102,6 +114,21 @@ init_indices() {
         exit 1
     fi
 
+    # An alias cannot be dropped and recreated as an index, and dropping what it points at empties
+    # the API's search until the load finishes.
+    local live
+    live=$(curl -s "${OPENSEARCH_URL}/_cat/aliases/${API_NAME}?h=index")
+    if [[ -n "$live" && "$INDEX_NAME" == "$API_NAME" ]]
+    then
+        echo "Error: ${API_NAME} is an alias, for ${live}. Load into a versioned index with --index-name, and switch the alias with opensearch/activate.sh." 1>&2
+        exit 1
+    fi
+    if [[ -n "$live" && "$INDEX_NAME" == "$live" && "$REPLACE_LIVE" != true ]]
+    then
+        echo "Error: ${INDEX_NAME} is the index the API queries through ${API_NAME}. Reloading it empties the API's search until the load finishes; pass --replace-live to do so anyway." 1>&2
+        exit 1
+    fi
+
     log "Started dropping the ${INDEX_NAME} index."
 
     # Only this index. The instance is allowed to hold indices that belong to something else.
@@ -112,16 +139,23 @@ init_indices() {
 
     log "Started creating the ${INDEX_NAME} index."
 
-    local index_file="${CURRENT_LOCATION}/mappings/${INDEX_NAME}.json"
-
-    if [[ ! -f "${index_file}" ]]
+    if [[ ! -f "${MAPPING_FILE}" ]]
     then
-        echo "Error: the index definition ${index_file} does not exist." 1>&2
+        echo "Error: the index definition ${MAPPING_FILE} does not exist." 1>&2
         exit 1
     fi
 
     opensearch_request "creating the ${INDEX_NAME} index" "200" PUT "${INDEX_NAME}" \
-        -H 'Content-Type: application/json' -d @"${index_file}"
+        -H 'Content-Type: application/json' -d @"${MAPPING_FILE}"
+
+    # Dropping an index drops the aliases on it, so the live index reloaded with --replace-live
+    # gets its alias back at once, rather than leaving the API with no name to query.
+    if [[ -n "$live" && "$INDEX_NAME" == "$live" ]]
+    then
+        opensearch_request "pointing ${API_NAME} at ${INDEX_NAME} again" "200" POST _aliases \
+            -H 'Content-Type: application/json' \
+            -d "{\"actions\":[{\"add\":{\"index\":\"${INDEX_NAME}\",\"alias\":\"${API_NAME}\"}}]}"
+    fi
 
     log "Finished creating the ${INDEX_NAME} index."
 }
@@ -172,6 +206,10 @@ upload_uniprot_entries() {
 #   --opensearch-url      (optional) URL of the OpenSearch instance. Defaults  #
 #                         to 'http://localhost:9200'.                         #
 #   --uniprot-entries     (required) Path to the UniProt TSV file for upload.  #
+#   --index-name          (optional) The index to fill. Defaults to            #
+#                         'uniprot_entries'.                                   #
+#   --replace-live        Allows reloading the index the alias points at.      #
+#   --skip                Rows to pass over, keeping the index.                #
 #   --help                Prints the help message and exits.                   #
 #                                                                              #
 # Returns:                                                                     #
@@ -187,6 +225,19 @@ parse_arguments() {
             --uniprot-entries)
                 UNIPROT_ENTRIES_FILE="$2"
                 shift 2
+                ;;
+            --index-name)
+                INDEX_NAME="$2"
+                if ! [[ "$INDEX_NAME" =~ ^[a-z0-9][a-z0-9_.-]*$ ]]; then
+                    echo "Error: --index-name takes a lowercase OpenSearch index name."
+                    print_help
+                    exit 1
+                fi
+                shift 2
+                ;;
+            --replace-live)
+                REPLACE_LIVE=true
+                shift
                 ;;
             --skip)
                 SKIP_ROWS="$2"
@@ -236,6 +287,8 @@ print_help() {
     echo "Options:"
     echo "  --uniprot-entries   Path to the 'uniprot_entries.tsv.lz4' file to be uploaded (required)."
     echo "  --opensearch-url    URL to communicate with the running OpenSearch instance (optional, default: 'http://localhost:9200')."
+    echo "  --index-name        The index to drop, create and fill (optional, default: 'uniprot_entries')."
+    echo "  --replace-live      Allow reloading the index the uniprot_entries alias points at."
     echo "  --skip              Rows to pass over, to continue an upload that stopped part way. The index is kept."
     echo "  --help              Prints this help message."
     echo ""
