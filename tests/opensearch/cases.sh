@@ -119,9 +119,18 @@ check "and is still an index, not an alias" "$(alias_target)" ""
 check "it is marked as loaded to the end" "$?" "0"
 
 
-section "the first switch keeps the old index"
+section "the first switch keeps the old index, and carries on from one that stopped part way"
+# What a first switch that stopped after cloning leaves: the old index marked and write-blocked,
+# and its copy under the legacy name, with the alias not yet switched.
+curl -s -X PUT "${OPENSEARCH_URL}/uniprot_entries/_mapping" -H 'Content-Type: application/json' \
+    -d '{"_meta":{"unipept_load":"complete"}}' > /dev/null
+curl -s -X PUT "${OPENSEARCH_URL}/uniprot_entries/_settings" -H 'Content-Type: application/json' \
+    -d '{"index.blocks.write":true}' > /dev/null
+curl -s -X POST "${OPENSEARCH_URL}/uniprot_entries/_clone/uniprot_entries-legacy" -H 'Content-Type: application/json' \
+    -d '{"settings":{"index.number_of_replicas":0}}' > /dev/null
 activate "${WORK}/activate.log" --index-name uniprot_entries-2026-01
 check_true "it succeeds" [ "$rc" -eq 0 ]
+check_true "carrying on from the copy already made" grep -q 'from a switch that did not finish' "${WORK}/activate.log"
 check "uniprot_entries is now an alias for the new index" "$(alias_target)" "uniprot_entries-2026-01"
 check "the API's name finds the new rows" "$(documents_in uniprot_entries)" "2"
 check "the old index is kept, closed" "$(status_of uniprot_entries-legacy)" "close"
@@ -207,6 +216,13 @@ check "the alias still points at it" "$(alias_target)" "uniprot_entries-2026-03"
 check "and the API then finds the new rows" "$(documents_in uniprot_entries)" "1"
 
 
+section "a load continued with --skip needs the index it continues"
+load "${WORK}/skip-missing.log" --uniprot-entries "$FIXTURE" --index-name uniprot_entries-2031-01 --skip 1
+check_true "a --skip into an index that is not there is refused" [ "$rc" -ne 0 ]
+check_true "and says to load from the start" grep -q 'Load it from the start' "${WORK}/skip-missing.log"
+check "without creating it" "$(status_of uniprot_entries-2031-01)" ""
+
+
 section "a load that stops part way"
 # What a load that was stopped after its first batch leaves: the index, some rows, and no mark. A
 # row of the wrong width stops the load before its batch is sent, so it cannot stand in for this.
@@ -268,6 +284,34 @@ check "the two before it are kept, index and files" \
     "open close kept"
 check "older ones lose their index" "$(status_of uniprot_entries-2026-03)$(status_of uniprot_entries-2026-01)$(status_of uniprot_entries-legacy)" ""
 check "and their files" "$([ -e "${DATA}/uniprot-2026-03" ] && echo left || echo removed)" "removed"
+
+section ".deploy/prune.sh keeps the files the API reads, when its alias has moved on"
+# What load.sh --activate leaves until the API's rollout switches its files too: the alias on
+# 2026-07, and the API still reading 2026-04.
+printf 'INDEX_LOCATION=%s/uniprot-2026-04/suffix-array\n' "$DATA" > /tmp/api.env
+chmod 644 /tmp/api.env
+prune_as_api() {
+    local logfile=$1
+    shift
+    runuser -u unipept -- env API_ENV_FILE=/tmp/api.env "${REPO}/.deploy/prune.sh" --output-dir "$DATA" \
+        --opensearch-url "$OPENSEARCH_URL" "$@" > "$logfile" 2>&1
+    rc=$?
+}
+prune_as_api "${WORK}/prune-served.log" --keep 0
+check_true "it succeeds" [ "$rc" -eq 0 ]
+check_true "and says what the API reads" grep -q 'reads the files of 2026-04' "${WORK}/prune-served.log"
+check "the files the API reads are kept, with their index" "$([ -d "${DATA}/uniprot-2026-04" ] && echo kept) $(status_of uniprot_entries-2026-04)" "kept close"
+check "and everything between them and the alias" "$(status_of uniprot_entries-2026-05)" "open"
+
+printf 'INDEX_LOCATION=/srv/index\n' > /tmp/api.env
+prune_as_api "${WORK}/prune-noversion.log" --keep 0
+check "an INDEX_LOCATION that names no version stops it" "$rc" "2"
+check "and removes nothing" "$(status_of uniprot_entries-2026-04)" "close"
+chmod 600 /tmp/api.env
+prune_as_api "${WORK}/prune-unreadable.log" --keep 0
+check "an environment file it cannot read stops it" "$rc" "2"
+rm /tmp/api.env
+
 
 section ".deploy/prune.sh keeps a version loaded ahead of a switch"
 load_version uniprot_entries-2026-09 P90001

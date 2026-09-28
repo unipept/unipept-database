@@ -57,6 +57,11 @@ is_complete() {
     curl -s -f "${OPENSEARCH_URL}/$1/_mapping" 2> /dev/null | grep -qF "$COMPLETE_MARK"
 }
 
+# The _aliases action that points the alias at an index.
+alias_add_action() {
+    printf '{"add":{"index":"%s","alias":"%s"}}' "$1" "$ALIAS"
+}
+
 mark_complete() {
     opensearch_request "marking $1 as loaded to the end" "200" PUT "$1/_mapping" \
         -H 'Content-Type: application/json' -d "{\"_meta\":{${COMPLETE_MARK}}}" > /dev/null
