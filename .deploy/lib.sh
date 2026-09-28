@@ -83,6 +83,11 @@ readonly OPTIONAL_INDEX_FILES=(kmer_table.bin)
 # shellcheck disable=SC2034 # read by the scripts that source this file
 readonly DATABASE_GLOB='uniprot-[0-9][0-9][0-9][0-9]-[0-9][0-9]'
 
+# Stops on a UniProtKB version not written YYYY-MM, the form every database directory is named in.
+valid_version() {
+    [[ "$1" =~ ^[0-9]{4}-[0-9]{2}$ ]] || die "a UniProtKB version is written YYYY-MM, not '$1'."
+}
+
 # The script's own process, captured before any subshell can shadow it. A die inside a command
 # substitution only ends that subshell, and the caller then reports the same failure a second time
 # through the ERR trap, so die signals the script itself. USR1 rather than TERM, so a real
@@ -106,7 +111,7 @@ need_value() {
 # root, they leave a database owned by root: one the next run as DEPLOY_USER cannot replace, and
 # one whose readability check passes only because root reads everything. verify.sh and load.sh
 # write nothing there, but both check through that same readability check, so they refuse root
-# for that reason alone.
+# for that reason alone. prune.sh removes databases, so it runs as the user who owns them.
 refuse_root() {
     [ "$(id -u)" -ne 0 ] \
         || die "do not run this as root. Run it as ${DEPLOY_USER}, for example: sudo -iu ${DEPLOY_USER}. Only .deploy/opensearch/install.sh needs root."

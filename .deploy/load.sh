@@ -67,7 +67,7 @@ USAGE
 parse_arguments() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            --uniprot-version) need_value "$1" "${2-}"; UNIPROT_VERSION="$2"; shift 2 ;;
+            --uniprot-version) need_value "$1" "${2-}"; valid_version "$2"; UNIPROT_VERSION="$2"; shift 2 ;;
             --output-dir) need_value "$1" "${2-}"; OUTPUT_DIR="$2"; shift 2 ;;
             --opensearch-url) need_value "$1" "${2-}"; OPENSEARCH_URL="$2"; shift 2 ;;
             --skip) need_value "$1" "${2-}"; SKIP_ROWS="$2"; shift 2 ;;
@@ -80,16 +80,6 @@ parse_arguments() {
     done
 
     [ -z "$SKIP_ROWS" ] || [[ "$SKIP_ROWS" =~ ^[0-9]+$ ]] || die "--skip takes a number of rows, not '${SKIP_ROWS}'."
-}
-
-# What opensearch/load.sh needs. Checked before anything is dropped, because load.sh only reports
-# a missing package once it is reached.
-check_loader_deps() {
-    checkdep lz4
-    checkdep pv
-    checkdep python3
-    python3 -c "import requests" > /dev/null 2>&1 \
-        || die "the OpenSearch loader requires the requests package. .deploy/opensearch/install.sh installs it, as python3-requests."
 }
 
 parse_arguments "$@"
@@ -110,8 +100,6 @@ if [ "$CHECK" = true ]; then
     echo "${INDEX_NAME} is not loaded, or its load did not finish." 1>&2
     exit 1
 fi
-
-check_loader_deps
 
 # Before the load, and so before anything can activate it: proteins loaded from a database the API
 # cannot serve would pair with files that are not there.

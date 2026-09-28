@@ -125,6 +125,8 @@ check_true "it succeeds" [ "$rc" -eq 0 ]
 check "uniprot_entries is now an alias for the new index" "$(alias_target)" "uniprot_entries-2026-01"
 check "the API's name finds the new rows" "$(documents_in uniprot_entries)" "2"
 check "the old index is kept, closed" "$(status_of uniprot_entries-legacy)" "close"
+"${REPO}/opensearch/load.sh" --opensearch-url "$OPENSEARCH_URL" --index-name uniprot_entries-legacy --check-complete
+check "and marked as loaded to the end, so going back to it is an ordinary switch" "$?" "0"
 # The two requests the API makes, by the name it knows.
 check_true "a search through the alias answers" grep -q 'P10001' \
     <<< "$(curl -s "${OPENSEARCH_URL}/uniprot_entries/_search?q=uniprot_accession_number:P10001")"

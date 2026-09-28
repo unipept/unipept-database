@@ -11,7 +11,8 @@ set -eo pipefail
 #      marked by opensearch/load.sh as loaded to the end.
 #   2. Where uniprot_entries is still an index rather than an alias, as a host loaded before
 #      versioned indices has it, clone it to uniprot_entries-legacy first. A clone is hard links,
-#      so it costs no copy, and the first switch then has something to go back to.
+#      so it costs no copy, and the first switch then has something to go back to. The old index is
+#      marked as loaded to the end before it is cloned: the API was serving it, so it was whole.
 #   3. Switch the alias in one request: remove it from the index it named, or remove the old index
 #      itself, and add it to the new one. OpenSearch applies the actions of one request together,
 #      so the API never finds the name missing.
@@ -20,17 +21,12 @@ set -eo pipefail
 CURRENT_LOCATION="${BASH_SOURCE%/*}"
 
 source "${CURRENT_LOCATION}/../pipelines/lib/common.sh"
+source "${CURRENT_LOCATION}/lib.sh"
 
 OPENSEARCH_URL="http://localhost:9200"
 
 # The index to point the alias at.
 INDEX_NAME=""
-
-# The name the API queries.
-readonly ALIAS="uniprot_entries"
-
-# What a host loaded before versioned indices had, once it is kept under a name of its own.
-readonly LEGACY="${ALIAS}-legacy"
 
 # Seconds to wait for an index that was opened or cloned to be ready to serve: its primary started,
 # which is all a single node can offer.
@@ -65,96 +61,67 @@ parse_arguments() {
     }
 }
 
-fail() {
-    echo "Error: $*" 1>&2
-    exit 1
-}
-
-# Sends one request and fails unless OpenSearch answers 200. Prints the body.
-request() {
-    local what=$1 method=$2 path=$3 body status
-    shift 3
-
-    body=$(curl -s -w '\n%{http_code}' -X "$method" "${OPENSEARCH_URL}/${path}" "$@") \
-        || fail "${what}: OpenSearch did not answer at ${OPENSEARCH_URL}."
-    status="${body##*$'\n'}"
-    body="${body%$'\n'*}"
-    [[ "$status" == 200 ]] || fail "${what} answered ${status}: ${body}"
-    printf '%s' "$body"
-}
-
-# Whether the name is an index, closed or open, as opposed to an alias or nothing.
-is_index() {
-    curl -s "${OPENSEARCH_URL}/_cat/indices/$1?h=index&expand_wildcards=all" | grep -qxF "$1"
-}
-
-# open or close, for an index.
-index_status() {
-    curl -s "${OPENSEARCH_URL}/_cat/indices/$1?h=status&expand_wildcards=all" | tr -d '[:space:]'
-}
-
 wait_until_ready() {
     local health
-    health=$(request "waiting for $1" GET "_cluster/health/$1?wait_for_status=yellow&timeout=${READY_TIMEOUT}s")
-    [[ "$health" != *'"timed_out":true'* ]] || fail "$1 was not ready within ${READY_TIMEOUT} seconds."
+    health=$(opensearch_request "waiting for $1" "200" GET "_cluster/health/$1?wait_for_status=yellow&timeout=${READY_TIMEOUT}s")
+    [[ "$health" != *'"timed_out":true'* ]] || opensearch_fail "$1 was not ready within ${READY_TIMEOUT} seconds."
 }
 
 parse_arguments "$@"
+require_opensearch
 
-curl -s -f "${OPENSEARCH_URL}/_cluster/health" > /dev/null \
-    || fail "OpenSearch is not reachable at ${OPENSEARCH_URL}."
+status=$(index_status "$INDEX_NAME")
+[[ -n "$status" ]] || opensearch_fail "there is no index ${INDEX_NAME} to activate. Load it with .deploy/load.sh first."
 
-is_index "$INDEX_NAME" || fail "there is no index ${INDEX_NAME} to activate. Load it with .deploy/load.sh first."
-
-if [[ "$(index_status "$INDEX_NAME")" == close ]]; then
-    request "opening ${INDEX_NAME}" POST "${INDEX_NAME}/_open" > /dev/null
+if [[ "$status" == close ]]; then
+    opensearch_request "opening ${INDEX_NAME}" "200" POST "${INDEX_NAME}/_open" > /dev/null
     wait_until_ready "$INDEX_NAME"
     log "Opened ${INDEX_NAME}, which was kept closed."
 fi
 
-request "refreshing ${INDEX_NAME}" POST "${INDEX_NAME}/_refresh" > /dev/null
+opensearch_request "refreshing ${INDEX_NAME}" "200" POST "${INDEX_NAME}/_refresh" > /dev/null
 documents=$(curl -s "${OPENSEARCH_URL}/_cat/count/${INDEX_NAME}?h=count" | awk '{print $NF}')
-[[ "${documents:-0}" -gt 0 ]] || fail "${INDEX_NAME} holds no documents, so the API would find no protein. Load it again."
-# A load that stopped part way leaves documents too. The old index kept at the first switch predates
-# the mark, and was whole: the API was serving it.
-if [[ "$INDEX_NAME" != "$LEGACY" ]]; then
-    "${CURRENT_LOCATION}/load.sh" --opensearch-url "$OPENSEARCH_URL" --index-name "$INDEX_NAME" --check-complete \
-        || fail "${INDEX_NAME} was not loaded to the end. Continue its load with --skip, or load it again."
-fi
+[[ "${documents:-0}" -gt 0 ]] \
+    || opensearch_fail "${INDEX_NAME} holds no documents, so the API would find no protein. Load it again."
+# A load that stopped part way leaves documents too.
+is_complete "$INDEX_NAME" \
+    || opensearch_fail "${INDEX_NAME} was not loaded to the end. Continue its load with --skip, or load it again."
 
-current=$(curl -s "${OPENSEARCH_URL}/_cat/aliases/${ALIAS}?h=index" | tr -d '[:space:]')
+current=$(alias_target)
+add="{\"add\":{\"index\":\"${INDEX_NAME}\",\"alias\":\"${ALIAS}\"}}"
 
 if [[ "$current" == "$INDEX_NAME" ]]; then
-    # Nothing moves, so nothing is closed or deleted: the index kept to go back to stays.
+    # Nothing moves, so nothing is closed: the index kept to go back to stays as it is.
     log "${ALIAS} already points at ${INDEX_NAME}."
     exit 0
-elif is_index "$ALIAS"; then
+elif [[ -n "$(index_status "$ALIAS")" ]]; then
     # A host loaded before versioned indices. The clone needs the source to take no writes, which
-    # the API, only reading, does not notice.
-    ! is_index "$LEGACY" || fail "${ALIAS} is an index and ${LEGACY} already exists, so the old index has nowhere to be kept. Delete ${LEGACY} if it is not needed."
-    request "blocking writes to ${ALIAS}" PUT "${ALIAS}/_settings" \
+    # the API, only reading, does not notice, and carries the mark over with the mapping.
+    [[ -z "$(index_status "$LEGACY")" ]] \
+        || opensearch_fail "${ALIAS} is an index and ${LEGACY} already exists, so the old index has nowhere to be kept. Delete ${LEGACY} if it is not needed."
+    mark_complete "$ALIAS"
+    opensearch_request "blocking writes to ${ALIAS}" "200" PUT "${ALIAS}/_settings" \
         -H 'Content-Type: application/json' -d '{"index.blocks.write":true}' > /dev/null
     # No replica, whatever the old index asked for: a single node cannot place one.
-    request "keeping ${ALIAS} as ${LEGACY}" POST "${ALIAS}/_clone/${LEGACY}" \
+    opensearch_request "keeping ${ALIAS} as ${LEGACY}" "200" POST "${ALIAS}/_clone/${LEGACY}" \
         -H 'Content-Type: application/json' -d '{"settings":{"index.number_of_replicas":0}}' > /dev/null
     wait_until_ready "$LEGACY"
-    request "switching ${ALIAS} to an alias for ${INDEX_NAME}" POST _aliases -H 'Content-Type: application/json' \
-        -d "{\"actions\":[{\"add\":{\"index\":\"${INDEX_NAME}\",\"alias\":\"${ALIAS}\"}},{\"remove_index\":{\"index\":\"${ALIAS}\"}}]}" > /dev/null
-    log "${ALIAS} was an index. It is kept as ${LEGACY}, and ${ALIAS} is now an alias for ${INDEX_NAME}."
+    log "${ALIAS} was an index. It is kept as ${LEGACY}."
     previous="$LEGACY"
+    actions="{\"remove_index\":{\"index\":\"${ALIAS}\"}},${add}"
 elif [[ -n "$current" ]]; then
-    request "switching ${ALIAS} from ${current} to ${INDEX_NAME}" POST _aliases -H 'Content-Type: application/json' \
-        -d "{\"actions\":[{\"remove\":{\"index\":\"${current}\",\"alias\":\"${ALIAS}\"}},{\"add\":{\"index\":\"${INDEX_NAME}\",\"alias\":\"${ALIAS}\"}}]}" > /dev/null
-    log "${ALIAS} now points at ${INDEX_NAME}, instead of ${current}."
     previous="$current"
+    actions="{\"remove\":{\"index\":\"${current}\",\"alias\":\"${ALIAS}\"}},${add}"
 else
-    request "adding ${ALIAS} for ${INDEX_NAME}" POST _aliases -H 'Content-Type: application/json' \
-        -d "{\"actions\":[{\"add\":{\"index\":\"${INDEX_NAME}\",\"alias\":\"${ALIAS}\"}}]}" > /dev/null
-    log "${ALIAS} now points at ${INDEX_NAME}."
     previous=''
+    actions="$add"
 fi
 
+opensearch_request "pointing ${ALIAS} at ${INDEX_NAME}" "200" POST _aliases \
+    -H 'Content-Type: application/json' -d "{\"actions\":[${actions}]}" > /dev/null
+log "${ALIAS} now points at ${INDEX_NAME}${previous:+, instead of ${previous}}."
+
 if [[ -n "$previous" && "$(index_status "$previous")" == open ]]; then
-    request "closing ${previous}" POST "${previous}/_close" > /dev/null
+    opensearch_request "closing ${previous}" "200" POST "${previous}/_close" > /dev/null
     log "Closed ${previous}. Activating it again opens it."
 fi
