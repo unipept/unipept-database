@@ -1,16 +1,22 @@
 # Deploying a Unipept database
 
-Three scripts build, distribute and check the database a Unipept API host serves. They
+Four scripts build, distribute, load and check the database a Unipept API host serves. They
 orchestrate; the pipeline itself lives in `pipelines/` and the loader in `opensearch/`.
 
-- `build.sh` builds everything on this host: the tables, the suffix array, the `datastore/` layout
-  the API reads, and the proteins in OpenSearch.
-- `clone.sh` copies a finished database from another host and loads its proteins into the
-  OpenSearch of this one. The build runs once; every other host clones the result.
-- `verify.sh` checks a finished database against the files the API needs. The other two make
-  the same checks, through the same `verify_database` in `lib.sh`, before they change anything
-  the API serves: `build.sh` before it loads OpenSearch, `clone.sh` on the remote host before it
-  copies and again on the copy. Run it by hand to check a database that is already there.
+- `build.sh` builds a database on this host: the tables, the suffix array and the `datastore/`
+  layout the API reads.
+- `clone.sh` copies a finished database from another host. The build runs once; every other host
+  clones the result.
+- `load.sh` loads the proteins of a database that is in place into the OpenSearch of this host,
+  as an index of that version beside the one the API queries. With `--activate` it then switches
+  the API to it; that is the only step that changes what the API's protein search answers.
+- `verify.sh` checks a finished database against the files the API needs. The others make the same
+  checks, through the same `verify_database` in `lib.sh`: `build.sh` before it puts a build in
+  place, `clone.sh` on the remote host before it copies and again on the copy, and `load.sh`
+  before it loads. Run it by hand to check a database that is already there.
+
+A new database on a host is therefore two steps, `build.sh` or `clone.sh` and then `load.sh`. A
+load that fails is rerun on its own, without building or copying again.
 
 ## Preparing a host
 
@@ -77,23 +83,81 @@ sudo -iu unipept
 .deploy/clone.sh --remote-address selma.ugent.be --local-ssh-key ~/.ssh/id_unipept
 ```
 
-Both refuse to run as root. A database written by root is one the next run as `unipept` cannot
-replace, and one whose check that the API can read it passes only because root reads everything.
+Both refuse to run as root, as do `load.sh` and `verify.sh`. A database written by root is one the
+next run as `unipept` cannot replace, and one whose check that the API can read it passes only
+because root reads everything.
 
 The result is `${OUTPUT_DIR}/uniprot-<version>/suffix-array/`, which holds `sa.bin`,
 `proteins.bin`, `mapping.bin`, `.version`, `datastore/` and `build-info.txt`. That directory is
 what the API is pointed at. The version in the name is the one the pipeline wrote to `.version`,
 so the two always agree.
 
-Beside it, `${OUTPUT_DIR}/uniprot-<version>/tables/uniprot_entries.tsv.lz4` is what `clone.sh`
-reads to fill another host's OpenSearch. Keep it on the build host for as long as hosts still
-clone that version. The rest of `tables/` is removed during the build.
+Beside it, `${OUTPUT_DIR}/uniprot-<version>/tables/uniprot_entries.tsv.lz4` is what `load.sh`
+reads to fill OpenSearch, on this host and on every host that clones it. Keep it for as long as
+that version may be loaded again. The rest of `tables/` is removed during the build.
 
 A build writes to `${OUTPUT_DIR}/.build/` and is renamed into place at the end, so the database
 this host serves is only ever replaced by a finished one. A build whose version already exists
 stops and keeps its result in `.build/`; `--replace` lets it take the place of the old one. The
 same holds for `clone.sh`, through `${OUTPUT_DIR}/.clone/`. Both therefore need room for two
 databases at the moment they finish.
+
+## Loading the proteins
+
+```sh
+.deploy/load.sh                                # the newest one under OUTPUT_DIR
+.deploy/load.sh --uniprot-version 2026-03
+.deploy/load.sh --uniprot-version 2026-03 --skip 120000000   # continue a load that stopped
+.deploy/load.sh --uniprot-version 2026-03 --activate         # and switch the API to it
+```
+
+It checks the database as `verify.sh` does, and refuses one that fails, before it loads
+`tables/uniprot_entries.tsv.lz4` into `uniprot_entries-<version>`. The API queries
+`uniprot_entries`, which is an alias, so a load changes nothing the API answers, and a load that
+fails can be rerun at any time. `--skip` passes over the rows a load that stopped already wrote,
+and keeps the index as it is.
+
+The switch is `opensearch/activate.sh`, which `--activate` runs after the load:
+
+- it points `uniprot_entries` at the new index in one request, so the API never finds the name
+  missing. It refuses an index that is not there, holds no documents, or was not loaded to the
+  end: the loader marks an index once its last row is in, and `load.sh --check` asks for that mark;
+- it closes the index it switched away from, which frees the memory that holds and keeps its data.
+  Going back is activating that one again, which opens it. It deletes nothing: see
+  [Removing old versions](#removing-old-versions);
+- on a host loaded before versioned indices, where `uniprot_entries` is still an index, the first
+  switch keeps that index as `uniprot_entries-legacy`, by a clone that shares its files, so there
+  is something to go back to from the start.
+
+Switching the index is only half of moving the API to a new version: its files are the other
+half, `INDEX_LOCATION` in its environment file. Until the API's rollout switches both together,
+`--activate` moves only the proteins, as a load did before.
+
+Reloading the version the alias points at is refused, because the loader drops it first and the API
+would search a partial index until it finishes. `--replace-live` does it anyway.
+
+## Removing old versions
+
+```sh
+.deploy/prune.sh --keep 2 --dry-run      # what it would remove
+.deploy/prune.sh --keep 2
+```
+
+Every version stays on a host until this removes it, its directory and its OpenSearch index
+together, so going back to one is a switch rather than a build or a copy. A closed index costs no
+memory; what old versions cost is disk.
+
+What the API serves is two things, which can be on different versions for a while: the proteins,
+through the `uniprot_entries` alias, and the files, through `INDEX_LOCATION` in the API's
+environment file, which it reads where the API runs on the host. `--activate` moves only the first.
+It keeps both versions, every version newer than the older of the two, since those are loaded ahead
+of a switch still to come, and the `--keep` newest ones older than that. The old index kept at a
+host's first switch, `uniprot_entries-legacy`, counts as the oldest. Without an alias, or with an
+environment file it cannot read or that names no version, it removes nothing.
+
+`load.sh` warns when OpenSearch's disk is past its low watermark, 85% unless the cluster sets
+another. At 95% OpenSearch makes every index read-only, and a load running then fails part way, so
+the warning is the time to prune.
 
 ## Checking a database
 
@@ -103,7 +167,7 @@ databases at the moment they finish.
 .deploy/verify.sh --index-dir /srv/data/uniprot-2026-03/suffix-array
 ```
 
-As `unipept`, like the other two: it checks that the files can be read by the user the API runs
+As `unipept`, like the others: it checks that the files can be read by the user the API runs
 as, and as root every file can.
 
 It reports every file that is missing, empty or unreadable rather than the first, and exits
@@ -114,17 +178,18 @@ against, so a change on either side has to be made on both.
 `build-info.txt` records the UniProtKB version, the commit of this checkout, the commit of the
 unipept-index clone the build used, and the sources it read. unipept-index is cloned at the tip of
 its default branch, so two builds of the same UniProtKB release can differ; this file is how you
-tell. It is written after the proteins are loaded, so a directory that has one is complete.
+tell. It is written last, so a directory that has one is a finished build. Whether its proteins
+are in OpenSearch is not something it records.
 
 ## What a host needs
 
 `install.sh` installs all of it but Rust. For reference, or for a host prepared another way:
 
-- `build.sh` and `clone.sh` both need `lz4`, `pv`, and Python with `requests` for the OpenSearch
-  loader, and an OpenSearch instance at `OPENSEARCH_URL`.
-- `build.sh` also needs `git`, `cmake` and a Rust toolchain, and the pipeline needs `curl`,
-  `uuidgen`, `pigz`, `gawk`, `unzip` and `xmllint`.
+- `build.sh` needs `git`, `cmake` and a Rust toolchain, and the pipeline needs `curl`, `uuidgen`,
+  `pigz`, `gawk`, `lz4`, `pv`, `unzip` and `xmllint`.
 - `clone.sh` needs `ssh` and `scp`, and none of the build tools.
+- `load.sh` needs `lz4`, `pv`, and Python with `requests` for the OpenSearch loader, and an
+  OpenSearch instance at `OPENSEARCH_URL`.
 
 `SCRATCH_DIR` holds the unipept-index clone and its cargo target, a few gigabytes. The build
 itself, tables and temporary files included, goes under `OUTPUT_DIR`, so that is the volume to

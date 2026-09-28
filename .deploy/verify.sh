@@ -58,20 +58,6 @@ parse_arguments() {
         || die "--index-dir and --uniprot-version name two different databases."
 }
 
-# The newest database under OUTPUT_DIR, as YYYY-MM. The glob expands in order, so the last one
-# that is a directory is the newest.
-latest_version() {
-    local newest='' candidate
-
-    # shellcheck disable=SC2231 # DATABASE_GLOB is a glob, and has to expand
-    for candidate in "${OUTPUT_DIR}"/${DATABASE_GLOB}; do
-        [ -d "$candidate" ] && newest="$candidate"
-    done
-
-    [ -n "$newest" ] || die "found no database in ${OUTPUT_DIR}."
-    database_version_of "$newest"
-}
-
 parse_arguments "$@"
 refuse_root
 

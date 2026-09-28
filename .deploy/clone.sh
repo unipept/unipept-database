@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 #
-# Copies a finished database from another host and loads its proteins into this host's OpenSearch.
-# The build itself runs once, on one host; every other host clones the result. Run it with --help
-# for the options.
+# Copies a finished database from another host. The build itself runs once, on one host; every
+# other host clones the result. It loads nothing into OpenSearch; .deploy/load.sh does that. Run it
+# with --help for the options.
 
 set -eo pipefail
 set -o errtrace
@@ -34,7 +34,8 @@ read_conf
 
 usage() {
     cat <<'USAGE'
-Copies a finished database from another host and loads its proteins into this host's OpenSearch.
+Copies a finished database from another host. .deploy/load.sh then loads its proteins into this
+host's OpenSearch.
 
   .deploy/clone.sh --remote-address HOST --local-ssh-key KEY [OPTIONS]
 
@@ -45,7 +46,6 @@ Copies a finished database from another host and loads its proteins into this ho
   --remote-output-dir DIR  where it keeps its databases
   --uniprot-version YYYY-MM  which database to copy, default the newest it has
   --output-dir DIR         where the copy is written
-  --opensearch-url URL     the instance the proteins are loaded into
   --replace                replace a database of that version already here
   --help                   print this message
 
@@ -62,7 +62,6 @@ parse_arguments() {
             --remote-output-dir) need_value "$1" "${2-}"; REMOTE_OUTPUT_DIR="$2"; shift 2 ;;
             --local-ssh-key) need_value "$1" "${2-}"; LOCAL_SSH_KEY="$2"; shift 2 ;;
             --output-dir) need_value "$1" "${2-}"; OUTPUT_DIR="$2"; shift 2 ;;
-            --opensearch-url) need_value "$1" "${2-}"; OPENSEARCH_URL="$2"; shift 2 ;;
             --uniprot-version) need_value "$1" "${2-}"; UNIPROT_VERSION="$2"; shift 2 ;;
             --replace) REPLACE=true; shift ;;
             --help) usage; exit 0 ;;
@@ -144,19 +143,9 @@ check_database() {
     verify_database "${dir}/suffix-array" \
         || die "the copy is missing files the API needs, or is not the version it is named after."
 
-    # Outside the index, so not in INDEX_FILES: it is what this script feeds to OpenSearch.
+    # Outside the index, so not in INDEX_FILES: it is what load.sh feeds to OpenSearch.
     [ -s "${dir}/tables/uniprot_entries.tsv.lz4" ] \
         || die "the copied database has no tables/uniprot_entries.tsv.lz4"
-}
-
-load_opensearch() {
-    local build_dir="$1"
-
-    log "Started loading the proteins into OpenSearch."
-    "${HERE}/../opensearch/load.sh" \
-        --opensearch-url "$OPENSEARCH_URL" \
-        --uniprot-entries "${build_dir}/tables/uniprot_entries.tsv.lz4"
-    log "Finished loading the proteins into OpenSearch."
 }
 
 parse_arguments "$@"
@@ -166,7 +155,6 @@ refuse_root
 
 checkdep ssh
 checkdep scp
-check_loader_deps
 
 [ -n "$UNIPROT_VERSION" ] || UNIPROT_VERSION=$(remote_latest_version)
 log "Cloning UniProtKB ${UNIPROT_VERSION} from ${REMOTE_ADDRESS}."
@@ -186,9 +174,7 @@ copy_database "$STAGING_DIR" "$REMOTE_DIR"
 COPIED_DIR="${STAGING_DIR}/uniprot-${UNIPROT_VERSION}"
 check_database "$COPIED_DIR" "$REMOTE_DIR"
 
-load_opensearch "$COPIED_DIR"
-
 swap_into_place "$COPIED_DIR" "$BUILD_DIR"
 rm -rf "${STAGING_DIR:?}"
 
-log "The database is ready in ${BUILD_DIR}."
+log "The database is ready in ${BUILD_DIR}. Load its proteins with: .deploy/load.sh --uniprot-version ${UNIPROT_VERSION}"

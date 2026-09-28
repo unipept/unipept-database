@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
-# .deploy/build.sh, .deploy/clone.sh and .deploy/opensearch/install.sh, in a container that has what
-# a host has. The cases run inside it: they start an sshd and clone over it, so the copy goes
+# The .deploy scripts, build.sh, clone.sh, load.sh and opensearch/install.sh among them, in a
+# container that has what a host has. The cases run inside it: they start an sshd and clone over it, so the copy goes
 # through a real scp.
 #
 # Needs Docker. Nothing is published on the host.
@@ -26,5 +26,5 @@ if [ "${DEPLOY_TEST_IMAGE_BUILT:-}" != true ]; then
     docker build -q -t "$IMAGE" "$HERE" > /dev/null || { echo "the deploy test image did not build" >&2; exit 1; }
 fi
 
-heading "Deploy suite: build.sh, clone.sh and install.sh"
+heading "Deploy suite: build.sh, clone.sh, load.sh and install.sh"
 docker run --rm -v "${REPO}:/repo:ro" "$IMAGE" bash /repo/tests/deploy/cases.sh

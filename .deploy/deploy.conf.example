@@ -9,7 +9,7 @@
 # holds the whole build while it runs.
 OUTPUT_DIR=/mnt/data
 
-# The OpenSearch instance the proteins are loaded into.
+# load.sh: the OpenSearch instance the proteins are loaded into.
 #OPENSEARCH_URL=http://localhost:9200
 
 # build.sh: where the repositories are cloned and built.

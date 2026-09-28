@@ -8,11 +8,10 @@
 # construction. This runs the real pipeline, offline, against the fixtures
 # tests/pipelines/build-suite.sh uses.
 #
-# sa-builder and the OpenSearch loader stay stand-ins: each has a suite of its own, and building a
-# real index is unipept-index's work and hours of it.
+# sa-builder stays a stand-in: building a real index is unipept-index's work and hours of it. The
+# OpenSearch loader is stood in for too, only to show that build.sh never calls it.
 #
-# Needs cargo, GNU sed and coreutils, gawk, lz4, pigz, pv, uuidgen, xmllint, zip and unzip, and
-# python3 with requests, which build.sh checks for the loader before it starts.
+# Needs cargo, GNU sed and coreutils, gawk, lz4, pigz, pv, uuidgen, xmllint, zip and unzip.
 
 set -uo pipefail
 
@@ -124,16 +123,9 @@ check "the taxon column holds a number" \
 
 section "the loader"
 
-check "it was called once" "$(grep -c -- '--uniprot-entries' "${WORK}/loader-calls" 2> /dev/null)" "1"
-
-# The proteins are loaded before the build is renamed into place, so the path it was given is the
-# staging one. A database only appears where the API reads it once the load has succeeded.
-loaded="$(gawk '{ for (i = 1; i < NF; i++) if ($i == "--uniprot-entries") print $(i + 1) }' \
-    "${WORK}/loader-calls")"
-check "it was given the entries table of the build" \
-    "$(basename "$loaded")" "uniprot_entries.tsv.lz4"
-check "from the staging directory, before the swap" \
-    "$(case "$loaded" in "${OUT}/.build/"*) echo yes ;; *) echo no ;; esac)" "yes"
+# Loading is .deploy/load.sh's. A build that loaded would replace the proteins the API serves
+# before anything had chosen to.
+check_true "build.sh does not call it" test ! -e "${WORK}/loader-calls"
 
 
 summary

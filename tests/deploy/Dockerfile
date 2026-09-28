@@ -1,6 +1,6 @@
-# What .deploy/build.sh, clone.sh and opensearch/install.sh need on a host. A real ssh and a real
-# scp, because what clone.sh gets wrong is where a copy lands, and a stub is written by the same
-# hand as the script. cargo, cmake and sa-builder are stood in for: building the index is
+# What .deploy/build.sh, clone.sh, load.sh and opensearch/install.sh need on a host. A real ssh and
+# a real scp, because what clone.sh gets wrong is where a copy lands, and a stub is written by the
+# same hand as the script. cargo, cmake and sa-builder are stood in for: building the index is
 # unipept-index's job and hours of it.
 FROM ubuntu:24.04
 

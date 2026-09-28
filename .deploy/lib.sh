@@ -21,7 +21,7 @@ source "${DEPLOY_DIR}/../pipelines/lib/common.sh"
 # shellcheck disable=SC2034 # read by the scripts that source this file
 OUTPUT_DIR=/mnt/data
 
-# The OpenSearch instance the proteins are loaded into.
+# The OpenSearch instance load.sh fills and prune.sh removes from.
 # shellcheck disable=SC2034 # read by the scripts that source this file
 OPENSEARCH_URL=http://localhost:9200
 
@@ -73,6 +73,11 @@ readonly OPTIONAL_INDEX_FILES=(kmer_table.bin)
 # shellcheck disable=SC2034 # read by the scripts that source this file
 readonly DATABASE_GLOB='uniprot-[0-9][0-9][0-9][0-9]-[0-9][0-9]'
 
+# Stops on a UniProtKB version not written YYYY-MM, the form every database directory is named in.
+valid_version() {
+    [[ "$1" =~ ^[0-9]{4}-[0-9]{2}$ ]] || die "a UniProtKB version is written YYYY-MM, not '$1'."
+}
+
 # The script's own process, captured before any subshell can shadow it. A die inside a command
 # substitution only ends that subshell, and the caller then reports the same failure a second time
 # through the ERR trap, so die signals the script itself. USR1 rather than TERM, so a real
@@ -92,20 +97,11 @@ need_value() {
     { [ -n "$value" ] && [[ "$value" != --* ]]; } || die "${flag} requires a value."
 }
 
-# What opensearch/load.sh needs. Checked before the work starts: the load is the last step of a
-# build that takes days, and load.sh only reports a missing package once it is reached.
-check_loader_deps() {
-    checkdep lz4
-    checkdep pv
-    checkdep python3
-    python3 -c "import requests" > /dev/null 2>&1 \
-        || die "the OpenSearch loader requires the requests package. .deploy/opensearch/install.sh installs it, as python3-requests."
-}
-
 # build.sh and clone.sh write what the API serves, so they run as the user the API reads as. Run as
 # root, they leave a database owned by root: one the next run as DEPLOY_USER cannot replace, and
-# one whose readability check passes only because root reads everything. verify.sh writes nothing,
-# but its check is that same readability check, so it refuses root for that reason alone.
+# one whose readability check passes only because root reads everything. verify.sh and load.sh
+# write nothing there, but both check through that same readability check, so they refuse root
+# for that reason alone. prune.sh removes databases, so it runs as the user who owns them.
 refuse_root() {
     [ "$(id -u)" -ne 0 ] \
         || die "do not run this as root. Run it as ${DEPLOY_USER}, for example: sudo -iu ${DEPLOY_USER}. Only .deploy/opensearch/install.sh needs root."
@@ -174,6 +170,20 @@ database_version_of() {
     case "$name" in uniprot-*) echo "${name#uniprot-}" ;; *) return 1 ;; esac
 }
 
+# The newest database under OUTPUT_DIR, as YYYY-MM. The glob expands in order, so the last one
+# that is a directory is the newest.
+latest_version() {
+    local newest='' candidate
+
+    # shellcheck disable=SC2231 # DATABASE_GLOB is a glob, and has to expand
+    for candidate in "${OUTPUT_DIR}"/${DATABASE_GLOB}; do
+        [ -d "$candidate" ] && newest="$candidate"
+    done
+
+    [ -n "$newest" ] || die "found no database in ${OUTPUT_DIR}."
+    database_version_of "$newest"
+}
+
 # The directory a build writes is named after the version inside it. A pair that disagrees means
 # one of the two came from somewhere else.
 check_index_version() {
@@ -192,15 +202,37 @@ check_index_version() {
 }
 
 # The whole contract a database is held to before the API is pointed at it, reporting every
-# failure rather than the first. build.sh, clone.sh and verify.sh all check through this, so a
-# check added here is one all three make. clone.sh also sends it to the remote host, so it may only
-# call the functions above and read the lists they read.
+# failure rather than the first. build.sh, clone.sh, load.sh and verify.sh all check through this,
+# so a check added here is one all four make. clone.sh also sends it to the remote host, so it may
+# only call the functions above and read the lists they read.
 verify_database() {
     local index="$1" status=0
 
     check_index "$index" || status=1
     check_index_version "$index" || status=1
     return "$status"
+}
+
+# Warns when OpenSearch's disk is past its low watermark, 85% unless the cluster says otherwise.
+# Past it OpenSearch places no new shard on that node, and at the flood stage, 95%, it makes every
+# index read-only, so a load running then fails part way. Each loaded version keeps its index until
+# .deploy/prune.sh removes it, so this is how running out is heard about before a load breaks on it.
+# Says nothing when OpenSearch cannot be asked: the load that follows reports that itself.
+warn_opensearch_disk() {
+    local url="$1" watermark used
+
+    watermark=$(curl -s -f --max-time 10 \
+        "${url}/_cluster/settings?include_defaults=true&flat_settings=true&filter_path=*.cluster.routing.allocation.disk.watermark.low" 2>/dev/null \
+        | sed -n 's/.*"cluster.routing.allocation.disk.watermark.low":"\([0-9]*\)%".*/\1/p') || true
+    [ -n "$watermark" ] || watermark=85
+
+    used=$(curl -s -f --max-time 10 "${url}/_cat/allocation?h=disk.percent" 2>/dev/null \
+        | awk '$1 ~ /^[0-9]+$/ && $1 > max { max = $1 } END { if (max != "") print max }') || true
+    [ -n "$used" ] || return 0
+
+    if [ "$used" -ge "$watermark" ]; then
+        echo "WARN OpenSearch's disk is ${used}% full, past its ${watermark}% watermark. A load can fail part way once it reaches 95%; .deploy/prune.sh --keep N removes old versions." 1>&2
+    fi
 }
 
 # The UniProtKB version the pipeline wrote beside the tables, as YYYY-MM.
