@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 #
 # Prepares a host to build, clone and hold a Unipept database: the user that owns the databases,
-# the tools build.sh, clone.sh and load.sh run, and the OpenSearch instance load.sh fills.
+# the tools build.sh, clone.sh and load.sh run, the scripts a host runs, installed where they do not
+# depend on a checkout, and the OpenSearch instance load.sh fills.
 # Run as root. Run it with --help for the options.
 #
 # This is the only step that needs root. Afterwards DEPLOY_USER owns OUTPUT_DIR and has every tool
@@ -17,15 +18,17 @@
 #      over ssh as that user, and sshd needs a shell to run a remote command.
 #   3. Install the tools build.sh, clone.sh and load.sh use, the ones not installed already.
 #   4. Create OUTPUT_DIR owned by DEPLOY_USER, and hand it the databases a run as root left.
-#   5. Add the OpenSearch APT repository, unless it is already there.
-#   6. Install the pinned version, and hold it so an unrelated upgrade cannot move it.
-#   7. Write the configuration this instance needs, keeping a copy of what was there and the data
+#   5. Install clone.sh, load.sh, verify.sh, prune.sh and what they call into INSTALL_ROOT, from
+#      this checkout, and write etc/deploy.conf there unless it is already there.
+#   6. Add the OpenSearch APT repository, unless it is already there.
+#   7. Install the pinned version, and hold it so an unrelated upgrade cannot move it.
+#   8. Write the configuration this instance needs, keeping a copy of what was there and the data
 #      and log paths it named.
-#   8. Write the heap size.
-#   9. Enable and start the service, restarting it only when something above changed, and wait
+#   9. Write the heap size.
+#  10. Enable and start the service, restarting it only when something above changed, and wait
 #      for it to answer.
-#  10. Set every index to hold no replica.
-#  11. Say what is left to do as DEPLOY_USER.
+#  11. Set every index to hold no replica.
+#  12. Say what is left to do as DEPLOY_USER.
 #
 # A second run with the same settings changes nothing and restarts nothing.
 
@@ -71,6 +74,27 @@ OPENSEARCH_LOG_DIR=
 # Seconds to wait for the service to answer after it is started.
 OPENSEARCH_READY_TIMEOUT=180
 
+# Where the scripts a host runs are installed. /opt/unipept-database, as unipept-api's are in
+# /opt/unipept-api; a flag for a test that installs more than one host into one machine.
+PREFIX="$INSTALL_ROOT"
+
+# The configuration of the install this run makes or updates, so --prefix reads its own and not
+# /opt/unipept-database's; a checkout's own deploy.conf still comes first, as lib.sh has it. Found
+# before the arguments are parsed, since read_conf comes first for a flag to win over it.
+for ((argument = 1; argument < $#; argument++)); do
+    [ "${!argument}" != --prefix ] || { next=$((argument + 1)); PREFIX="${!next}"; }
+done
+[ -f "${DEPLOY_DIR}/deploy.conf" ] || DEPLOY_CONF="${PREFIX}/etc/deploy.conf"
+
+# This runs as root, and sources that file. An installed one is root's, as install_scripts leaves
+# it, and one another user could write would hand that user root.
+if [ "$DEPLOY_CONF" != "${DEPLOY_DIR}/deploy.conf" ] && [ -e "$DEPLOY_CONF" ]; then
+    case "$(stat -c '%U %A' "$DEPLOY_CONF")" in
+        "root -rw-r--r--" | "root -rw-------" | "root -r--r--r--" | "root -r--------") ;;
+        *) die "${DEPLOY_CONF} can be written by someone other than root, and this runs as root and reads it. Make it root's, mode 0644, after checking what is in it." ;;
+    esac
+fi
+
 read_conf
 
 # What build.sh, clone.sh and load.sh run, by package: git, cmake and a C toolchain for the index
@@ -108,6 +132,7 @@ Installs and configures the OpenSearch instance this host loads its proteins int
   --log-dir DIR            where it writes its logs; default what the configuration names
   --user USER              who builds, clones and owns the databases
   --output-dir DIR         where the databases are, handed to that user
+  --prefix DIR             where the scripts a host runs are installed, default /opt/unipept-database
   --help                   print this message
 
 A flag wins over .deploy/deploy.conf, which wins over the defaults in this script.
@@ -124,6 +149,7 @@ parse_arguments() {
             --log-dir) need_value "$1" "${2-}"; OPENSEARCH_LOG_DIR="$2"; shift 2 ;;
             --user) need_value "$1" "${2-}"; DEPLOY_USER="$2"; shift 2 ;;
             --output-dir) need_value "$1" "${2-}"; OUTPUT_DIR="$2"; shift 2 ;;
+            --prefix) need_value "$1" "${2-}"; PREFIX="$2"; shift 2 ;;
             --help) usage; exit 0 ;;
             *) die "unknown option '$1'" ;;
         esac
@@ -220,6 +246,37 @@ prepare_output_dir() {
             log "Gave ${entry} to ${DEPLOY_USER}."
         fi
     done
+}
+
+# The scripts every host runs, where they do not depend on a checkout: a host that only clones and
+# serves needs no clone of this repository, and the path is the same on every host, so
+# distribute.sh and the API's deploy can rely on it. The layout keeps the paths the scripts use
+# between each other. Owned by root, since only this script changes them; etc/ belongs to
+# root too, since install.sh reads deploy.conf as root.
+#
+# From the checkout this runs in, so a host is updated by running this again from a checkout of the
+# commit to install, which INSTALLED then names.
+install_scripts() {
+    local repository="${HERE}/../.." commit
+
+    install -d -m 0755 "$PREFIX" "${PREFIX}/bin" "${PREFIX}/opensearch/mappings" "${PREFIX}/pipelines/lib"
+    install -m 0755 "${repository}/.deploy/"{lib.sh,clone.sh,load.sh,verify.sh,prune.sh} "${PREFIX}/bin/"
+    install -m 0755 "${repository}/opensearch/"{load.sh,activate.sh} "${PREFIX}/opensearch/"
+    install -m 0644 "${repository}/opensearch/"{lib.sh,bulk_load.py} "${PREFIX}/opensearch/"
+    install -m 0644 "${repository}/opensearch/mappings/uniprot_entries.json" "${PREFIX}/opensearch/mappings/"
+    install -m 0644 "${repository}/pipelines/lib/common.sh" "${PREFIX}/pipelines/lib/"
+
+    install -d -m 0755 -o root -g root "${PREFIX}/etc"
+    if [ ! -f "${PREFIX}/etc/deploy.conf" ]; then
+        sed "s#^OUTPUT_DIR=.*#OUTPUT_DIR=${OUTPUT_DIR}#" "${repository}/.deploy/deploy.conf.example" > "${PREFIX}/etc/deploy.conf"
+        chmod 0644 "${PREFIX}/etc/deploy.conf"
+        log "Wrote ${PREFIX}/etc/deploy.conf. Edit it, as root, for what this host decides."
+    fi
+
+    # As root, of a checkout another user owns, which git refuses to read unless told to trust it.
+    commit=$(git -c safe.directory='*' -C "$repository" rev-parse HEAD 2>/dev/null || echo unknown)
+    printf 'commit: %s\ninstalled: %s\n' "$commit" "$(date -u +'%F %T UTC')" > "${PREFIX}/INSTALLED"
+    log "Installed the scripts of ${commit} in ${PREFIX}."
 }
 
 add_repository() {
@@ -385,6 +442,7 @@ checkdep usermod
 ensure_user
 install_tools
 prepare_output_dir
+install_scripts
 
 # Installed with the tools above.
 checkdep curl
@@ -398,10 +456,13 @@ single_node_settings "$(ready_url)"
 
 cat >&2 <<EOF
 
-Still to do on this host, as ${DEPLOY_USER} (sudo -iu ${DEPLOY_USER}), none of it as root:
-  1. Clone unipept-database. From that clone, .deploy/build.sh or .deploy/clone.sh puts a database
-     in place, and .deploy/load.sh then loads its proteins into this OpenSearch.
-  2. To build: install Rust with rustup (https://rustup.rs); the repository pins the toolchain.
-  3. To clone from another host: an ssh key in ~/.ssh that ${DEPLOY_USER} on that host accepts.
+Still to do on this host:
+  1. As root, say what this host decides in ${PREFIX}/etc/deploy.conf.
+As ${DEPLOY_USER} (sudo -iu ${DEPLOY_USER}), none of it as root:
+  2. To clone from another host: an ssh key in ~/.ssh that ${DEPLOY_USER} on that host accepts.
+     ${PREFIX}/bin/clone.sh then copies a database, and ${PREFIX}/bin/load.sh loads its proteins.
+  3. To build: clone unipept-database, which build.sh needs whole, and install Rust with rustup
+     (https://rustup.rs); the repository pins the toolchain. .deploy/build.sh in that clone reads
+     the same deploy.conf.
 EOF
 log "The host is ready."

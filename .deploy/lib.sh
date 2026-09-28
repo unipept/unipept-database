@@ -31,9 +31,23 @@ OPENSEARCH_URL=http://localhost:9200
 # shellcheck disable=SC2034 # read by the scripts that source this file
 DEPLOY_USER=unipept
 
+# Where opensearch/install.sh installs the scripts a host runs, and their configuration. The build
+# host still builds from a checkout, which needs the whole repository.
+readonly INSTALL_ROOT=/opt/unipept-database
+
 # What this host decides. Read after the defaults, so it wins over them, and before the arguments
-# are parsed, so a flag wins over both.
+# are parsed, so a flag wins over both. One file per host: a checkout's own deploy.conf where it has
+# one, which is how a checkout is run on its own; the installed one beside these scripts, as
+# install.sh lays them out; and otherwise this host's installed one, so build.sh in a checkout reads
+# the same settings as the scripts installed beside it.
 DEPLOY_CONF="${DEPLOY_DIR}/deploy.conf"
+if [ ! -f "$DEPLOY_CONF" ]; then
+    if [ -f "${DEPLOY_DIR}/../etc/deploy.conf" ]; then
+        DEPLOY_CONF="${DEPLOY_DIR}/../etc/deploy.conf"
+    else
+        DEPLOY_CONF="${INSTALL_ROOT}/etc/deploy.conf"
+    fi
+fi
 
 read_conf() {
     if [ -f "$DEPLOY_CONF" ]; then
