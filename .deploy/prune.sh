@@ -22,6 +22,8 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # shellcheck source=lib.sh
 source "${HERE}/lib.sh"
+# shellcheck source=../opensearch/lib.sh
+source "${HERE}/../opensearch/lib.sh"
 
 trap errorAndExit ERR
 trap 'exit 2' USR1
@@ -38,9 +40,6 @@ KEEP=
 
 # Whether to only say what would be removed.
 DRY_RUN=false
-
-readonly ALIAS=uniprot_entries
-readonly LEGACY="${ALIAS}-legacy"
 
 usage() {
     cat <<'USAGE'
@@ -90,15 +89,14 @@ parse_arguments "$@"
 refuse_root
 
 [ -n "$OUTPUT_DIR" ] || die "--output-dir requires a value."
-curl -s -f --max-time 10 "${OPENSEARCH_URL}/_cluster/health" > /dev/null \
-    || die "OpenSearch does not answer at ${OPENSEARCH_URL}, so which version the API queries is not known."
+require_opensearch
 
-active_index=$(curl -s -f "${OPENSEARCH_URL}/_cat/aliases/${ALIAS}?h=index" | tr -d '[:space:]') || true
+active_index=$(alias_target)
 ACTIVE=$(version_of_index "$active_index")
 [ -n "$ACTIVE" ] \
     || die "${ALIAS} is not an alias for a version's index, so which version the API queries is not known. Nothing is removed."
 
-# Every version this host holds anything of, files or index, oldest first. legacy sorts first,
+# Every version this host holds anything of, files or index, newest first. legacy sorts last,
 # because it predates every versioned one.
 versions=$(
     {
@@ -109,24 +107,24 @@ versions=$(
         curl -s -f "${OPENSEARCH_URL}/_cat/indices/${ALIAS}-*?h=index&expand_wildcards=all" | while read -r index; do
             version_of_index "$index"
         done || true
-    } | sed 's/^legacy$/0000-00 legacy/; s/^\([0-9-]*\)$/\1 \1/' | sort -u -k1,1 | awk '{ print $2 }'
+    } | sed 's/^legacy$/0000-00 legacy/; s/^\([0-9-]*\)$/\1 \1/' | sort -u -r -k1,1 | awk '{ print $2 }'
 )
 
-# Walking from the newest down: newer than the active one is kept, the active one is kept, and then
-# the first KEEP older ones.
+# Newer than the active one is kept, being loaded ahead of a switch; the active one is kept; and
+# of those older, the first KEEP.
 keep=' '
 remove=''
-older=0
-for version in $(printf '%s\n' "$versions" | awk '{ line[NR] = $0 } END { for (i = NR; i > 0; i--) print line[i] }'); do
+seen_active=false
+kept_older=0
+for version in $versions; do
     if [ "$version" = "$ACTIVE" ]; then
         keep+="${version} "
-        older=-1
-    elif [ "$older" -eq 0 ]; then
-        # Newer than the active one: loaded ahead of a switch.
+        seen_active=true
+    elif [ "$seen_active" = false ]; then
         keep+="${version} "
-    elif [ "$((-older))" -le "$KEEP" ]; then
+    elif [ "$kept_older" -lt "$KEEP" ]; then
         keep+="${version} "
-        older=$((older - 1))
+        kept_older=$((kept_older + 1))
     else
         remove+="${version} "
     fi
@@ -149,12 +147,11 @@ for version in $remove; do
         directory="${OUTPUT_DIR}/uniprot-${version}"
     fi
 
-    status=$(curl -s -o /dev/null -w '%{http_code}' -X DELETE "${OPENSEARCH_URL}/${index}") || status=000
-    case "$status" in
-        200) log "Deleted the ${index} index." ;;
-        404) ;;
-        *) die "deleting the ${index} index answered ${status}; ${directory:-nothing} was left in place." ;;
-    esac
+    # Before the files, so a delete OpenSearch refuses leaves the version whole to try again.
+    if [ -n "$(index_status "$index")" ]; then
+        opensearch_request "deleting the ${index} index" "200" DELETE "$index" > /dev/null
+        log "Deleted the ${index} index."
+    fi
 
     if [ -n "$directory" ] && [ -e "$directory" ]; then
         rm -rf "${directory:?}"

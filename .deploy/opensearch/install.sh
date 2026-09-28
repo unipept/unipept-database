@@ -18,17 +18,17 @@
 #      over ssh as that user, and sshd needs a shell to run a remote command.
 #   3. Install the tools build.sh, clone.sh and load.sh use, the ones not installed already.
 #   4. Create OUTPUT_DIR owned by DEPLOY_USER, and hand it the databases a run as root left.
-#   4b. Install clone.sh, load.sh, verify.sh, prune.sh and what they call into INSTALL_ROOT, from
+#   5. Install clone.sh, load.sh, verify.sh, prune.sh and what they call into INSTALL_ROOT, from
 #      this checkout, and write etc/deploy.conf there unless it is already there.
-#   5. Add the OpenSearch APT repository, unless it is already there.
-#   6. Install the pinned version, and hold it so an unrelated upgrade cannot move it.
-#   7. Write the configuration this instance needs, keeping a copy of what was there and the data
+#   6. Add the OpenSearch APT repository, unless it is already there.
+#   7. Install the pinned version, and hold it so an unrelated upgrade cannot move it.
+#   8. Write the configuration this instance needs, keeping a copy of what was there and the data
 #      and log paths it named.
-#   8. Write the heap size.
-#   9. Enable and start the service, restarting it only when something above changed, and wait
+#   9. Write the heap size.
+#  10. Enable and start the service, restarting it only when something above changed, and wait
 #      for it to answer.
-#  10. Set every index to hold no replica.
-#  11. Say what is left to do as DEPLOY_USER.
+#  11. Set every index to hold no replica.
+#  12. Say what is left to do as DEPLOY_USER.
 #
 # A second run with the same settings changes nothing and restarts nothing.
 
@@ -245,7 +245,7 @@ install_scripts() {
     install -d -m 0755 "$PREFIX" "${PREFIX}/bin" "${PREFIX}/opensearch/mappings" "${PREFIX}/pipelines/lib"
     install -m 0755 "${repository}/.deploy/"{lib.sh,clone.sh,load.sh,verify.sh,prune.sh} "${PREFIX}/bin/"
     install -m 0755 "${repository}/opensearch/"{load.sh,activate.sh} "${PREFIX}/opensearch/"
-    install -m 0644 "${repository}/opensearch/bulk_load.py" "${PREFIX}/opensearch/"
+    install -m 0644 "${repository}/opensearch/"{lib.sh,bulk_load.py} "${PREFIX}/opensearch/"
     install -m 0644 "${repository}/opensearch/mappings/uniprot_entries.json" "${PREFIX}/opensearch/mappings/"
     install -m 0644 "${repository}/pipelines/lib/common.sh" "${PREFIX}/pipelines/lib/"
 

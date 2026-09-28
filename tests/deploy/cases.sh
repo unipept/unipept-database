@@ -37,7 +37,7 @@ setup_checkout() {
     cp /repo/.deploy/opensearch/*.sh "${CHECKOUT}/.deploy/opensearch/"
     cp /repo/pipelines/lib/common.sh "${CHECKOUT}/pipelines/lib/"
     # What install.sh installs beside the loader, which is a stand-in below.
-    cp /repo/opensearch/bulk_load.py "${CHECKOUT}/opensearch/"
+    cp /repo/opensearch/lib.sh /repo/opensearch/bulk_load.py "${CHECKOUT}/opensearch/"
     cp /repo/opensearch/mappings/uniprot_entries.json "${CHECKOUT}/opensearch/mappings/"
     printf '{"sample":true}\n' > "${CHECKOUT}/assets/sampledata.json"
 
@@ -416,8 +416,8 @@ check_true "the directory is named" grep -q 'uniprot-2030-01' /work/last-output
 load_proteins --output-dir /work/nothing-here
 check "no database at all stops it" "$?" "2"
 
-# The loader drops the index the API queries before it writes the new one, so a database the API
-# cannot serve is refused before it is reached.
+# Refused before the loader is reached, so a database the API cannot serve never gets an index
+# that could be activated.
 rm "${OUT}/uniprot-2025-11/suffix-array/mapping.bin"
 load_proteins --output-dir "$OUT" --uniprot-version 2025-11
 check "a database that fails verification stops it" "$?" "2"
@@ -434,7 +434,7 @@ load_proteins --output-dir "$OUT" --uniprot-version 2025-11
 check "a database without its entries table stops it" "$?" "2"
 check_true "the table is named" grep -q 'has no tables/uniprot_entries.tsv.lz4' /work/last-output
 
-for arguments in "--skip many" "--skip" "--no-such-flag"; do
+for arguments in "--skip many" "--skip" "--no-such-flag" "--uniprot-version 2026-3"; do
     # shellcheck disable=SC2086 # each is several words on purpose
     load_proteins --output-dir "$OUT" $arguments
     check "'${arguments}' is refused" "$?" "2"
@@ -762,7 +762,8 @@ check "it succeeds" "$?" "0"
 check_true "the scripts a host runs are there" \
     test -x "${PREFIX_A}/bin/clone.sh" -a -x "${PREFIX_A}/bin/load.sh" -a -x "${PREFIX_A}/bin/verify.sh" -a -x "${PREFIX_A}/bin/prune.sh"
 check_true "and what they call" \
-    test -x "${PREFIX_A}/opensearch/activate.sh" -a -f "${PREFIX_A}/opensearch/mappings/uniprot_entries.json" -a -f "${PREFIX_A}/pipelines/lib/common.sh"
+    test -x "${PREFIX_A}/opensearch/activate.sh" -a -f "${PREFIX_A}/opensearch/lib.sh" \
+        -a -f "${PREFIX_A}/opensearch/mappings/uniprot_entries.json" -a -f "${PREFIX_A}/pipelines/lib/common.sh"
 check_true "but not build.sh, which needs the whole repository" test ! -e "${PREFIX_A}/bin/build.sh"
 check "the scripts belong to root, which alone changes them" "$(stat -c %U "${PREFIX_A}/bin/load.sh")" "root"
 check "their configuration to the user who edits it" "$(stat -c %U "${PREFIX_A}/etc/deploy.conf")" "$DEPLOY"
