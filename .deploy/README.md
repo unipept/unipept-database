@@ -18,6 +18,11 @@ orchestrate; the pipeline itself lives in `pipelines/` and the loader in `opense
 A new database on a host is therefore two steps, `build.sh` or `clone.sh` and then `load.sh`. A
 load that fails is rerun on its own, without building or copying again.
 
+`install.sh` installs every script but `build.sh` in `/opt/unipept-database/bin`, so a host that
+only clones and serves needs no clone of this repository, and the path is the same on every host.
+`build.sh` runs from a clone, since it builds from the source. Below, `bin/` is that installed
+directory and `.deploy/` a clone's.
+
 ## Preparing a host
 
 ```sh
@@ -32,10 +37,14 @@ run without sudo:
 - the tools `build.sh` and `clone.sh` run, installed through apt when they are missing;
 - `OUTPUT_DIR`, owned by that user. Databases, staging directories and interrupted swaps an
   earlier run as root left there are handed over too; nothing else in the directory changes owner;
+- the scripts a host runs, in `/opt/unipept-database`: `bin/` with `clone.sh`, `load.sh`,
+  `verify.sh` and `prune.sh`, what they call beside it, `etc/deploy.conf`, written once from the
+  example and then the host's to edit, and `INSTALLED`, which names the commit they came from. A
+  host takes a newer version by running `install.sh` again from a clone of it;
 - the OpenSearch instance this host loads its proteins into, configured and started.
 
-It ends with what is left to do as `unipept`: clone this repository, install Rust with rustup for
-a build, and add an ssh key for a clone.
+It ends with what is left to do as `unipept`: fill in `deploy.conf`, add an ssh key for a clone,
+and for a build, clone this repository and install Rust with rustup.
 
 Run it as root, once per host or again after changing a setting: a run that changes nothing
 restarts nothing. It pins a version and holds it, also on a host that already had that version,
@@ -61,9 +70,13 @@ index is off.
 
 ## Configuration
 
-Copy `deploy.conf.example` to `deploy.conf` and edit it. A flag wins over that file, and the file
-wins over the defaults in `lib.sh` for the settings the scripts share, and in each script for the
-settings only it has:
+A host's settings are in `/opt/unipept-database/etc/deploy.conf`, which `install.sh` writes from
+`deploy.conf.example`. A flag wins over that file, and the file wins over the defaults in `lib.sh`
+for the settings the scripts share, and in each script for the settings only it has.
+
+The installed scripts and `build.sh` in a clone read that same file, so a build host has one set of
+settings. A clone with a `.deploy/deploy.conf` of its own reads that one instead, which is how a
+clone is run on a machine without an install:
 
 ```sh
 cp .deploy/deploy.conf.example .deploy/deploy.conf
@@ -75,12 +88,13 @@ disagree with the scripts.
 
 ## Running a build
 
-As `unipept`, from a clone of this repository that `unipept` owns:
+As `unipept`: a build from a clone of this repository that `unipept` owns, a clone from the
+installed scripts:
 
 ```sh
 sudo -iu unipept
-.deploy/build.sh
-.deploy/clone.sh --remote-address selma.ugent.be --local-ssh-key ~/.ssh/id_unipept
+.deploy/build.sh                                                   # in the clone
+/opt/unipept-database/bin/clone.sh --remote-address selma.ugent.be --local-ssh-key ~/.ssh/id_unipept
 ```
 
 Both refuse to run as root, as do `load.sh` and `verify.sh`. A database written by root is one the
