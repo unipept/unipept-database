@@ -1,6 +1,6 @@
 # Deploying a Unipept database
 
-Four scripts build, distribute, load and check the database a Unipept API host serves. They
+These scripts build, distribute, load and check the database a Unipept API host serves. They
 orchestrate; the pipeline itself lives in `pipelines/` and the loader in `opensearch/`.
 
 - `build.sh` builds a database on this host: the tables, the suffix array and the `datastore/`
@@ -17,6 +17,9 @@ orchestrate; the pipeline itself lives in `pipelines/` and the loader in `opense
 
 A new database on a host is therefore two steps, `build.sh` or `clone.sh` and then `load.sh`. A
 load that fails is rerun on its own, without building or copying again.
+
+`distribute.sh` does those two steps on every API server at once, from wherever it is run. See
+[Distributing a database](#distributing-a-database).
 
 ## Preparing a host
 
@@ -136,6 +139,36 @@ half, `INDEX_LOCATION` in its environment file. Until the API's rollout switches
 
 Reloading the version the alias points at is refused, because the loader drops it first and the API
 would search a partial index until it finishes. `--replace-live` does it anyway.
+
+## Distributing a database
+
+Once a build has finished on one host, from any machine that reaches the API servers over ssh as
+`unipept`:
+
+```sh
+cp .deploy/servers.conf.example .deploy/servers.conf     # once: the servers and their checkouts
+.deploy/distribute.sh --uniprot-version 2026-03 --from selma.ugent.be
+```
+
+It checks that the source has the version whole, then that every server answers and has a checkout,
+before it touches any. Then, one server at a time, it copies the version with that server's own
+`clone.sh` where the server does not have it, and loads it with that server's own `load.sh` where
+it is not loaded to the end. Where each server keeps its databases, and how it reaches the source,
+is that server's own `deploy.conf`. It ends with a table of what each server had and what was done.
+
+Nothing it does changes what the API serves: the copy lands beside the database in use, and the
+load in an index of its own, so every server stays in rotation. The API's rollout switches them.
+
+- **It never builds.** A version the source does not have whole stops it, before any server is
+  touched.
+- **It is safe to rerun.** A server that has the version, or its proteins, is not given them again,
+  so a run that stopped part way is finished by running it again.
+- **A server whose copy fails verification is left alone**, since someone may be looking into it.
+  `--replace` copies it again.
+- **A server that fails does not stop the others.** The table says which failed, and the exit
+  status is 1.
+
+The copy and the load take hours, each over an ssh session. Run it in `tmux` or `screen`.
 
 ## Checking a database
 
