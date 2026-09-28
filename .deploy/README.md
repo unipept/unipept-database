@@ -133,6 +133,19 @@ stops and keeps its result in `.build/`; `--replace` lets it take the place of t
 same holds for `clone.sh`, through `${OUTPUT_DIR}/.clone/`. Both therefore need room for two
 databases at the moment they finish.
 
+The suffix array is the step that needs the most memory, several hundred gigabytes for all of
+UniProt, and the kernel kills it when there is not enough. So a build checks first, and stops with
+what holds the memory and how to free it:
+
+- at the start, against what the suffix array took in the last build on this host, which
+  `build-info.txt` records; where no build has recorded it yet, it stops when the API or OpenSearch
+  is running on the host, since on a build host those hold the memory it needs;
+- again once the tables are built and the size of its input is known, before it starts rather than
+  killed part way through it.
+
+On a build host that also serves, that means taking it out of the pool and stopping the API and
+OpenSearch for the build. `--skip-memory-check` builds without checking.
+
 ## Loading the proteins
 
 ```sh
