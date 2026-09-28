@@ -167,7 +167,7 @@ check_host() {
     [ "$SKIP_CHECKS" != true ] || return 0
     local problems='' previous size free available staging
 
-    pgrep -x unipept-api > /dev/null \
+    grep -qsx unipept-api /proc/[0-9]*/comm \
         && problems+=$'\n'"  The Unipept API is running, and holds memory the suffix array needs."
     command -v systemctl > /dev/null && systemctl is-active --quiet opensearch 2> /dev/null \
         && problems+=$'\n'"  OpenSearch is running, and holds memory the suffix array needs."
@@ -209,7 +209,6 @@ refuse_root
 checkdep git
 checkdep cargo "the Rust toolchain"
 checkdep cmake
-checkdep pgrep procps
 
 # The checkout this script belongs to is what builds the database, so it is what build-info.txt
 # records. A deploy from an archive rather than a clone has no commit to name.
