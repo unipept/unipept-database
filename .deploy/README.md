@@ -163,11 +163,12 @@ cp .deploy/servers.conf.example .deploy/servers.conf     # once: the servers
 .deploy/distribute.sh --uniprot-version 2026-03 --from selma.ugent.be
 ```
 
-It checks that the source has the version whole, then that every server answers and has the
-scripts installed, before it touches any. Then, one server at a time, it copies the version with that server's own
-`clone.sh` where the server does not have it, and loads it with that server's own `load.sh` where
-it is not loaded to the end. Where each server keeps its databases, and how it reaches the source,
-is that server's own `deploy.conf`. It ends with a table of what each server had and what was done.
+It checks that the source has the version whole, then that every server answers and has the scripts
+installed, before it touches any. Then, one server at a time, it copies the version with that
+server's own `clone.sh` where the server does not have it, and loads it with that server's own
+`load.sh` where it is not loaded to the end. Where each server keeps its databases, and how it
+reaches the source, is that server's own installed `deploy.conf`. It ends with a table of what each
+server had and what was done.
 
 Nothing it does changes what the API serves: the copy lands beside the database in use, and the
 load in an index of its own, so every server stays in rotation. The API's rollout switches them.

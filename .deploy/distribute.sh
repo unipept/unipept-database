@@ -14,7 +14,7 @@
 # Flow:
 #   1. Read servers.conf, and check the source: it answers, and its copy of the version passes
 #      verify.sh there. Where it does not, stop, and say to build it there.
-#   2. Check every server before any is touched: it answers, and has a checkout with the scripts.
+#   2. Check every server before any is touched: it answers, and has the scripts installed.
 #   3. Per server, in the order of servers.conf:
 #        the files: verify.sh there. Missing, clone.sh copies them from the source. There but
 #        failing, the server is left alone unless --replace says to copy them again.
@@ -50,10 +50,8 @@ read_conf
 # The version to put on every server. Required.
 UNIPROT_VERSION=
 
-# The host that has it, and where unipept-database is cloned there.
+# The host that has it. Its scripts are installed where install.sh puts them, as on every host.
 SOURCE=
-# shellcheck disable=SC2088 # expanded on the source, where that user's home is
-SOURCE_CHECKOUT='~/unipept-database'
 
 # Whether a server whose copy of the version fails verification gets a new one.
 REPLACE=false
@@ -67,7 +65,6 @@ what any of them serves.
 
   --uniprot-version YYYY-MM  the version to distribute, required
   --from HOST              the host that has it, required. It is not built here
-  --from-checkout DIR      where unipept-database is cloned on that host, default ~/unipept-database
   --servers FILE           the servers to put it on, default .deploy/servers.conf
   --ssh-user USER          who to log in as, default the user that owns the databases
   --replace                copy again to a server whose copy fails verification
@@ -83,7 +80,6 @@ parse_arguments() {
         case "$1" in
             --uniprot-version) need_value "$1" "${2-}"; UNIPROT_VERSION="$2"; shift 2 ;;
             --from) need_value "$1" "${2-}"; SOURCE="$2"; shift 2 ;;
-            --from-checkout) need_value "$1" "${2-}"; SOURCE_CHECKOUT="$2"; shift 2 ;;
             --servers) need_value "$1" "${2-}"; SERVERS_FILE="$2"; shift 2 ;;
             --ssh-user) need_value "$1" "${2-}"; SSH_USER="$2"; shift 2 ;;
             --replace) REPLACE=true; shift ;;
@@ -95,40 +91,41 @@ parse_arguments() {
     [ -n "$UNIPROT_VERSION" ] || die "--uniprot-version is required."
     [[ "$UNIPROT_VERSION" =~ ^[0-9]{4}-[0-9]{2}$ ]] || die "--uniprot-version takes YYYY-MM, not '${UNIPROT_VERSION}'."
     [ -n "$SOURCE" ] || die "--from is required: the host that has ${UNIPROT_VERSION}. This script does not build."
-    valid_checkout "$SOURCE_CHECKOUT" || die "--from-checkout takes a path of letters, digits and ~ . _ - /, not '${SOURCE_CHECKOUT}'."
 }
 
-# A checkout path goes into a remote shell unquoted, so that ~ expands there, which it can only do
-# safely when it holds nothing else a shell reads.
-valid_checkout() {
-    [[ "$1" =~ ^[~A-Za-z0-9_./-]+$ ]]
+# Where a host's scripts are installed goes into a remote shell unquoted, which is only safe when it
+# holds nothing a shell reads.
+valid_root() {
+    [[ "$1" =~ ^/[A-Za-z0-9_./-]*$ ]]
 }
 
-# Runs a command in a checkout on a host, as SSH_USER. Each argument is quoted for the remote shell,
+# Runs one of the installed scripts, or a command, in a host's install root, as SSH_USER. Each argument is quoted for the remote shell,
 # since some come from another host. BatchMode, so a host that asks for a password fails at once
 # rather than waiting; keepalives, so an idle hour of loading is not taken for a dead connection.
 on() {
-    local host="$1" checkout="$2" command
+    local host="$1" root="$2" command
     shift 2
     command=$(printf '%q ' "$@")
 
     ssh -o BatchMode=yes -o ServerAliveInterval=60 -o ServerAliveCountMax=5 \
-        "${SSH_USER}@${host}" "cd ${checkout} && ${command}" < /dev/null
+        "${SSH_USER}@${host}" "cd ${root} && ${command}" < /dev/null
 }
 
-# The servers, one "name host checkout" line each, with what servers.conf gets wrong refused.
+# The servers, one "name host root" line each, with what servers.conf gets wrong refused. The root is
+# optional, for a server whose scripts are installed somewhere other than INSTALL_ROOT.
 read_servers() {
-    local name host checkout seen=' '
+    local name host root seen=' '
 
     [ -f "$SERVERS_FILE" ] || die "there is no ${SERVERS_FILE}. Copy servers.conf.example beside it and fill it in."
 
-    while read -r name host checkout _; do
+    while read -r name host root _; do
         case "${name:-}" in '' | \#*) continue ;; esac
-        [ -n "$checkout" ] || die "the line for '${name}' in ${SERVERS_FILE} has too few fields."
-        valid_checkout "$checkout" || die "the checkout of '${name}' takes a path of letters, digits and ~ . _ - /, not '${checkout}'."
+        [ -n "$host" ] || die "the line for '${name}' in ${SERVERS_FILE} has no host."
+        root=${root:-$INSTALL_ROOT}
+        valid_root "$root" || die "the install root of '${name}' takes an absolute path of letters, digits and . _ - /, not '${root}'."
         [[ "$seen" != *" ${name} "* ]] || die "'${name}' is in ${SERVERS_FILE} twice."
         seen+="${name} "
-        printf '%s %s %s\n' "$name" "$host" "$checkout"
+        printf '%s %s %s\n' "$name" "$host" "$root"
     done < "$SERVERS_FILE"
 }
 
@@ -139,7 +136,7 @@ check_source() {
 
     # To stderr, like everything else here that is not the answer, which the caller captures.
     log "Checking ${UNIPROT_VERSION} on ${SOURCE}." 1>&2
-    output=$(on "$SOURCE" "$SOURCE_CHECKOUT" .deploy/verify.sh --uniprot-version "$UNIPROT_VERSION" 2>&1) || {
+    output=$(on "$SOURCE" "$INSTALL_ROOT" bin/verify.sh --uniprot-version "$UNIPROT_VERSION" 2>&1) || {
         printf '%s\n' "$output" | sed 's/^/  /' 1>&2
         die "${SOURCE} does not have a whole ${UNIPROT_VERSION}. Build it there with .deploy/build.sh first; this script does not build."
     }
@@ -151,21 +148,21 @@ check_source() {
 
 # Every server answers and has the scripts, before any of them is touched.
 check_servers() {
-    local name host checkout unready=''
+    local name host root unready=''
 
-    while read -r name host checkout; do
-        on "$host" "$checkout" test -x .deploy/verify.sh -a -x .deploy/clone.sh -a -x .deploy/load.sh 2> /dev/null \
+    while read -r name host root; do
+        on "$host" "$root" test -x bin/verify.sh -a -x bin/clone.sh -a -x bin/load.sh 2> /dev/null \
             || unready+=" ${name}"
     done <<< "$SERVERS"
 
-    [ -z "$unready" ] || die "cannot reach, or find unipept-database at its checkout on:${unready}. Nothing was changed."
+    [ -z "$unready" ] || die "cannot reach, or find the scripts installed on:${unready}. Nothing was changed; .deploy/opensearch/install.sh installs them."
 }
 
 # Puts the version on one server, and prints what it found and did as files|proteins|result.
 distribute_to() {
-    local name="$1" host="$2" checkout="$3" files proteins clone_arguments verified
+    local name="$1" host="$2" root="$3" files proteins clone_arguments verified
 
-    if verified=$(on "$host" "$checkout" .deploy/verify.sh --uniprot-version "$UNIPROT_VERSION" 2>&1); then
+    if verified=$(on "$host" "$root" bin/verify.sh --uniprot-version "$UNIPROT_VERSION" 2>&1); then
         files=had
     else
         clone_arguments=(--remote-address "$SOURCE" --remote-output-dir "$SOURCE_OUTPUT_DIR" --uniprot-version "$UNIPROT_VERSION")
@@ -181,7 +178,7 @@ distribute_to() {
         fi
 
         log "${name}: copying ${UNIPROT_VERSION} from ${SOURCE}." 1>&2
-        if on "$host" "$checkout" .deploy/clone.sh "${clone_arguments[@]}" 1>&2; then
+        if on "$host" "$root" bin/clone.sh "${clone_arguments[@]}" 1>&2; then
             files=copied
         else
             echo "failed|-|the copy failed"
@@ -189,11 +186,11 @@ distribute_to() {
         fi
     fi
 
-    if on "$host" "$checkout" .deploy/load.sh --uniprot-version "$UNIPROT_VERSION" --check > /dev/null 2>&1; then
+    if on "$host" "$root" bin/load.sh --uniprot-version "$UNIPROT_VERSION" --check > /dev/null 2>&1; then
         proteins=had
     else
         log "${name}: loading the proteins of ${UNIPROT_VERSION}." 1>&2
-        if on "$host" "$checkout" .deploy/load.sh --uniprot-version "$UNIPROT_VERSION" 1>&2; then
+        if on "$host" "$root" bin/load.sh --uniprot-version "$UNIPROT_VERSION" 1>&2; then
             proteins=loaded
         else
             echo "${files}|failed|the load failed"
@@ -214,8 +211,8 @@ check_servers
 
 results=''
 failed=0
-while read -r name host checkout; do
-    result=$(distribute_to "$name" "$host" "$checkout")
+while read -r name host root; do
+    result=$(distribute_to "$name" "$host" "$root")
     results+="${name}|${result}"$'\n'
     [[ "$result" == *"|ready" ]] || failed=1
 done <<< "$SERVERS"
