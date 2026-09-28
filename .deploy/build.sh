@@ -191,11 +191,18 @@ check_host() {
     [ -z "$problems" ] && return 0
     die "this host has no room for a build:${problems}
 
-Take it out of the pool, then free what is named above: stop the API
-(sudo systemctl --user -M ${DEPLOY_USER}@ stop unipept-api) and OpenSearch (sudo systemctl stop
-opensearch), and remove what is not needed from ${OUTPUT_DIR}. Build again. Afterwards, start
-OpenSearch (sudo systemctl start opensearch) and the API (sudo systemctl --user -M ${DEPLOY_USER}@
-start unipept-api), and put the host back in the pool. --skip-checks builds anyway."
+Take the host out of the pool and free what is named above: remove what is not needed from
+${OUTPUT_DIR}, and stop the API and OpenSearch:
+
+  sudo systemctl --user -M ${DEPLOY_USER}@ stop unipept-api
+  sudo systemctl stop opensearch
+
+Build again, then start them, OpenSearch first, and put the host back in the pool:
+
+  sudo systemctl start opensearch
+  sudo systemctl --user -M ${DEPLOY_USER}@ start unipept-api
+
+--skip-checks builds anyway."
 }
 
 parse_arguments "$@"
