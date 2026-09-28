@@ -333,6 +333,7 @@ fi
 
 # Check if all required dependencies are installed
 checkdep "lz4"
+checkdep "pv"
 
 checkdep "python3"
 
