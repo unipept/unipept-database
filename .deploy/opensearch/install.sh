@@ -26,7 +26,8 @@
 #      the configuration this script writes, and hold it so an unrelated upgrade cannot move it.
 #   8. Write the configuration this instance needs, keeping a copy of what was there and the data
 #      and log paths it named.
-#   9. Write the heap size.
+#   9. Write the heap size, and a systemd drop-in giving OpenSearch time to start and starting it
+#      again after a failure.
 #  10. Enable and start the service, restarting it only when something above changed, and wait
 #      for it to answer.
 #  11. Set every index to hold no replica.
@@ -117,6 +118,15 @@ readonly APT_LIST="/etc/apt/sources.list.d/opensearch-${OPENSEARCH_MAJOR}.x.list
 readonly APT_KEYRING=/usr/share/keyrings/opensearch-keyring.gpg
 readonly CONFIG_FILE=/etc/opensearch/opensearch.yml
 readonly HEAP_FILE=/etc/opensearch/jvm.options.d/heap.options
+readonly UNIT_DROPIN=/etc/systemd/system/opensearch.service.d/unipept.conf
+
+# How long systemd gives OpenSearch to start, and how soon it starts it again after a failure. The
+# package gives it 75 seconds and never starts it again. That is enough on its own, but not while
+# unattended upgrades restart it and are busy with the same disk: on a host whose index is not in
+# the page cache, such as one running the API's preloaded variant, that start ran out every time,
+# and the host was left without OpenSearch until someone noticed, for months once.
+readonly START_TIMEOUT=600
+readonly RESTART_DELAY=30
 readonly MARKER='# Written by unipept-database .deploy/opensearch/install.sh. Edit that, not this.'
 
 # Whether this run wrote a file the service reads, and so has to restart it.
@@ -392,6 +402,24 @@ resolve_paths() {
     [ -d "$OPENSEARCH_LOG_DIR" ] || die "the log directory ${OPENSEARCH_LOG_DIR} does not exist."
 }
 
+# How systemd runs OpenSearch: time enough to start, and started again after a failure, crash or a
+# start that ran out alike. A drop-in rather than an edit of the package's unit, so an upgrade of
+# the package keeps it. It takes effect on a daemon-reload, so a host that only gains it is not
+# restarted for it.
+write_unit_dropin() {
+    local changed_before="$CHANGED"
+
+    mkdir -p "$(dirname "$UNIT_DROPIN")"
+    write_if_changed "$UNIT_DROPIN" <<UNIT
+${MARKER}
+[Service]
+TimeoutStartSec=${START_TIMEOUT}
+Restart=on-failure
+RestartSec=${RESTART_DELAY}
+UNIT
+    CHANGED="$changed_before"
+}
+
 write_config() {
     resolve_paths
 
@@ -441,9 +469,11 @@ start_opensearch() {
     systemctl daemon-reload
     systemctl enable opensearch > /dev/null
 
-    # A restart takes the API's protein search down while it lasts, so only when it is needed.
+    # A restart takes the API's protein search down while it lasts, so only when it is needed. The
+    # unit is Type=notify, so this waits until OpenSearch says it has started, or START_TIMEOUT.
     if [ "$CHANGED" = true ] || ! systemctl is-active --quiet opensearch; then
-        systemctl restart opensearch
+        systemctl restart opensearch \
+            || die "OpenSearch did not start within $((START_TIMEOUT / 60)) minutes. systemd starts it again every ${RESTART_DELAY} seconds; see: journalctl -u opensearch"
     else
         log "Nothing changed, so OpenSearch is left running."
     fi
@@ -504,6 +534,7 @@ checkdep gpg
 add_repository
 install_opensearch
 write_config
+write_unit_dropin
 start_opensearch
 single_node_settings "$(ready_url)"
 

@@ -512,7 +512,7 @@ STUB
 printf '%s\n' "\$*" >> "${WORK}/systemctl-calls"
 case "\$1" in
     is-active) [ -e "${WORK}/opensearch-active" ] ;;
-    restart) touch "${WORK}/opensearch-active" ;;
+    restart) [ ! -e "${WORK}/start-fails" ] || exit 1; touch "${WORK}/opensearch-active" ;;
 esac
 STUB
     # The instance: records each request, and answers at once unless curl-fails is there.
@@ -570,6 +570,11 @@ check_true "the data path the package set is kept" grep -qx 'path.data: /var/lib
 check_true "and the log path" grep -qx 'path.logs: /var/log/opensearch' "$CONFIG"
 check_true "the heap defaults to 4g" grep -qx -- '-Xmx4g' "$HEAP"
 check_true "the service is restarted" grep -qx 'restart opensearch' /work/systemctl-calls
+check_true "given time to start, and started again after a failure" \
+    grep -qxF 'TimeoutStartSec=600' /etc/systemd/system/opensearch.service.d/unipept.conf
+check_true "by a drop-in the package cannot overwrite" \
+    grep -qxF 'Restart=on-failure' /etc/systemd/system/opensearch.service.d/unipept.conf
+check "systemd reads it before the restart" "$(grep -xn 'daemon-reload\|restart opensearch' /work/systemctl-calls | cut -d: -f2 | tr '\n' ' ')" "daemon-reload restart opensearch "
 check_true "it waits on the address it configured" grep -qF 'http://127.0.0.1:9200/_cluster/health' /work/curl-calls
 check_true "new indices default to no replica" grep -qF '"cluster.default_number_of_replicas":0' /work/curl-calls
 check_true "the plugin's replicated indices are not written" grep -qF '"search.insights.top_queries.exporter.type":"none"' /work/curl-calls
@@ -585,6 +590,28 @@ check "it succeeds" "$?" "0"
 check_true "nothing is installed" not grep -q 'install' /work/apt-calls
 check_true "the configuration is unchanged" cmp -s "$CONFIG" /work/config-before
 check_true "the running service is not restarted" not grep -q 'restart' /work/systemctl-calls
+
+# A host set up before the drop-in existed: it gains it, and is not restarted for it, since systemd
+# applies it on a reload.
+rm /etc/systemd/system/opensearch.service.d/unipept.conf
+forget_calls
+install_opensearch
+check "a host that only lacks the drop-in succeeds" "$?" "0"
+check_true "it is written" test -s /etc/systemd/system/opensearch.service.d/unipept.conf
+check_true "systemd is reloaded" grep -qx 'daemon-reload' /work/systemctl-calls
+check_true "and the running service is not restarted" not grep -q 'restart' /work/systemctl-calls
+
+
+section "install.sh where OpenSearch does not start"
+
+rm -f "${WORK}/opensearch-active"
+touch "${WORK}/start-fails"
+forget_calls
+install_opensearch
+check "a start that fails stops it" "$?" "2"
+check_true "and says how long it was given, and that systemd tries again" \
+    grep -q 'did not start within 10 minutes. systemd starts it again every 30 seconds' /work/last-output
+rm "${WORK}/start-fails"
 
 
 section "install.sh where the service is down"
