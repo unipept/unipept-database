@@ -123,7 +123,9 @@ CHANGED=false
 
 usage() {
     cat <<'USAGE'
-Installs and configures the OpenSearch instance this host loads its proteins into. Run as root.
+Prepares a host to build, clone and hold a Unipept database: the user that owns the databases, the
+tools the scripts run, the scripts themselves in /opt/unipept-database, and the OpenSearch instance
+the proteins are loaded into. Run as root; it is the only step that needs it.
 
   .deploy/opensearch/install.sh [OPTIONS]
 

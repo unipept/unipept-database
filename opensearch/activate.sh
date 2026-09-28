@@ -72,7 +72,7 @@ parse_arguments "$@"
 require_opensearch
 
 status=$(index_status "$INDEX_NAME")
-[[ -n "$status" ]] || opensearch_fail "there is no index ${INDEX_NAME} to activate. Load it with .deploy/load.sh first."
+[[ -n "$status" ]] || opensearch_fail "there is no index ${INDEX_NAME} to activate. Load it with load.sh first."
 
 if [[ "$status" == close ]]; then
     opensearch_request "opening ${INDEX_NAME}" "200" POST "${INDEX_NAME}/_open" > /dev/null
