@@ -54,6 +54,7 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 mkdir -p "$OUT"
+echo run >> /work/pipeline-calls
 for table in uniprot_entries taxons lineages interpro_entries go_terms ec_numbers proteomes; do
     printf '1\tP12345\t1\t9606\tswissprot\tname\tMSEQ\tGO:0005515\n' | lz4 -c > "${OUT}/${table}.tsv.lz4"
 done
@@ -182,6 +183,12 @@ check "build-info.txt records this checkout" \
 check "build-info.txt records the index it cloned" \
     "$(grep '^unipept-index:' "${OUT}/uniprot-2026-03/suffix-array/build-info.txt" | awk '{print $2}')" \
     "$(as_deployer git -C "$INDEX_REPO" rev-parse HEAD)"
+check_true "build-info.txt records what the suffix array took" \
+    grep -qE '^sa-builder peak KiB: [0-9]+$' "${OUT}/uniprot-2026-03/suffix-array/build-info.txt"
+check_true "and from how large an input" \
+    grep -qE '^sa-builder input bytes: [0-9]+$' "${OUT}/uniprot-2026-03/suffix-array/build-info.txt"
+check "the marks it carries on from are not left in the database" \
+    "$(find "${OUT}/uniprot-2026-03" -maxdepth 1 -name '.*-done' -o -maxdepth 1 -name 'sa-builder-peak' | wc -l)" "0"
 check "the database belongs to the user the API reads as" \
     "$(find "${OUT}/uniprot-2026-03" ! -user "$DEPLOY" | wc -l)" "0"
 
@@ -199,6 +206,91 @@ build --output-dir "$OUT" --scratch-dir /work/scratch --replace
 check "--replace succeeds" "$?" "0"
 check_true "the old database is gone" test ! -f "${OUT}/uniprot-2026-03/marker"
 check_true "nothing is left beside it" test ! -e "${OUT}/uniprot-2026-03.replaced"
+
+
+section "a build that stopped at the suffix array carries on from its tables"
+
+RESUME_OUT=/work/data-resume
+as_deployer mkdir -p "$RESUME_OUT"
+rm -f /work/pipeline-calls
+touch /work/sa-builder-fails
+build --output-dir "$RESUME_OUT" --scratch-dir /work/scratch
+check "a suffix array that is killed stops the build" "$?" "2"
+check_true "the tables are kept, marked finished" test -f "${RESUME_OUT}/.build/.tables-done"
+rm /work/sa-builder-fails
+
+build --output-dir "$RESUME_OUT" --scratch-dir /work/scratch
+check "run again, it succeeds" "$?" "0"
+check_true "and says it carries on" grep -q 'Carrying on from the build in' /work/last-output
+check "without running the pipeline again" "$(wc -l < /work/pipeline-calls)" "1"
+check_true "the database is put in place" test -d "${RESUME_OUT}/uniprot-2026-03"
+check "build-info.txt names the checkout that built the tables" \
+    "$(grep '^unipept-database:' "${RESUME_OUT}/uniprot-2026-03/suffix-array/build-info.txt" | awk '{print $2}')" \
+    "$(as_deployer git -C "$CHECKOUT" rev-parse HEAD)"
+
+# Starting over: with --restart, and when the tables were built from other sources.
+touch /work/sa-builder-fails
+build --output-dir "$RESUME_OUT" --scratch-dir /work/scratch --replace
+rm /work/sa-builder-fails /work/pipeline-calls
+build --output-dir "$RESUME_OUT" --scratch-dir /work/scratch --replace --restart
+check "--restart starts over" "$?" "0"
+check "running the pipeline again" "$(wc -l < /work/pipeline-calls)" "1"
+
+touch /work/sa-builder-fails
+build --output-dir "$RESUME_OUT" --scratch-dir /work/scratch --replace
+rm /work/sa-builder-fails /work/pipeline-calls
+build --output-dir "$RESUME_OUT" --scratch-dir /work/scratch --replace --database-sources swissprot
+check "tables from other sources are built again" "$(wc -l < /work/pipeline-calls)" "1"
+
+# A pipeline that stopped part way left no mark, so nothing of it is carried on from.
+printf '\nexit 1\n' >> "${CHECKOUT}/pipelines/suffix-array/build.sh"
+build --output-dir "$RESUME_OUT" --scratch-dir /work/scratch --replace
+as_deployer git -C "$CHECKOUT" checkout -q -- pipelines/suffix-array/build.sh
+rm -f /work/pipeline-calls
+build --output-dir "$RESUME_OUT" --scratch-dir /work/scratch --replace
+check "a build after a pipeline that failed starts over" "$(wc -l < /work/pipeline-calls)" "1"
+
+
+section "a build checks there is memory for the suffix array"
+
+# Without an earlier build to go by, the API or OpenSearch running is what stops it: on a build
+# host they hold the memory sa-builder needs. A process by the API's name stands in for it.
+MEMORY_OUT=/work/data-memory
+as_deployer mkdir -p "$MEMORY_OUT"
+cp /bin/sleep /work/unipept-api
+/work/unipept-api 600 &
+api_pid=$!
+rm -f /work/pipeline-calls
+build --output-dir "$MEMORY_OUT" --scratch-dir /work/scratch
+check "a running API stops a build with nothing to go by" "$?" "2"
+check_true "and it says what holds the memory" grep -q 'the Unipept API is running' /work/last-output
+check_true "and how to free it" grep -q 'systemctl --user stop unipept-api' /work/last-output
+check_true "before the pipeline runs" test ! -e /work/pipeline-calls
+build --output-dir "$MEMORY_OUT" --scratch-dir /work/scratch --skip-memory-check
+check "--skip-memory-check builds anyway" "$?" "0"
+kill "$api_pid" 2> /dev/null; wait "$api_pid" 2> /dev/null
+
+# With an earlier build to go by: its recorded peak is what the next one is held to.
+info="${MEMORY_OUT}/uniprot-2026-03/suffix-array/build-info.txt"
+sed -i 's/^sa-builder peak KiB: .*/sa-builder peak KiB: 999999999999/' "$info"
+rm -f /work/pipeline-calls
+build --output-dir "$MEMORY_OUT" --scratch-dir /work/scratch --replace
+check "a peak the host cannot hold stops it at the start" "$?" "2"
+check_true "naming it" grep -q 'the suffix array took .* GiB in the last build here' /work/last-output
+check_true "before the pipeline runs" test ! -e /work/pipeline-calls
+
+# A peak that fits at the start, from an input far smaller than this one: scaled to this input, it
+# does not. Found once the input is known, with the tables kept.
+sed -i 's/^sa-builder peak KiB: .*/sa-builder peak KiB: 1048576/; s/^sa-builder input bytes: .*/sa-builder input bytes: 1/' "$info"
+rm -f /work/sa-builder-calls
+build --output-dir "$MEMORY_OUT" --scratch-dir /work/scratch --replace
+check "an input that will not fit stops it before sa-builder" "$?" "2"
+check_true "saying it carries on from the tables" grep -q 'it carries on from the tables it built' /work/last-output
+check_true "sa-builder was not started" test ! -s /work/sa-builder-calls
+check_true "and the tables are kept" test -f "${MEMORY_OUT}/.build/.tables-done"
+sed -i 's/^sa-builder input bytes: .*/sa-builder input bytes: 1000000000/' "$info"
+build --output-dir "$MEMORY_OUT" --scratch-dir /work/scratch --replace
+check "with room, it carries on and succeeds" "$?" "0"
 
 
 section "a build whose tables are empty"

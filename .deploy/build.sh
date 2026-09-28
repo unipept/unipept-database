@@ -29,6 +29,12 @@ INDEX_REPO=https://github.com/unipept/unipept-index.git
 # version already exists stops and keeps its own result, rather than removing what the API serves.
 REPLACE=false
 
+# Whether to discard a build that stopped part way and start over, rather than carry on from it.
+RESTART=false
+
+# Whether to build without first checking there is memory for the suffix array.
+SKIP_MEMORY_CHECK=false
+
 read_conf
 
 # sa-builder settings, below read_conf because they are not a host's to change: an index built with
@@ -52,6 +58,8 @@ API reads. .deploy/load.sh then loads its proteins into OpenSearch.
   --scratch-dir DIR        where the repositories are cloned and built
   --database-sources LIST  swissprot, trembl, or both, comma separated
   --replace                replace a database of the version this build turns out to be
+  --restart                discard a build that stopped part way, rather than carry on from it
+  --skip-memory-check      build without first checking there is memory for the suffix array
   --help                   print this message
 
 A flag wins over .deploy/deploy.conf, which wins over the defaults in lib.sh and in this script.
@@ -65,6 +73,8 @@ parse_arguments() {
             --scratch-dir) need_value "$1" "${2-}"; SCRATCH_DIR="$2"; shift 2 ;;
             --database-sources) need_value "$1" "${2-}"; DATABASE_SOURCES="$2"; shift 2 ;;
             --replace) REPLACE=true; shift ;;
+            --restart) RESTART=true; shift ;;
+            --skip-memory-check) SKIP_MEMORY_CHECK=true; shift ;;
             --help) usage; exit 0 ;;
             *) die "unknown option '$1'" ;;
         esac
@@ -97,8 +107,13 @@ build_suffix_array() {
     # The four columns sa-builder reads: accession, taxon, sequence, annotations.
     lz4cat "${build_dir}/tables/uniprot_entries.tsv.lz4" | cut -f2,4,7,8 > "${build_dir}/suffix-array/proteins.tsv"
 
+    local input_bytes peak_file="${build_dir}/sa-builder-peak"
+    input_bytes=$(stat -c %s "${build_dir}/suffix-array/proteins.tsv")
+    check_memory_for "$input_bytes"
+
+    # Under GNU time, for the peak it reached: what the next build on this host checks against.
     log "Started building the suffix array."
-    "${index_dir}/target/release/sa-builder" \
+    /usr/bin/time -f '%M' -o "$peak_file" "${index_dir}/target/release/sa-builder" \
         --database-file "${build_dir}/suffix-array/proteins.tsv" \
         --output-sa "${build_dir}/suffix-array/sa.bin" \
         --output-proteins "${build_dir}/suffix-array/proteins.bin" \
@@ -108,10 +123,14 @@ build_suffix_array() {
         --sparseness-factor "$SA_SPARSENESS" \
         --construction-algorithm "$SA_ALGORITHM" \
         --compress-sa
-    log "Finished building the suffix array."
+    log "Finished building the suffix array, at a peak of $(( $(tail -n 1 "$peak_file") / 1024 / 1024 )) GiB."
 
     # Around 100 GB on full UniProt, and read by nothing after this point.
     rm -f "${build_dir}/suffix-array/proteins.tsv"
+
+    # What a later run carries on from, and what build-info.txt records.
+    printf 'index_commit=%s\ninput_bytes=%s\npeak_kib=%s\n' \
+        "$INDEX_COMMIT" "$input_bytes" "$(tail -n 1 "$peak_file")" > "${build_dir}/${SUFFIX_ARRAY_DONE}"
 }
 
 # The tables the API reads, uncompressed, beside the index.
@@ -120,15 +139,108 @@ fill_datastore() {
 
     mkdir -p "$datastore"
 
+    # Each table through a temporary name, and its compressed copy only removed once it is in place,
+    # so a run that stopped half way through here leaves every table in one of the two forms.
     local table
     for table in "${DATASTORE_TABLES[@]}"; do
-        lz4cat "${build_dir}/tables/${table}.tsv.lz4" > "${datastore}/${table}.tsv"
+        [ -f "${build_dir}/tables/${table}.tsv.lz4" ] || continue
+        lz4cat "${build_dir}/tables/${table}.tsv.lz4" > "${datastore}/${table}.tsv.part"
+        mv "${datastore}/${table}.tsv.part" "${datastore}/${table}.tsv"
         rm "${build_dir}/tables/${table}.tsv.lz4"
     done
 
     cp "${HERE}/../assets/sampledata.json" "${datastore}/sampledata.json"
     cp "${build_dir}/tables/.version" "${build_dir}/suffix-array/.version"
     log "Filled the datastore."
+}
+
+# The marks a finished stage leaves in the staging directory, which a later run carries on from.
+readonly TABLES_DONE=.tables-done
+readonly SUFFIX_ARRAY_DONE=.suffix-array-done
+
+# A value a mark or build-info.txt holds as key=value, or "key: value".
+value_in() {
+    local file="$1" key="$2"
+    [ -f "$file" ] || return 0
+    sed -n "s/^${key}[=:] *//p" "$file" | tail -n 1
+}
+
+# The memory the kernel can hand out without swapping, in KiB.
+memory_available_kib() {
+    awk '/^MemAvailable:/ { print $2 }' /proc/meminfo
+}
+
+# What an earlier build on this host recorded of sa-builder, as "input_bytes peak_kib", from the
+# newest database that has it. Nothing when none has.
+recorded_peak() {
+    local candidate input peak found=''
+
+    # shellcheck disable=SC2231 # DATABASE_GLOB is a glob, and has to expand
+    for candidate in "${OUTPUT_DIR}"/${DATABASE_GLOB}; do
+        input=$(value_in "${candidate}/suffix-array/build-info.txt" 'sa-builder input bytes')
+        peak=$(value_in "${candidate}/suffix-array/build-info.txt" 'sa-builder peak KiB')
+        [ -n "$input" ] && [ -n "$peak" ] && found="${input} ${peak}"
+    done
+    printf '%s\n' "$found"
+}
+
+# What is holding memory on this host, for the operator to act on: the two services that share a
+# build host, and the largest processes.
+memory_holders() {
+    local api_pid
+    api_pid=$(pgrep -x unipept-api | head -n 1) || true
+    [ -z "$api_pid" ] || echo "  the Unipept API is running (pid ${api_pid}, $(( $(ps -o rss= -p "$api_pid") / 1024 / 1024 )) GiB)."
+    ! opensearch_running || echo "  OpenSearch is running."
+    echo "  The largest processes, in GiB:"
+    ps -eo rss=,comm= --sort=-rss | head -n 5 | awk '{ printf "    %6.1f  %s\n", $1 / 1024 / 1024, $2 }'
+}
+
+opensearch_running() {
+    command -v systemctl > /dev/null && systemctl is-active --quiet opensearch 2> /dev/null
+}
+
+# Stops, before the pipeline, a build that the suffix array will not fit. With an earlier build's
+# peak, by that peak. Without one, by whether the API or OpenSearch is running: on a build host they
+# hold the memory sa-builder needs, and a build with them running was killed hours in.
+check_memory_at_start() {
+    [ "$SKIP_MEMORY_CHECK" != true ] || return 0
+    local recorded peak available
+    recorded=$(recorded_peak)
+    available=$(memory_available_kib)
+
+    if [ -n "$recorded" ]; then
+        peak=${recorded#* }
+        # A release is somewhat larger than the one before.
+        [ "$(( peak * 11 / 10 ))" -le "$available" ] && return 0
+        die "the suffix array took $(( peak / 1024 / 1024 )) GiB in the last build here, and $(( available / 1024 / 1024 )) GiB is available.
+$(memory_holders)
+Free it before building: take this host out of the pool, stop the API (systemctl --user stop unipept-api) and OpenSearch (sudo systemctl stop opensearch), and build again. --skip-memory-check builds anyway."
+    fi
+
+    if pgrep -x unipept-api > /dev/null || opensearch_running; then
+        die "no earlier build here recorded what the suffix array needs, and something that holds the memory it needs is running.
+$(memory_holders)
+Take this host out of the pool, stop the API (systemctl --user stop unipept-api) and OpenSearch (sudo systemctl stop opensearch), and build again. --skip-memory-check builds anyway."
+    fi
+}
+
+# Stops before sa-builder starts, now that its input is known, where an earlier build's peak says
+# it will not fit. The tables are kept, so the build carries on from here once memory is freed.
+check_memory_for() {
+    [ "$SKIP_MEMORY_CHECK" != true ] || return 0
+    local input_bytes="$1" recorded needed available
+    recorded=$(recorded_peak)
+    [ -n "$recorded" ] || { log "No earlier build here recorded what the suffix array needs; this one records it."; return 0; }
+
+    # Scaled by how much larger the input is than last time.
+    needed=$(awk -v peak="${recorded#* }" -v was="${recorded% *}" -v now="$input_bytes" \
+        'BEGIN { printf "%d", peak / was * now * 1.05 }')
+    available=$(memory_available_kib)
+    [ "$needed" -le "$available" ] && return 0
+
+    die "the suffix array needs about $(( needed / 1024 / 1024 )) GiB for this input, going by the last build here, and $(( available / 1024 / 1024 )) GiB is available.
+$(memory_holders)
+Free it and run build.sh again: it carries on from the tables it built. --skip-memory-check builds anyway."
 }
 
 parse_arguments "$@"
@@ -142,6 +254,9 @@ refuse_root
 checkdep git
 checkdep cargo "the Rust toolchain"
 checkdep cmake
+checkdep pgrep procps
+# GNU time, for what sa-builder takes. Not `command -v time`, which finds the shell's keyword.
+[ -x /usr/bin/time ] || die "GNU time is not installed at /usr/bin/time; .deploy/opensearch/install.sh installs it, as the time package."
 
 # The checkout this script belongs to is what builds the database, so it is what build-info.txt
 # records. A deploy from an archive rather than a clone has no commit to name.
@@ -151,18 +266,40 @@ DATABASE_COMMIT=$(git -C "${HERE}/.." rev-parse HEAD 2>/dev/null || echo unknown
 # rename stays within one filesystem, and because the version it will be named after is not known
 # until the pipeline has run.
 STAGING_DIR="${OUTPUT_DIR}/.build"
-rm -rf "${STAGING_DIR:?}"
-mkdir -p "${STAGING_DIR}"/{suffix-array,tables,temp}
 
-generate_tables "$STAGING_DIR"
+# A build that stopped part way carries on from the last stage it finished: hours of tables are not
+# thrown away over a suffix array that did not fit. Only tables built from the same sources, and
+# only a stage that left its mark; anything else, or --restart, starts over.
+if [ "$RESTART" != true ] && [ -f "${STAGING_DIR}/${TABLES_DONE}" ] \
+    && [ "$(value_in "${STAGING_DIR}/${TABLES_DONE}" sources)" = "$DATABASE_SOURCES" ]; then
+    # The checkout that built the tables is the one that made the data.
+    DATABASE_COMMIT=$(value_in "${STAGING_DIR}/${TABLES_DONE}" commit)
+    log "Carrying on from the build in ${STAGING_DIR}, whose tables were finished $(value_in "${STAGING_DIR}/${TABLES_DONE}" finished). --restart starts over."
+else
+    rm -rf "${STAGING_DIR:?}"
+    mkdir -p "${STAGING_DIR}"/{suffix-array,tables,temp}
+fi
 
-# Under a directory of its own, because clone_repo removes it first and SCRATCH_DIR is a place the
-# operator also keeps work in.
-INDEX_DIR="${SCRATCH_DIR}/unipept-build/unipept-index"
-INDEX_COMMIT=$(clone_repo "$INDEX_REPO" "$INDEX_DIR")
-log "Cloned unipept-index at ${INDEX_COMMIT}."
+# Only where the suffix array is still to be built: past it, there is nothing left that needs it.
+[ -f "${STAGING_DIR}/${SUFFIX_ARRAY_DONE}" ] || check_memory_at_start
 
-build_suffix_array "$STAGING_DIR" "$INDEX_DIR"
+if [ ! -f "${STAGING_DIR}/${TABLES_DONE}" ]; then
+    generate_tables "$STAGING_DIR"
+    printf 'sources=%s\ncommit=%s\nfinished=%s\n' "$DATABASE_SOURCES" "$DATABASE_COMMIT" "$(date -u +'%F %T UTC')" \
+        > "${STAGING_DIR}/${TABLES_DONE}"
+fi
+
+if [ ! -f "${STAGING_DIR}/${SUFFIX_ARRAY_DONE}" ]; then
+    # Under a directory of its own, because clone_repo removes it first and SCRATCH_DIR is a place
+    # the operator also keeps work in.
+    INDEX_DIR="${SCRATCH_DIR}/unipept-build/unipept-index"
+    INDEX_COMMIT=$(clone_repo "$INDEX_REPO" "$INDEX_DIR")
+    log "Cloned unipept-index at ${INDEX_COMMIT}."
+
+    build_suffix_array "$STAGING_DIR" "$INDEX_DIR"
+fi
+INDEX_COMMIT=$(value_in "${STAGING_DIR}/${SUFFIX_ARRAY_DONE}" index_commit)
+
 fill_datastore "$STAGING_DIR"
 
 # Before anything outside the staging directory changes, so a build that is not whole never
@@ -179,6 +316,12 @@ fi
 
 # Last, so a directory that carries this file is a finished build.
 write_build_info "${STAGING_DIR}/suffix-array" "$UNIPROT_VERSION" "$DATABASE_COMMIT" "$INDEX_COMMIT"
+printf 'sa-builder input bytes: %s\nsa-builder peak KiB: %s\n' \
+    "$(value_in "${STAGING_DIR}/${SUFFIX_ARRAY_DONE}" input_bytes)" \
+    "$(value_in "${STAGING_DIR}/${SUFFIX_ARRAY_DONE}" peak_kib)" >> "${STAGING_DIR}/suffix-array/build-info.txt"
+
+# The marks were for carrying on; build-info.txt now holds what is worth keeping of them.
+rm -f "${STAGING_DIR}/${TABLES_DONE}" "${STAGING_DIR}/${SUFFIX_ARRAY_DONE}" "${STAGING_DIR}/sa-builder-peak"
 
 swap_into_place "$STAGING_DIR" "$BUILD_DIR"
 

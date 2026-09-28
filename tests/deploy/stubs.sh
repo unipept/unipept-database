@@ -9,6 +9,7 @@
 # and the commit it records are the real ones. It holds a crate cargo can really build, for the
 # suite that runs the real cargo, beside a committed sa-builder that is what actually runs: it
 # writes each output it is asked for, keeps the protein file it was handed, and records its call.
+# It fails where sa-builder-fails is in the work directory, as one the kernel ran out of memory for.
 make_index_repo() {
     local repo="$1" work="$2"
 
@@ -19,6 +20,7 @@ make_index_repo() {
 
     cat > "${repo}/target/release/sa-builder" <<SA
 #!/usr/bin/env bash
+[ ! -e "${work}/sa-builder-fails" ] || exit 137
 set -eo pipefail
 prev=''
 for arg in "\$@"; do

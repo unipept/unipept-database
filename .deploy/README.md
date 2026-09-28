@@ -133,6 +133,24 @@ stops and keeps its result in `.build/`; `--replace` lets it take the place of t
 same holds for `clone.sh`, through `${OUTPUT_DIR}/.clone/`. Both therefore need room for two
 databases at the moment they finish.
 
+A build that stops part way carries on from where it stopped when it is run again: from the
+finished tables, or from the finished suffix array, as long as the tables were built from the same
+`DATABASE_SOURCES`. Hours of tables are not rebuilt over a step after them that failed. `--restart`
+throws what is in `.build/` away and starts over.
+
+The suffix array is the step that needs the most memory, several hundred gigabytes for all of
+UniProt, and it is killed by the kernel when there is not enough. So a build checks first, and
+stops with what holds the memory and how to free it:
+
+- at the start, against what the suffix array took in the last build on this host, which
+  `build-info.txt` records; where no build has recorded it yet, it stops when the API or OpenSearch
+  is running on the host, since on a build host those hold the memory it needs;
+- again once the tables are built and the size of its input is known, before it starts, keeping
+  the tables for the build to carry on from once the memory is freed.
+
+On a build host that also serves, that means taking it out of the pool and stopping the API and
+OpenSearch for the build. `--skip-memory-check` builds without checking.
+
 ## Loading the proteins
 
 ```sh
