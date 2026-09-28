@@ -190,14 +190,23 @@ check "no database at all is an error" "$?" "2"
 "$VERIFY" --index-dir "$INDEX" --uniprot-version 2026-03 > /dev/null 2>&1
 check "two ways of naming one database is an error" "$?" "2"
 
+# Not there at all is its own status, 3, so a caller can tell a database to copy from one that is
+# there and broken.
 output="$("$VERIFY" --index-dir "${TEMP_DIR}/no-such-index" 2>&1)"
-check "an index directory that is not there fails" "$?" "1"
-check_true "it is named" said "${TEMP_DIR}/no-such-index is not a directory"
+check "an index directory that is not there answers 3" "$?" "3"
+check_true "it is named" said "${TEMP_DIR}/no-such-index is not there"
 check_true "build-info.txt is not called missing" not_said "build-info.txt is missing"
 
 output="$("$VERIFY" --output-dir "$root" --uniprot-version 2030-01 2>&1)"
-check "a version that is not there fails" "$?" "1"
-check_true "the directory it looked for is named" said "uniprot-2030-01/suffix-array is not a directory"
+check "a version that is not there answers 3" "$?" "3"
+check_true "the directory it looked for is named" said "uniprot-2030-01 is not there"
+
+# The version's directory is there, and the index in it is not: broken, not missing.
+mkdir -p "${root}/uniprot-2030-02/tables"
+output="$("$VERIFY" --output-dir "$root" --uniprot-version 2030-02 2>&1)"
+check "a version whose index is not there fails as broken" "$?" "1"
+check_true "and names the index" said "uniprot-2030-02/suffix-array is not a directory"
+rm -rf "${root}/uniprot-2030-02"
 
 # The API is often pointed at a link that is not named after a version. There is no name to
 # compare .version with, so only the files are checked.

@@ -88,7 +88,9 @@ setup_stubs() {
 setup_sshd() {
     mkdir -p /run/sshd
     ssh-keygen -A > /dev/null 2>&1
-    /usr/sbin/sshd
+    # Only on 4840, the port clone.sh and distribute.sh reach a host on unless told otherwise, so
+    # a script that does not take its port from REMOTE_PORT cannot pass here by landing on 22.
+    /usr/sbin/sshd -p 4840
 
     as_deployer mkdir -p "${DEPLOY_HOME}/.ssh"
     as_deployer ssh-keygen -q -t ed25519 -N '' -f "${DEPLOY_HOME}/.ssh/id_test"
@@ -96,7 +98,8 @@ setup_sshd() {
 
     # clone.sh runs ssh without StrictHostKeyChecking=no, as it does on a real host, so the key has
     # to be known before it runs.
-    ssh-keyscan -H localhost 2>/dev/null | as_deployer tee -a "${DEPLOY_HOME}/.ssh/known_hosts" > /dev/null
+    ssh-keyscan -H -p 4840 localhost 2>/dev/null \
+        | as_deployer tee -a "${DEPLOY_HOME}/.ssh/known_hosts" > /dev/null
 }
 
 # For check_true, which runs a command rather than evaluating an expression.
@@ -113,7 +116,7 @@ build() {
 
 clone() {
     as_deployer "${CHECKOUT}/.deploy/clone.sh" \
-        --remote-address localhost --remote-user "$DEPLOY" --remote-port 22 \
+        --remote-address localhost --remote-user "$DEPLOY" \
         --local-ssh-key "${DEPLOY_HOME}/.ssh/id_test" "$@" > /work/last-output 2>&1
 }
 
@@ -834,7 +837,7 @@ make_server() {
 
     rm -rf "$root" "/work/${name}-loaded" "/work/${name}-loader-calls"
     install_opensearch --user "$DEPLOY" --output-dir "$output_dir" --prefix "$root" || return 1
-    printf 'OUTPUT_DIR=%s\nLOCAL_SSH_KEY=%s/.ssh/id_test\nREMOTE_USER=%s\nREMOTE_PORT=22\n' \
+    printf 'OUTPUT_DIR=%s\nLOCAL_SSH_KEY=%s/.ssh/id_test\nREMOTE_USER=%s\n' \
         "$output_dir" "$DEPLOY_HOME" "$DEPLOY" > "${root}/etc/deploy.conf"
     cat > "${root}/opensearch/load.sh" <<LOADER
 #!/usr/bin/env bash
@@ -913,9 +916,22 @@ check "--replace succeeds" "$?" "0"
 check_true "b is copied to again and loaded" row_says b copied loaded ready
 check_true "and whole" test -s /work/b-data/uniprot-2026-03/suffix-array/mapping.bin
 
-# A server whose deploy.conf cannot reach the source: its copy fails, and the next is still tried.
+# A server whose deploy.conf gives clone.sh no key to reach the source with. Found before anything
+# is touched, rather than after the servers before it have copied and loaded.
 make_server c /work/c-data
 printf 'OUTPUT_DIR=/work/c-data\n' > /work/server-c/etc/deploy.conf
+printf 'a localhost /work/server-a\nc localhost /work/server-c\n' > /work/servers.conf
+rm -f /work/a-loaded
+distribute --uniprot-version 2026-03
+check "a server that could not clone stops it" "$?" "2"
+check_true "it is named" grep -q "cannot clone 2026-03 from localhost: c" /work/last-output
+check_true "before the server before it is touched" test ! -e /work/a-loaded
+touch /work/a-loaded
+
+# A copy that fails after the preflight passed: an output directory c cannot write into, which
+# clone.sh --check has no way to know. The server after it is still handled.
+make_server c /work/c-locked/data
+chown root: /work/c-locked/data
 printf 'c localhost /work/server-c\na localhost /work/server-a\n' > /work/servers.conf
 distribute --uniprot-version 2026-03
 check "a copy that fails fails the run" "$?" "1"

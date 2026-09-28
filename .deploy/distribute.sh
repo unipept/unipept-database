@@ -14,7 +14,8 @@
 # Flow:
 #   1. Read servers.conf, and check the source: it answers, and its copy of the version passes
 #      verify.sh there. Where it does not, stop, and say to build it there.
-#   2. Check every server before any is touched: it answers, and has the scripts installed.
+#   2. Check every server before any is touched: it answers, has the scripts installed, and, where
+#      it needs a copy, can make one: clone.sh --check there, with its own deploy.conf.
 #   3. Per server, in the order of servers.conf:
 #        the files: verify.sh there. Missing, clone.sh copies them from the source. There but
 #        failing, the server is left alone unless --replace says to copy them again.
@@ -39,8 +40,8 @@ trap 'exit 2' USR1
 # The servers to put the database on.
 SERVERS_FILE="${HERE}/servers.conf"
 
-# Who to log in as on the source and the servers: the user who owns the databases there.
-SSH_USER="$DEPLOY_USER"
+# The source and the servers are reached as clone.sh reaches a host, through REMOTE_PORT,
+# REMOTE_USER and LOCAL_SSH_KEY in lib.sh, so the one deploy.conf setting serves both.
 
 read_conf
 
@@ -66,7 +67,9 @@ what any of them serves.
   --uniprot-version YYYY-MM  the version to distribute, required
   --from HOST              the host that has it, required. It is not built here
   --servers FILE           the servers to put it on, default .deploy/servers.conf
-  --ssh-user USER          who to log in as, default the user that owns the databases
+  --remote-user USER       who to log in as on the source and the servers
+  --remote-port PORT       their ssh port
+  --local-ssh-key KEY      the private key to reach them with, default ssh's own
   --replace                copy again to a server whose copy fails verification
   --help                   print this message
 
@@ -81,7 +84,9 @@ parse_arguments() {
             --uniprot-version) need_value "$1" "${2-}"; UNIPROT_VERSION="$2"; shift 2 ;;
             --from) need_value "$1" "${2-}"; SOURCE="$2"; shift 2 ;;
             --servers) need_value "$1" "${2-}"; SERVERS_FILE="$2"; shift 2 ;;
-            --ssh-user) need_value "$1" "${2-}"; SSH_USER="$2"; shift 2 ;;
+            --remote-user) need_value "$1" "${2-}"; REMOTE_USER="$2"; shift 2 ;;
+            --remote-port) need_value "$1" "${2-}"; REMOTE_PORT="$2"; shift 2 ;;
+            --local-ssh-key) need_value "$1" "${2-}"; LOCAL_SSH_KEY="$2"; shift 2 ;;
             --replace) REPLACE=true; shift ;;
             --help) usage; exit 0 ;;
             *) die "unknown option '$1'" ;;
@@ -99,7 +104,7 @@ valid_root() {
     [[ "$1" =~ ^/[A-Za-z0-9_./-]*$ ]]
 }
 
-# Runs one of the installed scripts, or a command, in a host's install root, as SSH_USER. Each
+# Runs one of the installed scripts, or a command, in a host's install root, as REMOTE_USER. Each
 # argument is quoted for the remote shell, since some come from another host. BatchMode, so a host
 # that asks for a password fails at once rather than waiting; keepalives, so an idle hour of loading
 # is not taken for a dead connection.
@@ -108,8 +113,8 @@ on() {
     shift 2
     command=$(printf '%q ' "$@")
 
-    ssh -o BatchMode=yes -o ServerAliveInterval=60 -o ServerAliveCountMax=5 \
-        "${SSH_USER}@${host}" "cd ${root} && ${command}" < /dev/null
+    ssh -o BatchMode=yes -o ServerAliveInterval=60 -o ServerAliveCountMax=5 -p "$REMOTE_PORT" \
+        ${LOCAL_SSH_KEY:+-i "$LOCAL_SSH_KEY"} "${REMOTE_USER}@${host}" "cd ${root} && ${command}" < /dev/null
 }
 
 # The servers, one "name host root" line each, with what servers.conf gets wrong refused. The root is
@@ -147,37 +152,61 @@ check_source() {
     echo "$output"
 }
 
-# Every server answers and has the scripts, before any of them is touched.
+# name -> had, missing or broken: what each server holds of the version, read in the preflight.
+declare -A FILES_OF=()
+
+# Every server, before any is touched: it answers, it has the scripts, what it holds of the version,
+# and for one that needs a copy, that its clone.sh could make one from the source, which is what
+# its own deploy.conf decides and what would otherwise fail only after the servers before it had
+# spent hours. verify.sh answers 3 for a version that is not there at all and 1 for one that is
+# there and is not whole; ssh answers 255 for a host it could not reach.
 check_servers() {
-    local name host root unready=''
+    local name host root status unready='' uncloneable=''
+    local clone_arguments=(--remote-address "$SOURCE" --remote-output-dir "$SOURCE_OUTPUT_DIR" --uniprot-version "$UNIPROT_VERSION")
 
     while read -r name host root; do
-        on "$host" "$root" test -x bin/verify.sh -a -x bin/clone.sh -a -x bin/load.sh 2> /dev/null \
-            || unready+=" ${name}"
+        if ! on "$host" "$root" test -x bin/verify.sh -a -x bin/clone.sh -a -x bin/load.sh 2> /dev/null; then
+            unready+=" ${name}"
+            continue
+        fi
+
+        status=0
+        on "$host" "$root" bin/verify.sh --uniprot-version "$UNIPROT_VERSION" > /dev/null 2>&1 || status=$?
+        case "$status" in
+            0) FILES_OF[$name]=had; continue ;;
+            3) FILES_OF[$name]=missing ;;
+            255) unready+=" ${name}"; continue ;;
+            *) FILES_OF[$name]=broken ;;
+        esac
+
+        # A broken copy is only copied again when --replace says so, so only then does it matter
+        # whether it could be.
+        [ "${FILES_OF[$name]}" = missing ] || [ "$REPLACE" = true ] || continue
+        on "$host" "$root" bin/clone.sh --check "${clone_arguments[@]}" > /dev/null 2>&1 || uncloneable+=" ${name}"
     done <<< "$SERVERS"
 
     [ -z "$unready" ] || die "cannot reach, or find the scripts installed on:${unready}. Nothing was changed; .deploy/opensearch/install.sh installs them."
+    [ -z "$uncloneable" ] \
+        || die "these cannot clone ${UNIPROT_VERSION} from ${SOURCE}:${uncloneable}. Nothing was changed; run clone.sh --check there to see why."
 }
 
 # Puts the version on one server, and prints what it found and did as files|proteins|result.
 distribute_to() {
-    local name="$1" host="$2" root="$3" files proteins clone_arguments verified
+    local name="$1" host="$2" root="$3" files proteins status
+    local clone_arguments=(--remote-address "$SOURCE" --remote-output-dir "$SOURCE_OUTPUT_DIR" --uniprot-version "$UNIPROT_VERSION")
 
-    if verified=$(on "$host" "$root" bin/verify.sh --uniprot-version "$UNIPROT_VERSION" 2>&1); then
-        files=had
-    else
-        clone_arguments=(--remote-address "$SOURCE" --remote-output-dir "$SOURCE_OUTPUT_DIR" --uniprot-version "$UNIPROT_VERSION")
-
-        # verify.sh fails alike for a copy that is not there and one that is broken. Only the first
-        # is copied without being asked: the second may be what someone is looking into.
-        if ! grep -q 'is not a directory' <<< "$verified"; then
+    case "${FILES_OF[$name]}" in
+        had) files=had ;;
+        broken)
+            # Only copied again when asked: it may be what someone is looking into.
             if [ "$REPLACE" != true ]; then
                 echo "broken|-|its copy fails verification; --replace copies it again"
                 return
             fi
-            clone_arguments+=(--replace)
-        fi
+            clone_arguments+=(--replace) ;;
+    esac
 
+    if [ "${FILES_OF[$name]}" != had ]; then
         log "${name}: copying ${UNIPROT_VERSION} from ${SOURCE}." 1>&2
         if on "$host" "$root" bin/clone.sh "${clone_arguments[@]}" 1>&2; then
             files=copied
@@ -187,17 +216,20 @@ distribute_to() {
         fi
     fi
 
-    if on "$host" "$root" bin/load.sh --uniprot-version "$UNIPROT_VERSION" --check > /dev/null 2>&1; then
-        proteins=had
-    else
-        log "${name}: loading the proteins of ${UNIPROT_VERSION}." 1>&2
-        if on "$host" "$root" bin/load.sh --uniprot-version "$UNIPROT_VERSION" 1>&2; then
-            proteins=loaded
-        else
-            echo "${files}|failed|the load failed"
-            return
-        fi
-    fi
+    status=0
+    on "$host" "$root" bin/load.sh --uniprot-version "$UNIPROT_VERSION" --check > /dev/null 2>&1 || status=$?
+    case "$status" in
+        0) proteins=had ;;
+        255) echo "${files}|failed|could not reach it to load"; return ;;
+        *)
+            log "${name}: loading the proteins of ${UNIPROT_VERSION}." 1>&2
+            if on "$host" "$root" bin/load.sh --uniprot-version "$UNIPROT_VERSION" 1>&2; then
+                proteins=loaded
+            else
+                echo "${files}|failed|the load failed"
+                return
+            fi ;;
+    esac
 
     echo "${files}|${proteins}|ready"
 }

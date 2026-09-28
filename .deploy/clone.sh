@@ -17,18 +17,20 @@ trap 'exit 2' USR1
 
 # The settings only this script has. lib.sh holds the ones it shares.
 
-# The host a finished database is copied from.
+# The host a finished database is copied from. REMOTE_PORT, REMOTE_USER and LOCAL_SSH_KEY are in
+# lib.sh, since distribute.sh reaches hosts the same way.
 REMOTE_ADDRESS=
-REMOTE_PORT=4840
-REMOTE_USER=unipept
 REMOTE_OUTPUT_DIR=/mnt/data
-LOCAL_SSH_KEY=
 
 # Which database to copy. Empty means the newest one the remote host has.
 UNIPROT_VERSION=
 
 # Whether a database of that version already here may be replaced.
 REPLACE=false
+
+# Whether to only check that a copy could be made: the settings, the key, the remote host, and its
+# copy of the version. What distribute.sh asks every server before it touches any.
+CHECK=false
 
 read_conf
 
@@ -47,6 +49,7 @@ host's OpenSearch.
   --uniprot-version YYYY-MM  which database to copy, default the newest it has
   --output-dir DIR         where the copy is written
   --replace                replace a database of that version already here
+  --check                  copy nothing: check that the copy could be made, and exit 0 if so
   --help                   print this message
 
 A flag wins over .deploy/deploy.conf, which wins over the defaults in lib.sh and in this script.
@@ -64,6 +67,7 @@ parse_arguments() {
             --output-dir) need_value "$1" "${2-}"; OUTPUT_DIR="$2"; shift 2 ;;
             --uniprot-version) need_value "$1" "${2-}"; UNIPROT_VERSION="$2"; shift 2 ;;
             --replace) REPLACE=true; shift ;;
+            --check) CHECK=true; shift ;;
             --help) usage; exit 0 ;;
             *) die "unknown option '$1'" ;;
         esac
@@ -157,6 +161,14 @@ checkdep ssh
 checkdep scp
 
 [ -n "$UNIPROT_VERSION" ] || UNIPROT_VERSION=$(remote_latest_version)
+
+if [ "$CHECK" = true ]; then
+    [ -r "$LOCAL_SSH_KEY" ] || die "cannot read the ssh key ${LOCAL_SSH_KEY}."
+    check_remote_database "${REMOTE_OUTPUT_DIR}/uniprot-${UNIPROT_VERSION}"
+    log "UniProtKB ${UNIPROT_VERSION} can be cloned from ${REMOTE_ADDRESS}."
+    exit 0
+fi
+
 log "Cloning UniProtKB ${UNIPROT_VERSION} from ${REMOTE_ADDRESS}."
 
 BUILD_DIR="${OUTPUT_DIR}/uniprot-${UNIPROT_VERSION}"
@@ -177,4 +189,4 @@ check_database "$COPIED_DIR" "$REMOTE_DIR"
 swap_into_place "$COPIED_DIR" "$BUILD_DIR"
 rm -rf "${STAGING_DIR:?}"
 
-log "The database is ready in ${BUILD_DIR}. Load its proteins with: .deploy/load.sh --uniprot-version ${UNIPROT_VERSION}"
+log "The database is ready in ${BUILD_DIR}. Load its proteins with: ${HERE}/load.sh --uniprot-version ${UNIPROT_VERSION}"

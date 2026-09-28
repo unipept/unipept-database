@@ -164,12 +164,15 @@ cp .deploy/servers.conf.example .deploy/servers.conf     # once: the servers
 .deploy/distribute.sh --uniprot-version 2026-03 --from selma.ugent.be
 ```
 
-It checks that the source has the version whole, then that every server answers and has the scripts
-installed, before it touches any. Then, one server at a time, it copies the version with that
-server's own `clone.sh` where the server does not have it, and loads it with that server's own
-`load.sh` where it is not loaded to the end. Where each server keeps its databases, and how it
-reaches the source, is that server's own installed `deploy.conf`. It ends with a table of what each
-server had and what was done.
+It checks that the source has the version whole, then that every server answers, has the scripts
+installed, and, where it needs a copy, could make one: `clone.sh --check` there, which checks that
+server's settings, its key, and that it reaches the source and finds the version whole. All of that
+before it touches any server. Then, one server at a time, it copies the version with that server's
+own `clone.sh` where the server does not have it, and loads it with that server's own `load.sh`
+where it is not loaded to the end. Where each server keeps its databases, and how it reaches the
+source, is that server's own installed `deploy.conf`. It reaches the source and the servers the way
+`clone.sh` reaches a host, through `REMOTE_PORT`, `REMOTE_USER` and `LOCAL_SSH_KEY`, so one setting
+serves both. It ends with a table of what each server had and what was done.
 
 Nothing it does changes what the API serves: the copy lands beside the database in use, and the
 load in an index of its own, so every server stays in rotation. The API's rollout switches them.
@@ -219,10 +222,11 @@ the warning is the time to prune.
 As `unipept`, like the others: it checks that the files can be read by the user the API runs
 as, and as root every file can.
 
-It reports every file that is missing, empty or unreadable rather than the first, and exits
-non-zero if any of them is. A missing `kmer_table.bin` is a warning: the API runs without it and
-searches are slower. The list it checks is the one `unipept-api/.deploy/lib.sh` starts a service
-against, so a change on either side has to be made on both.
+It reports every file that is missing, empty or unreadable rather than the first, and exits 1 if any
+of them is, or 3 when the database is not there at all. A missing `kmer_table.bin` is a warning: the
+API runs without it and searches are slower. The list it checks is the one
+`unipept-api/.deploy/lib.sh` starts a service against, so a change on either side has to be made on
+both.
 
 `build-info.txt` records the UniProtKB version, the commit of this checkout, the commit of the
 unipept-index clone the build used, and the sources it read. unipept-index is cloned at the tip of
