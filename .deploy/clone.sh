@@ -17,10 +17,12 @@ trap 'exit 2' USR1
 
 # The settings only this script has. lib.sh holds the ones it shares.
 
-# The host a finished database is copied from. REMOTE_PORT, REMOTE_USER and LOCAL_SSH_KEY are in
-# lib.sh, since distribute.sh reaches hosts the same way.
+# The host a finished database is copied from.
 REMOTE_ADDRESS=
+REMOTE_PORT=4840
+REMOTE_USER=unipept
 REMOTE_OUTPUT_DIR=/mnt/data
+LOCAL_SSH_KEY=
 
 # Which database to copy. Empty means the newest one the remote host has.
 UNIPROT_VERSION=

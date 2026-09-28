@@ -40,8 +40,12 @@ trap 'exit 2' USR1
 # The servers to put the database on.
 SERVERS_FILE="${HERE}/servers.conf"
 
-# The source and the servers are reached as clone.sh reaches a host, through REMOTE_PORT,
-# REMOTE_USER and LOCAL_SSH_KEY in lib.sh, so the one deploy.conf setting serves both.
+# Who to log in as on the source and the servers, as unipept-api's rollout does. The port and the
+# key are ssh's own to decide, from ~/.ssh/config on the machine this runs on, so a host reached on
+# another port says so there once, for this and the API's rollout alike. Empty leaves the user to
+# ~/.ssh/config as well. How each server reaches the source is another connection, which its own
+# deploy.conf decides for its clone.sh.
+SSH_USER="$DEPLOY_USER"
 
 read_conf
 
@@ -67,9 +71,8 @@ what any of them serves.
   --uniprot-version YYYY-MM  the version to distribute, required
   --from HOST              the host that has it, required. It is not built here
   --servers FILE           the servers to put it on, default .deploy/servers.conf
-  --remote-user USER       who to log in as on the source and the servers
-  --remote-port PORT       their ssh port
-  --local-ssh-key KEY      the private key to reach them with, default ssh's own
+  --ssh-user USER          who to log in as on the source and the servers; the port and key are
+                           ~/.ssh/config's
   --replace                copy again to a server whose copy fails verification
   --help                   print this message
 
@@ -84,9 +87,7 @@ parse_arguments() {
             --uniprot-version) need_value "$1" "${2-}"; UNIPROT_VERSION="$2"; shift 2 ;;
             --from) need_value "$1" "${2-}"; SOURCE="$2"; shift 2 ;;
             --servers) need_value "$1" "${2-}"; SERVERS_FILE="$2"; shift 2 ;;
-            --remote-user) need_value "$1" "${2-}"; REMOTE_USER="$2"; shift 2 ;;
-            --remote-port) need_value "$1" "${2-}"; REMOTE_PORT="$2"; shift 2 ;;
-            --local-ssh-key) need_value "$1" "${2-}"; LOCAL_SSH_KEY="$2"; shift 2 ;;
+            --ssh-user) need_value "$1" "${2-}"; SSH_USER="$2"; shift 2 ;;
             --replace) REPLACE=true; shift ;;
             --help) usage; exit 0 ;;
             *) die "unknown option '$1'" ;;
@@ -104,7 +105,7 @@ valid_root() {
     [[ "$1" =~ ^/[A-Za-z0-9_./-]*$ ]]
 }
 
-# Runs one of the installed scripts, or a command, in a host's install root, as REMOTE_USER. Each
+# Runs one of the installed scripts, or a command, in a host's install root, as SSH_USER. Each
 # argument is quoted for the remote shell, since some come from another host. BatchMode, so a host
 # that asks for a password fails at once rather than waiting; keepalives, so an idle hour of loading
 # is not taken for a dead connection.
@@ -113,8 +114,8 @@ on() {
     shift 2
     command=$(printf '%q ' "$@")
 
-    ssh -o BatchMode=yes -o ServerAliveInterval=60 -o ServerAliveCountMax=5 -p "$REMOTE_PORT" \
-        ${LOCAL_SSH_KEY:+-i "$LOCAL_SSH_KEY"} "${REMOTE_USER}@${host}" "cd ${root} && ${command}" < /dev/null
+    ssh -o BatchMode=yes -o ServerAliveInterval=60 -o ServerAliveCountMax=5 \
+        "${SSH_USER:+${SSH_USER}@}${host}" "cd ${root} && ${command}" < /dev/null
 }
 
 # The servers, one "name host root" line each, with what servers.conf gets wrong refused. The root is

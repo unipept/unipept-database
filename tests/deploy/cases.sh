@@ -88,8 +88,8 @@ setup_stubs() {
 setup_sshd() {
     mkdir -p /run/sshd
     ssh-keygen -A > /dev/null 2>&1
-    # Only on 4840, the port clone.sh and distribute.sh reach a host on unless told otherwise, so
-    # a script that does not take its port from REMOTE_PORT cannot pass here by landing on 22.
+    # Only on 4840: clone.sh's default, and what ~/.ssh/config says for distribute.sh below. A
+    # script that assumed port 22 rather than following either cannot pass here by landing on it.
     /usr/sbin/sshd -p 4840
 
     as_deployer mkdir -p "${DEPLOY_HOME}/.ssh"
@@ -826,6 +826,7 @@ check_true "and so checks the databases it names" grep -qF "Checking ${OUT}/unip
 as_deployer tee -a "${DEPLOY_HOME}/.ssh/config" > /dev/null <<'SSHCONFIG'
 Host localhost
     IdentityFile ~/.ssh/id_test
+    Port 4840
 SSHCONFIG
 
 # A server: install.sh's scripts under a prefix of its own, a deploy.conf that reaches the source,
