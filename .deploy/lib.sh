@@ -27,9 +27,23 @@ OUTPUT_DIR=/mnt/data
 # shellcheck disable=SC2034 # read by the scripts that source this file
 DEPLOY_USER=unipept
 
+# Where opensearch/install.sh installs the scripts a host runs, and their configuration. The build
+# host still builds from a checkout, which needs the whole repository.
+readonly INSTALL_ROOT=/opt/unipept-database
+
 # What this host decides. Read after the defaults, so it wins over them, and before the arguments
-# are parsed, so a flag wins over both.
+# are parsed, so a flag wins over both. One file per host: a checkout's own deploy.conf where it has
+# one, which is how a checkout is run on its own; the installed one beside these scripts, as
+# install.sh lays them out; and otherwise this host's installed one, so build.sh in a checkout reads
+# the same settings as the scripts installed beside it.
 DEPLOY_CONF="${DEPLOY_DIR}/deploy.conf"
+if [ ! -f "$DEPLOY_CONF" ]; then
+    if [ -f "${DEPLOY_DIR}/../etc/deploy.conf" ]; then
+        DEPLOY_CONF="${DEPLOY_DIR}/../etc/deploy.conf"
+    else
+        DEPLOY_CONF="${INSTALL_ROOT}/etc/deploy.conf"
+    fi
+fi
 
 read_conf() {
     if [ -f "$DEPLOY_CONF" ]; then
@@ -202,6 +216,28 @@ verify_database() {
     check_index "$index" || status=1
     check_index_version "$index" || status=1
     return "$status"
+}
+
+# Warns when OpenSearch's disk is past its low watermark, 85% unless the cluster says otherwise.
+# Past it OpenSearch places no new shard on that node, and at the flood stage, 95%, it makes every
+# index read-only, so a load running then fails part way. Each loaded version keeps its index until
+# .deploy/prune.sh removes it, so this is how running out is heard about before a load breaks on it.
+# Says nothing when OpenSearch cannot be asked: the load that follows reports that itself.
+warn_opensearch_disk() {
+    local url="$1" watermark used
+
+    watermark=$(curl -s -f --max-time 10 \
+        "${url}/_cluster/settings?include_defaults=true&flat_settings=true&filter_path=*.cluster.routing.allocation.disk.watermark.low" 2>/dev/null \
+        | sed -n 's/.*"cluster.routing.allocation.disk.watermark.low":"\([0-9]*\)%".*/\1/p') || true
+    [ -n "$watermark" ] || watermark=85
+
+    used=$(curl -s -f --max-time 10 "${url}/_cat/allocation?h=disk.percent" 2>/dev/null \
+        | awk '$1 ~ /^[0-9]+$/ && $1 > max { max = $1 } END { if (max != "") print max }') || true
+    [ -n "$used" ] || return 0
+
+    if [ "$used" -ge "$watermark" ]; then
+        echo "WARN OpenSearch's disk is ${used}% full, past its ${watermark}% watermark. A load can fail part way once it reaches 95%; .deploy/prune.sh --keep N removes old versions." 1>&2
+    fi
 }
 
 # The UniProtKB version the pipeline wrote beside the tables, as YYYY-MM.

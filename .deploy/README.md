@@ -21,6 +21,11 @@ load that fails is rerun on its own, without building or copying again.
 `distribute.sh` does those two steps on every API server at once, from wherever it is run. See
 [Distributing a database](#distributing-a-database).
 
+`install.sh` installs every script but `build.sh` in `/opt/unipept-database/bin`, so a host that
+only clones and serves needs no clone of this repository, and the path is the same on every host.
+`build.sh` runs from a clone, since it builds from the source. Below, `bin/` is that installed
+directory and `.deploy/` a clone's.
+
 ## Preparing a host
 
 ```sh
@@ -35,10 +40,14 @@ run without sudo:
 - the tools `build.sh` and `clone.sh` run, installed through apt when they are missing;
 - `OUTPUT_DIR`, owned by that user. Databases, staging directories and interrupted swaps an
   earlier run as root left there are handed over too; nothing else in the directory changes owner;
+- the scripts a host runs, in `/opt/unipept-database`: `bin/` with `clone.sh`, `load.sh`,
+  `verify.sh` and `prune.sh`, what they call beside it, `etc/deploy.conf`, written once from the
+  example and then the host's to edit, and `INSTALLED`, which names the commit they came from. A
+  host takes a newer version by running `install.sh` again from a clone of it;
 - the OpenSearch instance this host loads its proteins into, configured and started.
 
-It ends with what is left to do as `unipept`: clone this repository, install Rust with rustup for
-a build, and add an ssh key for a clone.
+It ends with what is left to do as `unipept`: fill in `deploy.conf`, add an ssh key for a clone,
+and for a build, clone this repository and install Rust with rustup.
 
 Run it as root, once per host or again after changing a setting: a run that changes nothing
 restarts nothing. It pins a version and holds it, also on a host that already had that version,
@@ -64,9 +73,13 @@ index is off.
 
 ## Configuration
 
-Copy `deploy.conf.example` to `deploy.conf` and edit it. A flag wins over that file, and the file
-wins over the defaults in `lib.sh` for the settings the scripts share, and in each script for the
-settings only it has:
+A host's settings are in `/opt/unipept-database/etc/deploy.conf`, which `install.sh` writes from
+`deploy.conf.example`. A flag wins over that file, and the file wins over the defaults in `lib.sh`
+for the settings the scripts share, and in each script for the settings only it has.
+
+The installed scripts and `build.sh` in a clone read that same file, so a build host has one set of
+settings. A clone with a `.deploy/deploy.conf` of its own reads that one instead, which is how a
+clone is run on a machine without an install:
 
 ```sh
 cp .deploy/deploy.conf.example .deploy/deploy.conf
@@ -78,12 +91,13 @@ disagree with the scripts.
 
 ## Running a build
 
-As `unipept`, from a clone of this repository that `unipept` owns:
+As `unipept`: a build from a clone of this repository that `unipept` owns, a clone from the
+installed scripts:
 
 ```sh
 sudo -iu unipept
-.deploy/build.sh
-.deploy/clone.sh --remote-address selma.ugent.be --local-ssh-key ~/.ssh/id_unipept
+.deploy/build.sh                                                   # in the clone
+/opt/unipept-database/bin/clone.sh --remote-address selma.ugent.be --local-ssh-key ~/.ssh/id_unipept
 ```
 
 Both refuse to run as root, as do `load.sh` and `verify.sh`. A database written by root is one the
@@ -126,9 +140,8 @@ The switch is `opensearch/activate.sh`, which `--activate` runs after the load:
   missing. It refuses an index that is not there, holds no documents, or was not loaded to the
   end: the loader marks an index once its last row is in, and `load.sh --check` asks for that mark;
 - it closes the index it switched away from, which frees the memory that holds and keeps its data.
-  Going back is activating that one again, which opens it;
-- it deletes the older ones, but keeps any of a newer version than the one it activates, since
-  those are loaded ahead of a switch still to come;
+  Going back is activating that one again, which opens it. It deletes nothing: see
+  [Removing old versions](#removing-old-versions);
 - on a host loaded before versioned indices, where `uniprot_entries` is still an index, the first
   switch keeps that index as `uniprot_entries-legacy`, by a clone that shares its files, so there
   is something to go back to from the start.
@@ -146,12 +159,12 @@ Once a build has finished on one host, from any machine that reaches the API ser
 `unipept`:
 
 ```sh
-cp .deploy/servers.conf.example .deploy/servers.conf     # once: the servers and their checkouts
+cp .deploy/servers.conf.example .deploy/servers.conf     # once: the servers
 .deploy/distribute.sh --uniprot-version 2026-03 --from selma.ugent.be
 ```
 
-It checks that the source has the version whole, then that every server answers and has a checkout,
-before it touches any. Then, one server at a time, it copies the version with that server's own
+It checks that the source has the version whole, then that every server answers and has the
+scripts installed, before it touches any. Then, one server at a time, it copies the version with that server's own
 `clone.sh` where the server does not have it, and loads it with that server's own `load.sh` where
 it is not loaded to the end. Where each server keeps its databases, and how it reaches the source,
 is that server's own `deploy.conf`. It ends with a table of what each server had and what was done.
@@ -169,6 +182,26 @@ load in an index of its own, so every server stays in rotation. The API's rollou
   status is 1.
 
 The copy and the load take hours, each over an ssh session. Run it in `tmux` or `screen`.
+
+## Removing old versions
+
+```sh
+.deploy/prune.sh --keep 2 --dry-run      # what it would remove
+.deploy/prune.sh --keep 2
+```
+
+Every version stays on a host until this removes it, its directory and its OpenSearch index
+together, so going back to one is a switch rather than a build or a copy. A closed index costs no
+memory; what old versions cost is disk.
+
+It keeps the version the API queries, which is the one the `uniprot_entries` alias points at, every
+newer version, since those are loaded ahead of a switch still to come, and the `--keep` newest ones
+older than it. The old index kept at a host's first switch, `uniprot_entries-legacy`, counts as the
+oldest. Without an alias it removes nothing, since which version the API queries is then not known.
+
+`load.sh` warns when OpenSearch's disk is past its low watermark, 85% unless the cluster sets
+another. At 95% OpenSearch makes every index read-only, and a load running then fails part way, so
+the warning is the time to prune.
 
 ## Checking a database
 

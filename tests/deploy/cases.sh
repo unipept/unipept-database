@@ -31,11 +31,14 @@ export PATH="${STUBS}:${PATH}"
 # real repository is read-only, and the point is to replace the expensive parts.
 setup_checkout() {
     rm -rf "${CHECKOUT:?}"
-    mkdir -p "${CHECKOUT}"/{.deploy/opensearch,pipelines/lib,pipelines/suffix-array,opensearch,assets}
+    mkdir -p "${CHECKOUT}"/{.deploy/opensearch,pipelines/lib,pipelines/suffix-array,opensearch/mappings,assets}
 
-    cp /repo/.deploy/*.sh "${CHECKOUT}/.deploy/"
+    cp /repo/.deploy/*.sh /repo/.deploy/deploy.conf.example "${CHECKOUT}/.deploy/"
     cp /repo/.deploy/opensearch/*.sh "${CHECKOUT}/.deploy/opensearch/"
     cp /repo/pipelines/lib/common.sh "${CHECKOUT}/pipelines/lib/"
+    # What install.sh installs beside the loader, which is a stand-in below.
+    cp /repo/opensearch/bulk_load.py "${CHECKOUT}/opensearch/"
+    cp /repo/opensearch/mappings/uniprot_entries.json "${CHECKOUT}/opensearch/mappings/"
     printf '{"sample":true}\n' > "${CHECKOUT}/assets/sampledata.json"
 
     # The pipeline: writes the seven tables and the .version, and nothing else it writes matters
@@ -370,6 +373,36 @@ check "an older one can be named, and a load continued" "$?" "0"
 check_true "that one is loaded, from the row given" \
     grep -qF -- "--uniprot-entries ${OUT}/uniprot-2025-11/tables/uniprot_entries.tsv.lz4 --index-name uniprot_entries-2025-11 --skip 500" \
     /work/loader-calls
+
+
+section "load.sh warns when OpenSearch's disk is past its watermark"
+
+# A curl that answers the two questions warn_opensearch_disk asks, for a node at DISK_PERCENT with
+# its low watermark at 90%. The loader is a stand-in and makes no request of its own.
+cat > "${STUBS}/curl" <<'CURL'
+#!/usr/bin/env bash
+case "$*" in
+    *_cat/allocation*) echo "$(cat /work/disk-percent)" ;;
+    *watermark*) echo '{"defaults":{"cluster.routing.allocation.disk.watermark.low":"90%"}}' ;;
+    *) exit 7 ;;
+esac
+CURL
+chmod +x "${STUBS}/curl"
+
+echo 93 > /work/disk-percent
+rm -f /work/loader-calls
+load_proteins --output-dir "$OUT"
+check "past it, the load still runs" "$?" "0"
+check_true "and it warns, with the watermark the cluster set" grep -q "93% full, past its 90% watermark" /work/last-output
+check_true "naming what gives the space back" grep -q 'prune.sh --keep' /work/last-output
+
+echo 42 > /work/disk-percent
+load_proteins --output-dir "$OUT"
+check_true "below it there is no warning" not grep -q 'watermark' /work/last-output
+rm "${STUBS}/curl" /work/disk-percent
+
+load_proteins --output-dir "$OUT" --opensearch-url http://stub:9200
+check_true "an OpenSearch that cannot be asked gives no warning" not grep -q 'watermark' /work/last-output
 
 
 section "load.sh refuses a database it cannot load"
@@ -854,6 +887,47 @@ check "and what an interrupted swap left" \
     "$(stat -c %U /work/out4/uniprot-2025-11.replaced/suffix-array/sa.bin)" "$DEPLOY"
 check "what else is there keeps its owner" "$(stat -c %U /work/out4/opensearch-data/node)" "root"
 check_true "it says what is left to do as that user" grep -q "as ${DEPLOY} (sudo -iu ${DEPLOY})" /work/last-output
+
+
+section "install.sh installs the scripts a host runs"
+
+PREFIX_A=/work/opt-a
+packaged_host
+install_opensearch --user "$DEPLOY" --output-dir "$OUT" --prefix "$PREFIX_A"
+check "it succeeds" "$?" "0"
+check_true "the scripts a host runs are there" \
+    test -x "${PREFIX_A}/bin/clone.sh" -a -x "${PREFIX_A}/bin/load.sh" -a -x "${PREFIX_A}/bin/verify.sh" -a -x "${PREFIX_A}/bin/prune.sh"
+check_true "and what they call" \
+    test -x "${PREFIX_A}/opensearch/activate.sh" -a -f "${PREFIX_A}/opensearch/mappings/uniprot_entries.json" -a -f "${PREFIX_A}/pipelines/lib/common.sh"
+check_true "but not build.sh, which needs the whole repository" test ! -e "${PREFIX_A}/bin/build.sh"
+check "the scripts belong to root, which alone changes them" "$(stat -c %U "${PREFIX_A}/bin/load.sh")" "root"
+check "their configuration to the user who edits it" "$(stat -c %U "${PREFIX_A}/etc/deploy.conf")" "$DEPLOY"
+check "with the output directory it was given" "$(sed -n 's/^OUTPUT_DIR=//p' "${PREFIX_A}/etc/deploy.conf")" "$OUT"
+check "INSTALLED names the commit" "$(sed -n 's/^commit: //p' "${PREFIX_A}/INSTALLED")" "$(as_deployer git -C "$CHECKOUT" rev-parse HEAD)"
+
+as_deployer "${PREFIX_A}/bin/verify.sh" > /work/last-output 2>&1
+check "the installed verify.sh runs, reading the installed deploy.conf" "$?" "0"
+check_true "and checks the newest database there" grep -qF "Checking ${OUT}/uniprot-2026-03/suffix-array" /work/last-output
+rm -f /work/loader-calls
+as_deployer "${PREFIX_A}/bin/load.sh" --check > /work/last-output 2>&1
+check "the installed load.sh reaches the installed loader" "$?" "0"
+check_true "which was asked about the newest version" grep -q -- '--index-name uniprot_entries-2026-03 --check-complete' /work/loader-calls
+
+printf '# edited on this host\n' >> "${PREFIX_A}/etc/deploy.conf"
+install_opensearch --user "$DEPLOY" --output-dir "$OUT" --prefix "$PREFIX_A"
+check "installing again succeeds" "$?" "0"
+check_true "and keeps the deploy.conf the host edited" grep -q 'edited on this host' "${PREFIX_A}/etc/deploy.conf"
+
+# A checkout without a deploy.conf of its own, as the build host has beside its installed scripts.
+BARE=/work/bare-checkout
+rm -rf "$BARE"
+as_deployer cp -a "$CHECKOUT" "$BARE"
+rm -f "${BARE}/.deploy/deploy.conf"
+install -d -o "$DEPLOY" /opt/unipept-database/etc
+printf 'OUTPUT_DIR=%s\n' "$OUT" > /opt/unipept-database/etc/deploy.conf
+as_deployer "${BARE}/.deploy/verify.sh" > /work/last-output 2>&1
+check "a checkout without its own deploy.conf reads the host's installed one" "$?" "0"
+check_true "and so checks the databases it names" grep -qF "Checking ${OUT}/uniprot-2026-03" /work/last-output
 
 
 summary
