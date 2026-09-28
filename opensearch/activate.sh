@@ -63,7 +63,8 @@ parse_arguments() {
 
 wait_until_ready() {
     local health
-    health=$(opensearch_request "waiting for $1" "200" GET "_cluster/health/$1?wait_for_status=yellow&timeout=${READY_TIMEOUT}s")
+    # A wait that runs out answers 408, with timed_out in its body.
+    health=$(opensearch_request "waiting for $1" "200 408" GET "_cluster/health/$1?wait_for_status=yellow&timeout=${READY_TIMEOUT}s")
     [[ "$health" != *'"timed_out":true'* ]] || opensearch_fail "$1 was not ready within ${READY_TIMEOUT} seconds."
 }
 
@@ -88,7 +89,7 @@ is_complete "$INDEX_NAME" \
     || opensearch_fail "${INDEX_NAME} was not loaded to the end. Continue its load with --skip, or load it again."
 
 current=$(alias_target)
-add="{\"add\":{\"index\":\"${INDEX_NAME}\",\"alias\":\"${ALIAS}\"}}"
+add=$(alias_add_action "$INDEX_NAME")
 
 if [[ "$current" == "$INDEX_NAME" ]]; then
     # Nothing moves, so nothing is closed: the index kept to go back to stays as it is.
@@ -96,16 +97,22 @@ if [[ "$current" == "$INDEX_NAME" ]]; then
     exit 0
 elif [[ -n "$(index_status "$ALIAS")" ]]; then
     # A host loaded before versioned indices. The clone needs the source to take no writes, which
-    # the API, only reading, does not notice, and carries the mark over with the mapping.
-    [[ -z "$(index_status "$LEGACY")" ]] \
-        || opensearch_fail "${ALIAS} is an index and ${LEGACY} already exists, so the old index has nowhere to be kept. Delete ${LEGACY} if it is not needed."
-    mark_complete "$ALIAS"
-    opensearch_request "blocking writes to ${ALIAS}" "200" PUT "${ALIAS}/_settings" \
-        -H 'Content-Type: application/json' -d '{"index.blocks.write":true}' > /dev/null
-    # No replica, whatever the old index asked for: a single node cannot place one.
-    opensearch_request "keeping ${ALIAS} as ${LEGACY}" "200" POST "${ALIAS}/_clone/${LEGACY}" \
-        -H 'Content-Type: application/json' -d '{"settings":{"index.number_of_replicas":0}}' > /dev/null
+    # the API, only reading, does not notice, and carries the mark over with the mapping. A clone
+    # that is already there is one an earlier run made and did not get to switch the alias after,
+    # so it is taken as it is: only a copy of this index carries the mark under that name.
+    if [[ -z "$(index_status "$LEGACY")" ]]; then
+        mark_complete "$ALIAS"
+        opensearch_request "blocking writes to ${ALIAS}" "200" PUT "${ALIAS}/_settings" \
+            -H 'Content-Type: application/json' -d '{"index.blocks.write":true}' > /dev/null
+        # No replica, whatever the old index asked for: a single node cannot place one.
+        opensearch_request "keeping ${ALIAS} as ${LEGACY}" "200" POST "${ALIAS}/_clone/${LEGACY}" \
+            -H 'Content-Type: application/json' -d '{"settings":{"index.number_of_replicas":0}}' > /dev/null
+    else
+        log "${LEGACY} is there from a switch that did not finish; carrying on from it."
+    fi
     wait_until_ready "$LEGACY"
+    is_complete "$LEGACY" \
+        || opensearch_fail "${LEGACY} is there and is not a copy of ${ALIAS}, so the old index has nowhere to be kept. Delete ${LEGACY} if it is not needed."
     log "${ALIAS} was an index. It is kept as ${LEGACY}."
     previous="$LEGACY"
     actions="{\"remove_index\":{\"index\":\"${ALIAS}\"}},${add}"

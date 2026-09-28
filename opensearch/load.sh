@@ -119,7 +119,7 @@ init_indices() {
     then
         opensearch_request "pointing ${ALIAS} at ${INDEX_NAME} again" "200" POST _aliases \
             -H 'Content-Type: application/json' \
-            -d "{\"actions\":[{\"add\":{\"index\":\"${INDEX_NAME}\",\"alias\":\"${ALIAS}\"}}]}" > /dev/null
+            -d "{\"actions\":[$(alias_add_action "$INDEX_NAME")]}" > /dev/null
     fi
 
     log "Finished creating the ${INDEX_NAME} index."
@@ -295,6 +295,11 @@ if [[ "$SKIP_ROWS" -eq 0 ]]
 then
     init_indices
 else
+    # Written into an index that is not there, the rows would create one with no mapping, holding
+    # only the tail, and the mark would then call it whole.
+    require_opensearch
+    [[ -n "$(index_status "$INDEX_NAME")" ]] \
+        || opensearch_fail "there is no ${INDEX_NAME} to continue. Load it from the start, without --skip."
     log "Continuing at row ${SKIP_ROWS}. The ${INDEX_NAME} index is kept as it is."
 fi
 

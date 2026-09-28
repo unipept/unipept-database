@@ -21,6 +21,10 @@ source "${DEPLOY_DIR}/../pipelines/lib/common.sh"
 # shellcheck disable=SC2034 # read by the scripts that source this file
 OUTPUT_DIR=/mnt/data
 
+# The OpenSearch instance load.sh fills and prune.sh removes from.
+# shellcheck disable=SC2034 # read by the scripts that source this file
+OPENSEARCH_URL=http://localhost:9200
+
 # Who builds, clones and owns the databases. The API on this host runs as the same user, which is
 # what makes every file a build writes one the API can read. opensearch/install.sh creates it and
 # gives it OUTPUT_DIR; after that, nothing here needs root.

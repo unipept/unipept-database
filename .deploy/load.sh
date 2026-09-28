@@ -16,9 +16,6 @@ source "${HERE}/lib.sh"
 trap errorAndExit ERR
 trap 'exit 2' USR1
 
-# The OpenSearch instance the proteins are loaded into.
-OPENSEARCH_URL=http://localhost:9200
-
 read_conf
 
 # The settings only this script has. lib.sh holds the ones it shares. After read_conf rather than
