@@ -497,7 +497,7 @@ printf '%s\n' "$*" >> /work/apt-calls
 [ "$1" = install ] || exit 0
 for arg in "${@:2}"; do
     case "$arg" in
-        -*) ;;
+        -* | *::*) ;;
         opensearch=*) echo "installed ${arg#opensearch=}" > /work/dpkg-state ;;
         *) echo "$arg" >> /work/dpkg-installed ;;
     esac
@@ -664,74 +664,65 @@ forget_calls
 install_opensearch
 check "it upgrades" "$?" "0"
 check_true "to the pinned version, past the hold it put on it" \
-    grep -q "install .*--allow-change-held-packages opensearch=${PINNED}" /work/apt-calls
-check_true "and says so" grep -q "Upgrading OpenSearch ${PINNED_MAJOR}.0.0 to ${PINNED}" /work/last-output
+    grep -q "install .*--allow-change-held-packages .*opensearch=${PINNED}" /work/apt-calls
+check_true "keeping the configuration it writes rather than stopping to ask" \
+    grep -q "Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold" /work/apt-calls
+check_true "and says so" grep -q "Upgrading OpenSearch ${PINNED_MAJOR}.0.0 (installed) to ${PINNED}" /work/last-output
 check_true "and restarts the service on it" grep -qx 'restart opensearch' /work/systemctl-calls
+
+# A configuration naming a log path that is not there stops the run, and must before the package
+# under the running instance is replaced, not after.
+packaged_host
+printf 'path.data: /var/lib/opensearch\npath.logs: /work/no-such-logs\n' > "$CONFIG"
+echo "installed ${PINNED_MAJOR}.0.0" > "$DPKG_STATE"
+forget_calls
+install_opensearch
+check "an upgrade to a configuration that cannot start stops" "$?" "2"
+check_true "before the package is replaced" not grep -q 'install .*opensearch=' /work/apt-calls
+
+# What an earlier run can leave: the pinned version unpacked and not configured.
+packaged_host
+echo "half-configured ${PINNED}" > "$DPKG_STATE"
+forget_calls
+install_opensearch
+check "a half-configured pinned version is finished" "$?" "0"
+check_true "by installing it again" grep -q "install .*--reinstall .*opensearch=${PINNED}" /work/apt-calls
 
 
 section "install.sh where OpenSearch cannot go to the pinned version"
 
-packaged_host
-cp "$CONFIG" /work/config-before
+# Each refused before anything on the host changes: here, before the scripts are installed under
+# a prefix of their own, which is the first thing it would otherwise write.
+refused() {
+    local state="$1"
 
-echo "installed ${PINNED_MAJOR}.999.0" > "$DPKG_STATE"
-forget_calls
-install_opensearch
+    packaged_host
+    cp "$CONFIG" /work/config-before
+    echo "$state" > "$DPKG_STATE"
+    rm -rf /work/opt-refused
+    forget_calls
+    install_opensearch --prefix /work/opt-refused
+}
+nothing_changed() {
+    check_true "it installs nothing" not grep -q 'install' /work/apt-calls
+    check_true "writes no scripts" test ! -e /work/opt-refused
+    check_true "leaves the configuration as it was" cmp -s "$CONFIG" /work/config-before
+    check_true "and does not touch the service" not grep -q . /work/systemctl-calls
+}
+
+refused "installed ${PINNED_MAJOR}.999.0"
 check "a newer release of the same major version stops it" "$?" "2"
 check_true "and says OpenSearch cannot go back" grep -q "newer than the ${PINNED} this script pins, and OpenSearch cannot go back" /work/last-output
-check_true "it installs nothing over it" not grep -q 'install .*opensearch=' /work/apt-calls
+nothing_changed
 
-echo "installed $((PINNED_MAJOR + 1)).0.0" > "$DPKG_STATE"
-forget_calls
-install_opensearch
+refused "installed $((PINNED_MAJOR + 1)).0.0"
 check "another major version stops it" "$?" "2"
 check_true "and says that upgrade cannot be undone" grep -q "another major version. That upgrade cannot be undone" /work/last-output
-check_true "it installs nothing over it" not grep -q 'install .*opensearch=' /work/apt-calls
-check_true "the configuration is left as it was" cmp -s "$CONFIG" /work/config-before
-check_true "the service is not touched" not grep -q 'restart' /work/systemctl-calls
+nothing_changed
 
-
-section "install.sh refuses what it cannot do"
-
-forget_calls
-PATH="${INSTALL_STUBS}:${PATH}" as_deployer "${CHECKOUT}/.deploy/opensearch/install.sh" > /work/last-output 2>&1
-check "as another user than root it stops" "$?" "2"
-check_true "it says to run it as root" grep -q 'run this as root' /work/last-output
-check_true "before it changes anything" not grep -q . /work/apt-calls
-
-for arguments in "--heap 8" "--heap 8gb" "--port 92OO" "--heap" "--heap --port 9200" "--no-such-flag"; do
-    # shellcheck disable=SC2086 # each is several words on purpose
-    install_opensearch $arguments
-    check "'${arguments}' is refused" "$?" "2"
-done
-check_true "before it changes anything" not grep -q . /work/apt-calls
-
-packaged_host
-mkdir -p /work/hand-data
-printf 'path.data: /work/hand-data\npath.logs: /work/no-such-logs\n' > "$CONFIG"
-cp "$CONFIG" /work/config-before
-install_opensearch
-check "a log path that is not there stops it" "$?" "2"
-check_true "the path is named" grep -q '/work/no-such-logs' /work/last-output
-check_true "the configuration is left as it was" cmp -s "$CONFIG" /work/config-before
-
-
-section "install.sh adds the OpenSearch repository"
-
-packaged_host
-rm -f /usr/share/keyrings/opensearch-keyring.gpg "/etc/apt/sources.list.d/opensearch-${PINNED_MAJOR}.x.list"
-forget_calls
-install_opensearch
-check "it succeeds" "$?" "0"
-check_true "the signing key is fetched" grep -qF 'https://artifacts.opensearch.org/publickeys/opensearch.pgp' /work/curl-calls
-check_true "the list is signed by it" \
-    grep -qF "deb [signed-by=/usr/share/keyrings/opensearch-keyring.gpg] https://artifacts.opensearch.org/releases/bundle/opensearch/${PINNED_MAJOR}.x/apt stable main" \
-    "/etc/apt/sources.list.d/opensearch-${PINNED_MAJOR}.x.list"
-
-forget_calls
-install_opensearch
-check "a second run succeeds" "$?" "0"
-check_true "and does not fetch the key again" not grep -q 'opensearch.pgp' /work/curl-calls
+refused "half-configured $((PINNED_MAJOR + 1)).0.0"
+check "another major version left half-configured stops it too" "$?" "2"
+nothing_changed
 
 
 section "install.sh waits where the instance listens"

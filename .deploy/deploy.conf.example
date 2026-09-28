@@ -1,6 +1,7 @@
-# .deploy/opensearch/install.sh writes this, as /opt/unipept-database/etc/deploy.conf, the file the
-# scripts on the host read; edit it there, as root. A clone of this repository run on its own reads
-# a .deploy/deploy.conf beside the scripts instead. Neither is in this repository.
+# .deploy/opensearch/install.sh writes this as etc/deploy.conf of the install it makes,
+# /opt/unipept-database/etc/deploy.conf unless --prefix says otherwise, and the scripts on the host
+# read it there; edit it as root. A clone of this repository reads a .deploy/deploy.conf of its own
+# where it has one, and otherwise this host's installed one. Neither is in this repository.
 #
 # Only what a host has to decide is listed. Everything the scripts already default to sensibly is
 # left out, so this file cannot go stale. The defaults are in lib.sh and in each script.

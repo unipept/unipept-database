@@ -51,9 +51,15 @@ It ends with what is left to do: fill in `deploy.conf` as root, then as `unipept
 a clone, and for a build, clone this repository and install Rust with rustup.
 
 Run it as root, once per host or again after changing a setting: a run that changes nothing
-restarts nothing. It pins a version and holds it, also on a host that already had that version,
-so an unrelated `apt-get upgrade` cannot move a host onto a release nothing has been tested
-against.
+restarts nothing. It pins a version of OpenSearch, `OPENSEARCH_VERSION` in
+`.deploy/opensearch/version.sh`, and holds it, so an unrelated `apt-get upgrade` cannot move a host
+onto a release nothing has been tested against.
+
+Raising that pin is how a host is kept patched: run it again, and it upgrades an older release of
+the same major version to the pin, keeping the configuration it writes, and restarts OpenSearch. The
+API's protein search pauses while that happens, so take the host out of the pool first. It refuses,
+before it changes anything on the host, a newer release than the pin, since OpenSearch cannot go
+back, and another major version, since that upgrade cannot be undone and is a step of its own.
 
 It keeps the data and log paths the existing configuration names, so a host set up by hand with
 its data on another volume keeps it there. `--data-dir` and `--log-dir` point the configuration
