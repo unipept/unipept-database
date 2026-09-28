@@ -78,6 +78,23 @@ OPENSEARCH_READY_TIMEOUT=180
 # /opt/unipept-api; a flag for a test that installs more than one host into one machine.
 PREFIX="$INSTALL_ROOT"
 
+# The configuration of the install this run makes or updates, so --prefix reads its own and not
+# /opt/unipept-database's; a checkout's own deploy.conf still comes first, as lib.sh has it. Found
+# before the arguments are parsed, since read_conf comes first for a flag to win over it.
+for ((argument = 1; argument < $#; argument++)); do
+    [ "${!argument}" != --prefix ] || { next=$((argument + 1)); PREFIX="${!next}"; }
+done
+[ -f "${DEPLOY_DIR}/deploy.conf" ] || DEPLOY_CONF="${PREFIX}/etc/deploy.conf"
+
+# This runs as root, and sources that file. An installed one is root's, as install_scripts leaves
+# it, and one another user could write would hand that user root.
+if [ "$DEPLOY_CONF" != "${DEPLOY_DIR}/deploy.conf" ] && [ -e "$DEPLOY_CONF" ]; then
+    case "$(stat -c '%U %A' "$DEPLOY_CONF")" in
+        "root -rw-r--r--" | "root -rw-------" | "root -r--r--r--" | "root -r--------") ;;
+        *) die "${DEPLOY_CONF} can be written by someone other than root, and this runs as root and reads it. Make it root's, mode 0644, after checking what is in it." ;;
+    esac
+fi
+
 read_conf
 
 # What build.sh, clone.sh and load.sh run, by package: git, cmake and a C toolchain for the index
@@ -235,7 +252,7 @@ prepare_output_dir() {
 # serves needs no clone of this repository, and the path is the same on every host, so
 # distribute.sh and the API's deploy can rely on it. The layout keeps the paths the scripts use
 # between each other. Owned by root, since only this script changes them; etc/ belongs to
-# DEPLOY_USER, who edits deploy.conf.
+# root too, since install.sh reads deploy.conf as root.
 #
 # From the checkout this runs in, so a host is updated by running this again from a checkout of the
 # commit to install, which INSTALLED then names.
@@ -249,11 +266,11 @@ install_scripts() {
     install -m 0644 "${repository}/opensearch/mappings/uniprot_entries.json" "${PREFIX}/opensearch/mappings/"
     install -m 0644 "${repository}/pipelines/lib/common.sh" "${PREFIX}/pipelines/lib/"
 
-    install -d -m 0755 -o "$DEPLOY_USER" -g "$DEPLOY_USER" "${PREFIX}/etc"
+    install -d -m 0755 -o root -g root "${PREFIX}/etc"
     if [ ! -f "${PREFIX}/etc/deploy.conf" ]; then
         sed "s#^OUTPUT_DIR=.*#OUTPUT_DIR=${OUTPUT_DIR}#" "${repository}/.deploy/deploy.conf.example" > "${PREFIX}/etc/deploy.conf"
-        chown "${DEPLOY_USER}:" "${PREFIX}/etc/deploy.conf"
-        log "Wrote ${PREFIX}/etc/deploy.conf. Edit it for what this host decides."
+        chmod 0644 "${PREFIX}/etc/deploy.conf"
+        log "Wrote ${PREFIX}/etc/deploy.conf. Edit it, as root, for what this host decides."
     fi
 
     # As root, of a checkout another user owns, which git refuses to read unless told to trust it.
@@ -439,8 +456,9 @@ single_node_settings "$(ready_url)"
 
 cat >&2 <<EOF
 
-Still to do on this host, as ${DEPLOY_USER} (sudo -iu ${DEPLOY_USER}), none of it as root:
-  1. Say what this host decides in ${PREFIX}/etc/deploy.conf.
+Still to do on this host:
+  1. As root, say what this host decides in ${PREFIX}/etc/deploy.conf.
+As ${DEPLOY_USER} (sudo -iu ${DEPLOY_USER}), none of it as root:
   2. To clone from another host: an ssh key in ~/.ssh that ${DEPLOY_USER} on that host accepts.
      ${PREFIX}/bin/clone.sh then copies a database, and ${PREFIX}/bin/load.sh loads its proteins.
   3. To build: clone unipept-database, which build.sh needs whole, and install Rust with rustup

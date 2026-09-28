@@ -749,7 +749,7 @@ check "and the staging directories" "$(stat -c %U /work/out4/.build):$(stat -c %
 check "and what an interrupted swap left" \
     "$(stat -c %U /work/out4/uniprot-2025-11.replaced/suffix-array/sa.bin)" "$DEPLOY"
 check "what else is there keeps its owner" "$(stat -c %U /work/out4/opensearch-data/node)" "root"
-check_true "it says what is left to do as that user" grep -q "as ${DEPLOY} (sudo -iu ${DEPLOY})" /work/last-output
+check_true "it says what is left to do as that user" grep -q "As ${DEPLOY} (sudo -iu ${DEPLOY})" /work/last-output
 
 
 section "install.sh installs the scripts a host runs"
@@ -765,7 +765,8 @@ check_true "and what they call" \
         -a -f "${PREFIX_A}/opensearch/mappings/uniprot_entries.json" -a -f "${PREFIX_A}/pipelines/lib/common.sh"
 check_true "but not build.sh, which needs the whole repository" test ! -e "${PREFIX_A}/bin/build.sh"
 check "the scripts belong to root, which alone changes them" "$(stat -c %U "${PREFIX_A}/bin/load.sh")" "root"
-check "their configuration to the user who edits it" "$(stat -c %U "${PREFIX_A}/etc/deploy.conf")" "$DEPLOY"
+# install.sh reads it as root, so a file the deploy user could write would hand that user root.
+check "and so does their configuration, which install.sh reads as root" "$(stat -c '%U %a' "${PREFIX_A}/etc/deploy.conf")" "root 644"
 check "with the output directory it was given" "$(sed -n 's/^OUTPUT_DIR=//p' "${PREFIX_A}/etc/deploy.conf")" "$OUT"
 check "INSTALLED names the commit" "$(sed -n 's/^commit: //p' "${PREFIX_A}/INSTALLED")" "$(as_deployer git -C "$CHECKOUT" rev-parse HEAD)"
 
@@ -782,12 +783,33 @@ install_opensearch --user "$DEPLOY" --output-dir "$OUT" --prefix "$PREFIX_A"
 check "installing again succeeds" "$?" "0"
 check_true "and keeps the deploy.conf the host edited" grep -q 'edited on this host' "${PREFIX_A}/etc/deploy.conf"
 
+# From a checkout without a deploy.conf of its own, as a host is updated from, so the installed one
+# is the one read.
+INSTALL_FROM=/work/install-checkout
+rm -rf "$INSTALL_FROM"
+cp -a "$CHECKOUT" "$INSTALL_FROM"
+rm -f "${INSTALL_FROM}/.deploy/deploy.conf"
+install_from_checkout() {
+    PATH="${INSTALL_STUBS}:${PATH}" "${INSTALL_FROM}/.deploy/opensearch/install.sh" "$@" > /work/last-output 2>&1
+}
+
+chown "${DEPLOY}:" "${PREFIX_A}/etc/deploy.conf"
+install_from_checkout --user "$DEPLOY" --output-dir "$OUT" --prefix "$PREFIX_A"
+check "a deploy.conf the deploy user could write stops it" "$?" "2"
+check_true "and says why" grep -q 'can be written by someone other than root' /work/last-output
+chown root: "${PREFIX_A}/etc/deploy.conf"
+
+# Its own prefix's settings, not /opt/unipept-database's: here the output directory it creates.
+printf 'OUTPUT_DIR=/work/out-from-prefix\n' > "${PREFIX_A}/etc/deploy.conf"
+install_from_checkout --user "$DEPLOY" --prefix "$PREFIX_A"
+check "--prefix reads that install's deploy.conf" "$(stat -c %U /work/out-from-prefix 2> /dev/null)" "$DEPLOY"
+
 # A checkout without a deploy.conf of its own, as the build host has beside its installed scripts.
 BARE=/work/bare-checkout
 rm -rf "$BARE"
 as_deployer cp -a "$CHECKOUT" "$BARE"
 rm -f "${BARE}/.deploy/deploy.conf"
-install -d -o "$DEPLOY" /opt/unipept-database/etc
+install -d /opt/unipept-database/etc
 printf 'OUTPUT_DIR=%s\n' "$OUT" > /opt/unipept-database/etc/deploy.conf
 as_deployer "${BARE}/.deploy/verify.sh" > /work/last-output 2>&1
 check "a checkout without its own deploy.conf reads the host's installed one" "$?" "0"

@@ -39,12 +39,13 @@ run without sudo:
   earlier run as root left there are handed over too; nothing else in the directory changes owner;
 - the scripts a host runs, in `/opt/unipept-database`: `bin/` with `clone.sh`, `load.sh`,
   `verify.sh` and `prune.sh`, what they call beside it, `etc/deploy.conf`, written once from the
-  example and then the host's to edit, and `INSTALLED`, which names the commit they came from. A
-  host takes a newer version by running `install.sh` again from a clone of it;
+  example and then root's to edit, since `install.sh` reads it as root, and `INSTALLED`, which names
+  the commit they came from. A host takes a newer version by running `install.sh` again from a clone
+  of it;
 - the OpenSearch instance this host loads its proteins into, configured and started.
 
-It ends with what is left to do as `unipept`: fill in `deploy.conf`, add an ssh key for a clone,
-and for a build, clone this repository and install Rust with rustup.
+It ends with what is left to do: fill in `deploy.conf` as root, then as `unipept` add an ssh key for
+a clone, and for a build, clone this repository and install Rust with rustup.
 
 Run it as root, once per host or again after changing a setting: a run that changes nothing
 restarts nothing. It pins a version and holds it, also on a host that already had that version,
