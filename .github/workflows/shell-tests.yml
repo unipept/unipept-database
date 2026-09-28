@@ -4,7 +4,7 @@ name: Shell tests
 
 on:
   push:
-    branches: [master]
+    branches: [main]
     paths:
       - '.deploy/**'
       - 'pipelines/**'
@@ -30,10 +30,10 @@ on:
       - '!**/*.md'
   workflow_dispatch:
 
-# A new push to a pull request cancels the older run. Runs on master are kept.
+# A new push to a pull request cancels the older run. Runs on main are kept.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 permissions:
   contents: read
