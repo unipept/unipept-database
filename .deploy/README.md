@@ -61,11 +61,12 @@ API's protein search pauses while that happens, so take the host out of the pool
 before it changes anything on the host, a newer release than the pin, since OpenSearch cannot go
 back, and another major version, since that upgrade cannot be undone and is a step of its own.
 
-It also gives systemd a drop-in for OpenSearch, `/etc/systemd/system/opensearch.service.d/unipept.conf`:
-ten minutes to start instead of the package's 75 seconds, and a new start 30 seconds after a
-failure. Unattended upgrades restart OpenSearch when a library it uses is updated, while they are
-busy with the same disk, and on a host whose index is not in the page cache that start used to run
-out and was never tried again. A host that only gains the drop-in is reloaded, not restarted.
+It also gives systemd a drop-in for OpenSearch,
+`/etc/systemd/system/opensearch.service.d/unipept.conf`: ten minutes to start instead of the
+package's 75 seconds, and a new start 30 seconds after a failure. Unattended upgrades restart
+OpenSearch when a library it uses is updated, while they are busy with the same disk, and on a host
+whose index is not in the page cache that start used to run out and was never tried again. A host
+that only gains the drop-in is reloaded, not restarted.
 
 It keeps the data and log paths the existing configuration names, so a host set up by hand with
 its data on another volume keeps it there. `--data-dir` and `--log-dir` point the configuration
