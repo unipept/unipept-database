@@ -7,7 +7,8 @@ set -eo pipefail
 # deleted.
 #
 # Flow:
-#   1. Check that OpenSearch answers, and that the index to activate is there, open and not empty.
+#   1. Check that OpenSearch answers, and that the index to activate is there, open, not empty, and
+#      marked by opensearch/load.sh as loaded to the end.
 #   2. Where uniprot_entries is still an index rather than an alias, as a host loaded before
 #      versioned indices has it, clone it to uniprot_entries-legacy first. A clone is hard links,
 #      so it costs no copy, and the first switch then has something to go back to.
@@ -122,6 +123,12 @@ fi
 request "refreshing ${INDEX_NAME}" POST "${INDEX_NAME}/_refresh" > /dev/null
 documents=$(curl -s "${OPENSEARCH_URL}/_cat/count/${INDEX_NAME}?h=count" | awk '{print $NF}')
 [[ "${documents:-0}" -gt 0 ]] || fail "${INDEX_NAME} holds no documents, so the API would find no protein. Load it again."
+# A load that stopped part way leaves documents too. The old index kept at the first switch predates
+# the mark, and was whole: the API was serving it.
+if [[ "$INDEX_NAME" != "$LEGACY" ]]; then
+    "${CURRENT_LOCATION}/load.sh" --opensearch-url "$OPENSEARCH_URL" --index-name "$INDEX_NAME" --check-complete \
+        || fail "${INDEX_NAME} was not loaded to the end. Continue its load with --skip, or load it again."
+fi
 
 current=$(curl -s "${OPENSEARCH_URL}/_cat/aliases/${ALIAS}?h=index" | tr -d '[:space:]')
 

@@ -40,6 +40,10 @@ ACTIVATE=false
 # the loader drops it until the load finishes, the API searches a partial index.
 REPLACE_LIVE=false
 
+# Whether to only say if the version is loaded to the end, and load nothing. What distribute.sh and
+# the API's rollout ask a host before they rely on its index.
+CHECK=false
+
 usage() {
     cat <<'USAGE'
 Loads the proteins of a finished database into this host's OpenSearch.
@@ -53,6 +57,7 @@ Loads the proteins of a finished database into this host's OpenSearch.
   --activate               point the uniprot_entries alias the API queries at it once it is loaded
   --replace-live           allow reloading the version the alias points at, which empties the
                            API's protein search until the load finishes
+  --check                  load nothing: exit 0 if the version is loaded to the end, 1 if not
   --help                   print this message
 
 A flag wins over .deploy/deploy.conf, which wins over the defaults in lib.sh and in this script.
@@ -68,6 +73,7 @@ parse_arguments() {
             --skip) need_value "$1" "${2-}"; SKIP_ROWS="$2"; shift 2 ;;
             --activate) ACTIVATE=true; shift ;;
             --replace-live) REPLACE_LIVE=true; shift ;;
+            --check) CHECK=true; shift ;;
             --help) usage; exit 0 ;;
             *) die "unknown option '$1'" ;;
         esac
@@ -90,12 +96,22 @@ parse_arguments "$@"
 refuse_root
 
 [ -n "$OUTPUT_DIR" ] || die "--output-dir requires a value."
-check_loader_deps
 
 [ -n "$UNIPROT_VERSION" ] || UNIPROT_VERSION=$(latest_version)
 DATABASE_DIR="${OUTPUT_DIR}/uniprot-${UNIPROT_VERSION}"
 ENTRIES="${DATABASE_DIR}/tables/uniprot_entries.tsv.lz4"
 INDEX_NAME="uniprot_entries-${UNIPROT_VERSION}"
+
+if [ "$CHECK" = true ]; then
+    if "${HERE}/../opensearch/load.sh" --opensearch-url "$OPENSEARCH_URL" --index-name "$INDEX_NAME" --check-complete; then
+        echo "${INDEX_NAME} is loaded to the end."
+        exit 0
+    fi
+    echo "${INDEX_NAME} is not loaded, or its load did not finish." 1>&2
+    exit 1
+fi
+
+check_loader_deps
 
 # Before the load, and so before anything can activate it: proteins loaded from a database the API
 # cannot serve would pair with files that are not there.

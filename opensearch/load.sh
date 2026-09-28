@@ -45,6 +45,13 @@ readonly MAPPING_FILE="${CURRENT_LOCATION}/mappings/uniprot_entries.json"
 # into it is refused: from the drop until the load finishes, the API would search a partial index.
 REPLACE_LIVE=false
 
+# Whether to only answer if INDEX_NAME was loaded to the end, rather than load anything.
+CHECK_COMPLETE=false
+
+# What an index carries in its mapping's _meta once every row is in. An index a load left part way
+# has documents too, so this is how activate.sh and a rollout tell a whole one from it.
+readonly COMPLETE_META='{"_meta":{"unipept_load":"complete"}}'
+
 # Rows to pass over, to continue an upload that stopped part way. Above zero the index is kept as
 # it is, because dropping it would discard the rows being skipped.
 SKIP_ROWS=0
@@ -195,6 +202,17 @@ upload_uniprot_entries() {
     log "Finished uploading UniProt entries."
 }
 
+# Marks INDEX_NAME as loaded to the end. Last, so an upload that fails leaves it unmarked.
+mark_complete() {
+    opensearch_request "marking ${INDEX_NAME} as loaded to the end" "200" PUT "${INDEX_NAME}/_mapping" \
+        -H 'Content-Type: application/json' -d "$COMPLETE_META"
+}
+
+# Whether INDEX_NAME was loaded to the end. Exits 0 when it was, 1 when it was not or is not there.
+check_complete() {
+    curl -s -f "${OPENSEARCH_URL}/${INDEX_NAME}/_mapping" 2> /dev/null | grep -q '"unipept_load":"complete"'
+}
+
 ################################################################################
 # parse_arguments                                                              #
 #                                                                              #
@@ -210,6 +228,8 @@ upload_uniprot_entries() {
 #                         'uniprot_entries'.                                   #
 #   --replace-live        Allows reloading the index the alias points at.      #
 #   --skip                Rows to pass over, keeping the index.                #
+#   --check-complete      Loads nothing; exits 0 if --index-name was loaded    #
+#                         to the end, 1 otherwise.                             #
 #   --help                Prints the help message and exits.                   #
 #                                                                              #
 # Returns:                                                                     #
@@ -239,6 +259,10 @@ parse_arguments() {
                 REPLACE_LIVE=true
                 shift
                 ;;
+            --check-complete)
+                CHECK_COMPLETE=true
+                shift
+                ;;
             --skip)
                 SKIP_ROWS="$2"
                 if ! [[ "$SKIP_ROWS" =~ ^[0-9]+$ ]]; then
@@ -261,7 +285,7 @@ parse_arguments() {
     done
 
     # Ensure the required parameter --uniprot-entries is set
-    if [[ -z $UNIPROT_ENTRIES_FILE ]]; then
+    if [[ -z $UNIPROT_ENTRIES_FILE && "$CHECK_COMPLETE" != true ]]; then
         echo "Error: --uniprot-entries is required."
         print_help
         exit 1
@@ -290,6 +314,7 @@ print_help() {
     echo "  --index-name        The index to drop, create and fill (optional, default: 'uniprot_entries')."
     echo "  --replace-live      Allow reloading the index the uniprot_entries alias points at."
     echo "  --skip              Rows to pass over, to continue an upload that stopped part way. The index is kept."
+    echo "  --check-complete    Load nothing: exit 0 if the index was loaded to the end, 1 if not."
     echo "  --help              Prints this help message."
     echo ""
     echo "Examples:"
@@ -298,9 +323,16 @@ print_help() {
     echo ""
 }
 
+parse_arguments "$@"
+
+# Only curl, so before the loader's own dependencies, which a host that only asks need not have.
+if [[ "$CHECK_COMPLETE" == true ]]
+then
+    if check_complete; then exit 0; else exit 1; fi
+fi
+
 # Check if all required dependencies are installed
 checkdep "lz4"
-parse_arguments "$@"
 
 checkdep "python3"
 
@@ -318,3 +350,4 @@ else
 fi
 
 upload_uniprot_entries
+mark_complete

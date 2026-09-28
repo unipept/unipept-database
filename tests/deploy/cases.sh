@@ -352,6 +352,13 @@ check_true "it points the alias at what it loaded" \
 check_true "after the load" test -s /work/loader-calls
 
 rm -f /work/loader-calls
+load_proteins --output-dir "$OUT" --uniprot-version 2025-11 --check
+check "--check answers from the loader" "$?" "0"
+check_true "asking about the version's own index" \
+    grep -qxF -- "--opensearch-url http://localhost:9200 --index-name uniprot_entries-2025-11 --check-complete" /work/loader-calls
+check "and loads nothing" "$(grep -c -- '--uniprot-entries' /work/loader-calls)" "0"
+
+rm -f /work/loader-calls
 load_proteins --output-dir "$OUT" --replace-live
 check "--replace-live succeeds" "$?" "0"
 check_true "it is handed to the loader" grep -q -- '--index-name uniprot_entries-2026-03 --replace-live' /work/loader-calls

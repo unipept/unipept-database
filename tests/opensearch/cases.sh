@@ -115,6 +115,8 @@ check_true "the load succeeds" [ "$rc" -eq 0 ]
 check "the versioned index holds its rows" "$(documents_in uniprot_entries-2026-01)" "2"
 check "the index the API queries is untouched" "$(documents_in uniprot_entries)" "3"
 check "and is still an index, not an alias" "$(alias_target)" ""
+"${REPO}/opensearch/load.sh" --opensearch-url "$OPENSEARCH_URL" --index-name uniprot_entries-2026-01 --check-complete
+check "it is marked as loaded to the end" "$?" "0"
 
 
 section "the first switch keeps the old index"
@@ -201,6 +203,33 @@ curl -s -X POST "${OPENSEARCH_URL}/uniprot_entries-2026-03/_refresh" > /dev/null
 check_true "--replace-live allows it" [ "$rc" -eq 0 ]
 check "the alias still points at it" "$(alias_target)" "uniprot_entries-2026-03"
 check "and the API then finds the new rows" "$(documents_in uniprot_entries)" "1"
+
+
+section "a load that stops part way"
+# What a load that was stopped after its first batch leaves: the index, some rows, and no mark. A
+# row of the wrong width stops the load before its batch is sent, so it cannot stand in for this.
+curl -s -X PUT "${OPENSEARCH_URL}/uniprot_entries-2026-07" -H 'Content-Type: application/json' \
+    -d @"${REPO}/opensearch/mappings/uniprot_entries.json" > /dev/null
+curl -s -X PUT "${OPENSEARCH_URL}/uniprot_entries-2026-07/_doc/P70001?refresh=true" -H 'Content-Type: application/json' \
+    -d '{"uniprot_accession_number":"P70001","version":1,"taxon_id":9606,"type":"swissprot","name":"First protein","sequence":"MKV","fa":""}' > /dev/null
+check "the stopped load left a row" "$(documents_in uniprot_entries-2026-07)" "1"
+"${REPO}/opensearch/load.sh" --opensearch-url "$OPENSEARCH_URL" --index-name uniprot_entries-2026-07 --check-complete
+check "the index is not marked as loaded to the end" "$?" "1"
+"${REPO}/opensearch/load.sh" --opensearch-url "$OPENSEARCH_URL" --index-name uniprot_entries-2030-01 --check-complete
+check "nor is an index that is not there" "$?" "1"
+
+activate "${WORK}/partial.log" --index-name uniprot_entries-2026-07
+check_true "activating it is refused" [ "$rc" -ne 0 ]
+check_true "and says the load did not finish" grep -q 'not loaded to the end' "${WORK}/partial.log"
+check "the alias stays where it was" "$(alias_target)" "uniprot_entries-2026-03"
+
+write_fixture "${WORK}/rest.tsv.lz4" "$(row 1 P70001 'First protein')" "$(row 2 P70002 'Second protein')"
+load /dev/null --uniprot-entries "${WORK}/rest.tsv.lz4" --index-name uniprot_entries-2026-07 --skip 1
+"${REPO}/opensearch/load.sh" --opensearch-url "$OPENSEARCH_URL" --index-name uniprot_entries-2026-07 --check-complete
+check "continued to the end, it is marked" "$?" "0"
+activate /dev/null --index-name uniprot_entries-2026-07
+check "and can be activated" "$(alias_target)" "uniprot_entries-2026-07"
+check "with every row" "$(documents_in uniprot_entries)" "2"
 
 
 summary

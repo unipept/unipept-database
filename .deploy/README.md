@@ -120,7 +120,8 @@ and keeps the index as it is.
 The switch is `opensearch/activate.sh`, which `--activate` runs after the load:
 
 - it points `uniprot_entries` at the new index in one request, so the API never finds the name
-  missing, and refuses an index that is not there or holds no documents;
+  missing. It refuses an index that is not there, holds no documents, or was not loaded to the
+  end: the loader marks an index once its last row is in, and `load.sh --check` asks for that mark;
 - it closes the index it switched away from, which frees the memory that holds and keeps its data.
   Going back is activating that one again, which opens it;
 - it deletes the older ones, but keeps any of a newer version than the one it activates, since
