@@ -148,9 +148,12 @@ previous_database() {
     printf '%s\n' "$newest"
 }
 
-# A directory's size in KiB, as its files are long rather than as the disk packs them.
+# A directory's size in KiB, as its files are long rather than as the disk packs them. Fails, with
+# du's own reason, on a directory it cannot measure whole.
 size_kib() {
-    du -sk --apparent-size "$1" 2> /dev/null | awk '{ print $1 }'
+    local line
+    line=$(du -sk --apparent-size -- "$1") || return 1
+    echo "${line%%[[:space:]]*}"
 }
 
 gib() {
@@ -173,11 +176,13 @@ check_host() {
         && problems+=$'\n'"  OpenSearch is running, and holds memory the suffix array needs."
 
     previous=$(previous_database)
-    if [ -n "$previous" ]; then
-        size=$(size_kib "$previous")
-        # What the last build left in the staging directory is removed before this one starts.
+    if [ -n "$previous" ] && ! size=$(size_kib "$previous"); then
+        echo "Warning: the size of ${previous} cannot be measured, so disk and memory are not checked." 1>&2
+    elif [ -n "$previous" ]; then
+        # What the last build left in the staging directory is removed before this one starts. Left
+        # out when it cannot be measured, which only makes the check stricter.
         staging=0
-        [ ! -d "$STAGING_DIR" ] || staging=$(size_kib "$STAGING_DIR")
+        [ ! -d "$STAGING_DIR" ] || staging=$(size_kib "$STAGING_DIR") || staging=0
         free=$(( $(df -Pk "$OUTPUT_DIR" | awk 'NR == 2 { print $4 }') + staging ))
         [ "$free" -ge "$(( size * 3 / 2 ))" ] \
             || problems+=$'\n'"  $(gib "$free") is free on disk in ${OUTPUT_DIR}, and a build needs 1.5 times the $(gib "$size") of ${previous##*/}: $(gib $(( size * 3 / 2 )))."

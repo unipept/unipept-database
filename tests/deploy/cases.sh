@@ -241,6 +241,17 @@ check_true "for disk" grep -q 'free on disk in .* and a build needs 1.5 times' /
 check_true "and for memory" grep -q 'of memory is available, and a build needs 1.2 times' /work/last-output
 check_true "the database that was there is kept" test -e "${CHECK_OUT}/uniprot-2026-03/suffix-array/large"
 
+# A database du cannot read to the end, as one root left behind would be: the check says it cannot
+# measure it rather than stop the build for a reason it hides.
+mkdir -m 700 "${CHECK_OUT}/uniprot-2026-03/unreadable"
+touch "${CHECK_OUT}/uniprot-2026-03/unreadable/file"
+build --output-dir "$CHECK_OUT" --scratch-dir /work/scratch
+check "a previous database it cannot measure does not stop the check" "$?" "2"
+check_true "the build goes on to find its version already there" grep -q -- '--replace' /work/last-output
+check_true "it says it was not measured" grep -q 'cannot be measured, so disk and memory are not checked' /work/last-output
+check_true "and why" grep -q 'Permission denied' /work/last-output
+rm -r "${CHECK_OUT}/uniprot-2026-03/unreadable"
+
 build --output-dir "$CHECK_OUT" --scratch-dir /work/scratch --replace --skip-checks
 check "--skip-checks builds anyway" "$?" "0"
 
