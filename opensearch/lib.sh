@@ -9,6 +9,7 @@
 # The name the API queries: an alias once activate.sh has switched it, an index on a host loaded
 # before versioned indices. activate.sh keeps that old index under LEGACY at its first switch.
 readonly ALIAS=uniprot_entries
+# shellcheck disable=SC2034 # read by the scripts that source this file
 readonly LEGACY="${ALIAS}-legacy"
 
 # What an index carries in its mapping's _meta once its last row is in. An index a load left part
