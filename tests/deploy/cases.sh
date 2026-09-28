@@ -462,6 +462,11 @@ rm -rf "${OUT}/uniprot-2025-11"
 # install.sh, against stand-ins for apt, dpkg, systemd and the instance itself. What is real is the
 # script and the files it writes under /etc/opensearch, which this container is free to change.
 readonly INSTALL_STUBS="${WORK}/install-stubs"
+
+# The version install.sh pins, and the major version whose apt repository it adds.
+# shellcheck source=../../.deploy/opensearch/version.sh
+source /repo/.deploy/opensearch/version.sh
+readonly PINNED="$OPENSEARCH_VERSION" PINNED_MAJOR="${OPENSEARCH_VERSION%%.*}"
 readonly DPKG_STATE="${WORK}/dpkg-state"
 readonly CONFIG=/etc/opensearch/opensearch.yml
 readonly HEAP=/etc/opensearch/jvm.options.d/heap.options
@@ -529,7 +534,7 @@ STUB
 
     # The repository is already configured, so add_repository has nothing to fetch.
     mkdir -p /usr/share/keyrings /etc/apt/sources.list.d
-    touch /usr/share/keyrings/opensearch-keyring.gpg /etc/apt/sources.list.d/opensearch-2.x.list
+    touch /usr/share/keyrings/opensearch-keyring.gpg "/etc/apt/sources.list.d/opensearch-${PINNED_MAJOR}.x.list"
 }
 
 # A host as the package leaves it: its own configuration, naming its own data and log paths.
@@ -557,7 +562,7 @@ packaged_host
 forget_calls
 install_opensearch
 check "it succeeds" "$?" "0"
-check_true "the pinned version is installed" grep -q 'install .*opensearch=2.19.0' /work/apt-calls
+check_true "the pinned version is installed" grep -q "install .*opensearch=${PINNED}" /work/apt-calls
 check_true "and held" grep -qx 'hold opensearch' /work/apt-calls
 check_true "the tools build.sh, clone.sh and load.sh use are installed" grep -q 'install .*python3-requests' /work/apt-calls
 check_true "the packaged configuration is kept" grep -q 'my-application' "${CONFIG}.dist"
@@ -620,7 +625,7 @@ section "install.sh on a host set up by hand"
 packaged_host
 mkdir -p /work/hand/data /work/hand/logs
 printf 'cluster.name: by-hand\npath.data: /work/hand/data\npath.logs: /work/hand/logs\n' > "$CONFIG"
-echo "installed 2.19.0" > "$DPKG_STATE"
+echo "installed ${PINNED}" > "$DPKG_STATE"
 touch "${WORK}/opensearch-active"
 forget_calls
 install_opensearch
@@ -646,18 +651,41 @@ echo "config-files 2.18.0" > "$DPKG_STATE"
 forget_calls
 install_opensearch
 check "it installs rather than stopping" "$?" "0"
-check_true "the pinned version is installed" grep -q 'install .*opensearch=2.19.0' /work/apt-calls
+check_true "the pinned version is installed" grep -q "install .*opensearch=${PINNED}" /work/apt-calls
 
 
-section "install.sh where another version is installed"
+section "install.sh where an older release of the same major version is installed"
 
+# How a host is kept patched: the pin is raised, and install.sh run again.
 packaged_host
-echo "installed 2.18.0" > "$DPKG_STATE"
-cp "$CONFIG" /work/config-before
+echo "installed ${PINNED_MAJOR}.0.0" > "$DPKG_STATE"
+touch "${WORK}/opensearch-active"
 forget_calls
 install_opensearch
-check "it stops" "$?" "2"
-check_true "it names both versions" grep -q 'OpenSearch 2.18.0 is installed and this script pins 2.19.0' /work/last-output
+check "it upgrades" "$?" "0"
+check_true "to the pinned version, past the hold it put on it" \
+    grep -q "install .*--allow-change-held-packages opensearch=${PINNED}" /work/apt-calls
+check_true "and says so" grep -q "Upgrading OpenSearch ${PINNED_MAJOR}.0.0 to ${PINNED}" /work/last-output
+check_true "and restarts the service on it" grep -qx 'restart opensearch' /work/systemctl-calls
+
+
+section "install.sh where OpenSearch cannot go to the pinned version"
+
+packaged_host
+cp "$CONFIG" /work/config-before
+
+echo "installed ${PINNED_MAJOR}.999.0" > "$DPKG_STATE"
+forget_calls
+install_opensearch
+check "a newer release of the same major version stops it" "$?" "2"
+check_true "and says OpenSearch cannot go back" grep -q "newer than the ${PINNED} this script pins, and OpenSearch cannot go back" /work/last-output
+check_true "it installs nothing over it" not grep -q 'install .*opensearch=' /work/apt-calls
+
+echo "installed $((PINNED_MAJOR + 1)).0.0" > "$DPKG_STATE"
+forget_calls
+install_opensearch
+check "another major version stops it" "$?" "2"
+check_true "and says that upgrade cannot be undone" grep -q "another major version. That upgrade cannot be undone" /work/last-output
 check_true "it installs nothing over it" not grep -q 'install .*opensearch=' /work/apt-calls
 check_true "the configuration is left as it was" cmp -s "$CONFIG" /work/config-before
 check_true "the service is not touched" not grep -q 'restart' /work/systemctl-calls
@@ -691,14 +719,14 @@ check_true "the configuration is left as it was" cmp -s "$CONFIG" /work/config-b
 section "install.sh adds the OpenSearch repository"
 
 packaged_host
-rm -f /usr/share/keyrings/opensearch-keyring.gpg /etc/apt/sources.list.d/opensearch-2.x.list
+rm -f /usr/share/keyrings/opensearch-keyring.gpg "/etc/apt/sources.list.d/opensearch-${PINNED_MAJOR}.x.list"
 forget_calls
 install_opensearch
 check "it succeeds" "$?" "0"
 check_true "the signing key is fetched" grep -qF 'https://artifacts.opensearch.org/publickeys/opensearch.pgp' /work/curl-calls
 check_true "the list is signed by it" \
-    grep -qF 'deb [signed-by=/usr/share/keyrings/opensearch-keyring.gpg] https://artifacts.opensearch.org/releases/bundle/opensearch/2.x/apt stable main' \
-    /etc/apt/sources.list.d/opensearch-2.x.list
+    grep -qF "deb [signed-by=/usr/share/keyrings/opensearch-keyring.gpg] https://artifacts.opensearch.org/releases/bundle/opensearch/${PINNED_MAJOR}.x/apt stable main" \
+    "/etc/apt/sources.list.d/opensearch-${PINNED_MAJOR}.x.list"
 
 forget_calls
 install_opensearch

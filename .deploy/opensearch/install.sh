@@ -21,7 +21,8 @@
 #   5. Install clone.sh, load.sh, verify.sh, prune.sh and what they call into INSTALL_ROOT, from
 #      this checkout, and write etc/deploy.conf there unless it is already there.
 #   6. Add the OpenSearch APT repository, unless it is already there.
-#   7. Install the pinned version, and hold it so an unrelated upgrade cannot move it.
+#   7. Install the pinned version, or upgrade an older one of the same major version to it, and
+#      hold it so an unrelated upgrade cannot move it.
 #   8. Write the configuration this instance needs, keeping a copy of what was there and the data
 #      and log paths it named.
 #   9. Write the heap size.
@@ -109,7 +110,9 @@ readonly TOOL_PACKAGES=(
     openssh-client
 )
 
-readonly APT_LIST=/etc/apt/sources.list.d/opensearch-2.x.list
+# OpenSearch publishes one apt repository per major version, so the one to add follows the pin.
+readonly OPENSEARCH_MAJOR="${OPENSEARCH_VERSION%%.*}"
+readonly APT_LIST="/etc/apt/sources.list.d/opensearch-${OPENSEARCH_MAJOR}.x.list"
 readonly APT_KEYRING=/usr/share/keyrings/opensearch-keyring.gpg
 readonly CONFIG_FILE=/etc/opensearch/opensearch.yml
 readonly HEAP_FILE=/etc/opensearch/jvm.options.d/heap.options
@@ -288,7 +291,7 @@ add_repository() {
     log "Adding the OpenSearch repository."
     curl -sSfL https://artifacts.opensearch.org/publickeys/opensearch.pgp \
         | gpg --dearmor --batch --yes -o "$APT_KEYRING"
-    echo "deb [signed-by=${APT_KEYRING}] https://artifacts.opensearch.org/releases/bundle/opensearch/2.x/apt stable main" \
+    echo "deb [signed-by=${APT_KEYRING}] https://artifacts.opensearch.org/releases/bundle/opensearch/${OPENSEARCH_MAJOR}.x/apt stable main" \
         > "$APT_LIST"
 }
 
@@ -306,16 +309,29 @@ install_opensearch() {
         hold_opensearch
         return
     fi
-    [ -z "$installed" ] || die "OpenSearch ${installed} is installed and this script pins ${OPENSEARCH_VERSION}. Remove it or change the pin."
+
+    # Raising the pin is how a host is kept patched, so an older release of the same major version
+    # is upgraded. Not another major version: data a newer major version writes cannot be read by
+    # the one before, so that upgrade cannot be undone and is a decision of its own. Nor back down,
+    # which OpenSearch does not support either.
+    if [ -n "$installed" ]; then
+        [ "${installed%%.*}" = "$OPENSEARCH_MAJOR" ] \
+            || die "OpenSearch ${installed} is installed and this script pins ${OPENSEARCH_VERSION}, another major version. That upgrade cannot be undone, so this does not make it; change the pin to a ${installed%%.*}.x release to keep this host where it is."
+        dpkg --compare-versions "$installed" lt "$OPENSEARCH_VERSION" \
+            || die "OpenSearch ${installed} is installed, newer than the ${OPENSEARCH_VERSION} this script pins, and OpenSearch cannot go back. Raise the pin to ${installed} or later."
+        log "Upgrading OpenSearch ${installed} to ${OPENSEARCH_VERSION}."
+    else
+        log "Installing OpenSearch ${OPENSEARCH_VERSION}."
+    fi
 
     apt-get update -qq
 
     # The package refuses to configure without this, and then ignores it, because the security
-    # plugin is disabled below. It is never a credential anybody uses.
-    log "Installing OpenSearch ${OPENSEARCH_VERSION}."
+    # plugin is disabled below. It is never a credential anybody uses. Held by an earlier run, so
+    # apt has to be told a change to it is meant.
     OPENSEARCH_INITIAL_ADMIN_PASSWORD="$(head -c 32 /dev/urandom | base64)" \
         DEBIAN_FRONTEND=noninteractive \
-        apt-get install -y -qq "opensearch=${OPENSEARCH_VERSION}"
+        apt-get install -y -qq --allow-change-held-packages "opensearch=${OPENSEARCH_VERSION}"
     CHANGED=true
 
     hold_opensearch
@@ -434,6 +450,7 @@ parse_arguments "$@"
 [ "$(id -u)" -eq 0 ] || die "run this as root. It is the only step that needs it."
 checkdep apt-get
 checkdep dpkg-query
+checkdep dpkg
 checkdep systemctl
 checkdep getent
 checkdep useradd
