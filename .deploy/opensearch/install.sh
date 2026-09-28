@@ -101,13 +101,12 @@ fi
 read_conf
 
 # What build.sh, clone.sh and load.sh run, by package: git, cmake and a C toolchain for the index
-# build, GNU time and procps for what it checks and records of memory, lz4, pv, pigz, gawk, unzip,
-# uuidgen, xmllint and curl for the pipeline, python3-requests for the loader, ssh and scp for the
-# clone, and gnupg for the OpenSearch repository's key below. The Rust toolchain is not here: the
-# repository pins its own through rust-toolchain.toml, which rustup, installed as DEPLOY_USER,
-# follows.
+# build, lz4, pv, pigz, gawk, unzip, uuidgen, xmllint and curl for the pipeline, python3-requests
+# for the loader, ssh and scp for the clone, and gnupg for the OpenSearch repository's key below.
+# The Rust toolchain is not here: the repository pins its own through rust-toolchain.toml, which
+# rustup, installed as DEPLOY_USER, follows.
 readonly TOOL_PACKAGES=(
-    git cmake build-essential curl ca-certificates gnupg time procps
+    git cmake build-essential curl ca-certificates gnupg
     lz4 pv pigz gawk unzip uuid-runtime libxml2-utils
     python3 python3-requests
     openssh-client

@@ -29,8 +29,8 @@ INDEX_REPO=https://github.com/unipept/unipept-index.git
 # version already exists stops and keeps its own result, rather than removing what the API serves.
 REPLACE=false
 
-# Whether to build without first checking there is memory for the suffix array.
-SKIP_MEMORY_CHECK=false
+# Whether to build without first checking the host has room for it.
+SKIP_CHECKS=false
 
 read_conf
 
@@ -55,7 +55,7 @@ API reads. .deploy/load.sh then loads its proteins into OpenSearch.
   --scratch-dir DIR        where the repositories are cloned and built
   --database-sources LIST  swissprot, trembl, or both, comma separated
   --replace                replace a database of the version this build turns out to be
-  --skip-memory-check      build without first checking there is memory for the suffix array
+  --skip-checks            build without first checking the host has room for it
   --help                   print this message
 
 A flag wins over .deploy/deploy.conf, which wins over the defaults in lib.sh and in this script.
@@ -69,7 +69,7 @@ parse_arguments() {
             --scratch-dir) need_value "$1" "${2-}"; SCRATCH_DIR="$2"; shift 2 ;;
             --database-sources) need_value "$1" "${2-}"; DATABASE_SOURCES="$2"; shift 2 ;;
             --replace) REPLACE=true; shift ;;
-            --skip-memory-check) SKIP_MEMORY_CHECK=true; shift ;;
+            --skip-checks) SKIP_CHECKS=true; shift ;;
             --help) usage; exit 0 ;;
             *) die "unknown option '$1'" ;;
         esac
@@ -102,13 +102,8 @@ build_suffix_array() {
     # The four columns sa-builder reads: accession, taxon, sequence, annotations.
     lz4cat "${build_dir}/tables/uniprot_entries.tsv.lz4" | cut -f2,4,7,8 > "${build_dir}/suffix-array/proteins.tsv"
 
-    local peak_file="${build_dir}/sa-builder-peak"
-    SA_INPUT_BYTES=$(stat -c %s "${build_dir}/suffix-array/proteins.tsv")
-    check_memory_for "$SA_INPUT_BYTES"
-
-    # Under GNU time, for the peak it reached: what the next build on this host checks against.
     log "Started building the suffix array."
-    /usr/bin/time -f '%M' -o "$peak_file" "${index_dir}/target/release/sa-builder" \
+    "${index_dir}/target/release/sa-builder" \
         --database-file "${build_dir}/suffix-array/proteins.tsv" \
         --output-sa "${build_dir}/suffix-array/sa.bin" \
         --output-proteins "${build_dir}/suffix-array/proteins.bin" \
@@ -118,9 +113,7 @@ build_suffix_array() {
         --sparseness-factor "$SA_SPARSENESS" \
         --construction-algorithm "$SA_ALGORITHM" \
         --compress-sa
-    SA_PEAK_KIB=$(tail -n 1 "$peak_file")
-    rm -f "$peak_file"
-    log "Finished building the suffix array, at a peak of $(( SA_PEAK_KIB / 1024 / 1024 )) GiB."
+    log "Finished building the suffix array."
 
     # Around 100 GB on full UniProt, and read by nothing after this point.
     rm -f "${build_dir}/suffix-array/proteins.tsv"
@@ -143,92 +136,66 @@ fill_datastore() {
     log "Filled the datastore."
 }
 
-# A value build-info.txt holds as "key: value".
-value_in() {
-    local file="$1" key="$2"
-    [ -f "$file" ] || return 0
-    sed -n "s/^${key}: *//p" "$file" | tail -n 1
-}
-
-# The memory the kernel can hand out without swapping, in KiB.
-memory_available_kib() {
-    awk '/^MemAvailable:/ { print $2 }' /proc/meminfo
-}
-
-# What an earlier build on this host recorded of sa-builder, as "input_bytes peak_kib", from the
-# newest database that has it. Nothing when none has.
-recorded_peak() {
-    local candidate input peak found=''
+# The newest database under OUTPUT_DIR, which is what the next one is sized by. Nothing when there
+# is none.
+previous_database() {
+    local candidate newest=''
 
     # shellcheck disable=SC2231 # DATABASE_GLOB is a glob, and has to expand
     for candidate in "${OUTPUT_DIR}"/${DATABASE_GLOB}; do
-        input=$(value_in "${candidate}/suffix-array/build-info.txt" 'sa-builder input bytes')
-        peak=$(value_in "${candidate}/suffix-array/build-info.txt" 'sa-builder peak KiB')
-        [ -n "$input" ] && [ -n "$peak" ] && found="${input} ${peak}"
+        [ -d "$candidate" ] && newest="$candidate"
     done
-    printf '%s\n' "$found"
+    printf '%s\n' "$newest"
 }
 
-opensearch_running() {
-    command -v systemctl > /dev/null && systemctl is-active --quiet opensearch 2> /dev/null
+# A directory's size in KiB, as its files are long rather than as the disk packs them.
+size_kib() {
+    du -sk --apparent-size "$1" 2> /dev/null | awk '{ print $1 }'
 }
 
-# What is holding memory on this host, for the operator to act on: the two services that share a
-# build host, and the largest processes.
-memory_holders() {
-    local api_pid
-    api_pid=$(pgrep -x unipept-api | head -n 1) || true
-    [ -z "$api_pid" ] || echo "  the Unipept API is running (pid ${api_pid}, $(( $(ps -o rss= -p "$api_pid") / 1024 / 1024 )) GiB)."
-    ! opensearch_running || echo "  OpenSearch is running."
-    echo "  The largest processes, in GiB:"
-    ps -eo rss=,comm= --sort=-rss | head -n 5 | awk '{ printf "    %6.1f  %s\n", $1 / 1024 / 1024, $2 }'
+gib() {
+    echo "$(( $1 / 1024 / 1024 )) GiB"
 }
 
-# What to do about it, the same in every message.
-readonly FREE_MEMORY="Take this host out of the pool, stop the API (systemctl --user stop unipept-api) and OpenSearch (sudo systemctl stop opensearch), and build again. --skip-memory-check builds anyway."
+# Stops a build the host has no room for, before anything is removed or built. The suffix array is
+# the step that needs the most memory, and a build found out hours in, on a host whose API and
+# OpenSearch held it, when the kernel killed sa-builder. The previous database is the measure of
+# what the next one needs: 1.5 times its size free on disk, for the new database beside the old one
+# and the files the build works through, and 1.2 times its size free in memory. Every problem is
+# reported, not only the first.
+check_host() {
+    [ "$SKIP_CHECKS" != true ] || return 0
+    local problems='' previous size free available staging
 
-# Stops, before the pipeline, a build that the suffix array will not fit. With an earlier build's
-# peak, by that peak. Without one, by whether the API or OpenSearch is running: on a build host they
-# hold the memory sa-builder needs, and a build with them running was killed hours in.
-check_memory_at_start() {
-    [ "$SKIP_MEMORY_CHECK" != true ] || return 0
-    local recorded peak available
-    recorded=$(recorded_peak)
-    available=$(memory_available_kib)
+    pgrep -x unipept-api > /dev/null \
+        && problems+=$'\n'"  The Unipept API is running, and holds memory the suffix array needs."
+    command -v systemctl > /dev/null && systemctl is-active --quiet opensearch 2> /dev/null \
+        && problems+=$'\n'"  OpenSearch is running, and holds memory the suffix array needs."
 
-    if [ -n "$recorded" ]; then
-        peak=${recorded#* }
-        # A release is somewhat larger than the one before.
-        [ "$(( peak * 11 / 10 ))" -le "$available" ] && return 0
-        die "the suffix array took $(( peak / 1024 / 1024 )) GiB in the last build here, and $(( available / 1024 / 1024 )) GiB is available.
-$(memory_holders)
-${FREE_MEMORY}"
+    previous=$(previous_database)
+    if [ -n "$previous" ]; then
+        size=$(size_kib "$previous")
+        # What the last build left in the staging directory is removed before this one starts.
+        staging=0
+        [ ! -d "$STAGING_DIR" ] || staging=$(size_kib "$STAGING_DIR")
+        free=$(( $(df -Pk "$OUTPUT_DIR" | awk 'NR == 2 { print $4 }') + staging ))
+        [ "$free" -ge "$(( size * 3 / 2 ))" ] \
+            || problems+=$'\n'"  $(gib "$free") is free on disk in ${OUTPUT_DIR}, and a build needs 1.5 times the $(gib "$size") of ${previous##*/}: $(gib $(( size * 3 / 2 )))."
+        available=$(awk '/^MemAvailable:/ { print $2 }' /proc/meminfo)
+        if [ -n "$available" ]; then
+            [ "$available" -ge "$(( size * 6 / 5 ))" ] \
+                || problems+=$'\n'"  $(gib "$available") of memory is available, and a build needs 1.2 times the $(gib "$size") of ${previous##*/}: $(gib $(( size * 6 / 5 )))."
+        fi
     fi
 
-    if pgrep -x unipept-api > /dev/null || opensearch_running; then
-        die "no earlier build here recorded what the suffix array needs, and something that holds the memory it needs is running.
-$(memory_holders)
-${FREE_MEMORY}"
-    fi
-}
+    [ -z "$problems" ] && return 0
+    die "this host has no room for a build:${problems}
 
-# Stops before sa-builder starts, now that its input is known, where an earlier build's peak says
-# it will not fit: stopped here, rather than killed by the kernel part way through it.
-check_memory_for() {
-    [ "$SKIP_MEMORY_CHECK" != true ] || return 0
-    local input_bytes="$1" recorded needed available
-    recorded=$(recorded_peak)
-    [ -n "$recorded" ] || { log "No earlier build here recorded what the suffix array needs; this one records it."; return 0; }
-
-    # Scaled by how much larger the input is than last time.
-    needed=$(awk -v peak="${recorded#* }" -v was="${recorded% *}" -v now="$input_bytes" \
-        'BEGIN { printf "%d", peak / was * now * 1.05 }')
-    available=$(memory_available_kib)
-    [ "$needed" -le "$available" ] && return 0
-
-    die "the suffix array needs about $(( needed / 1024 / 1024 )) GiB for this input, going by the last build here, and $(( available / 1024 / 1024 )) GiB is available.
-$(memory_holders)
-${FREE_MEMORY}"
+Take it out of the pool, then free what is named above: stop the API
+(sudo systemctl --user -M ${DEPLOY_USER}@ stop unipept-api) and OpenSearch (sudo systemctl stop
+opensearch), and remove what is not needed from ${OUTPUT_DIR}. Build again. Afterwards, start
+OpenSearch (sudo systemctl start opensearch) and the API (sudo systemctl --user -M ${DEPLOY_USER}@
+start unipept-api), and put the host back in the pool. --skip-checks builds anyway."
 }
 
 parse_arguments "$@"
@@ -243,8 +210,6 @@ checkdep git
 checkdep cargo "the Rust toolchain"
 checkdep cmake
 checkdep pgrep procps
-# GNU time, for what sa-builder takes. Not `command -v time`, which finds the shell's keyword.
-[ -x /usr/bin/time ] || die "GNU time is not installed at /usr/bin/time; .deploy/opensearch/install.sh installs it, as the time package."
 
 # The checkout this script belongs to is what builds the database, so it is what build-info.txt
 # records. A deploy from an archive rather than a clone has no commit to name.
@@ -254,10 +219,12 @@ DATABASE_COMMIT=$(git -C "${HERE}/.." rev-parse HEAD 2>/dev/null || echo unknown
 # rename stays within one filesystem, and because the version it will be named after is not known
 # until the pipeline has run.
 STAGING_DIR="${OUTPUT_DIR}/.build"
+
+# Before the staging directory is removed, so a build refused here keeps what an earlier one left.
+check_host
+
 rm -rf "${STAGING_DIR:?}"
 mkdir -p "${STAGING_DIR}"/{suffix-array,tables,temp}
-
-check_memory_at_start
 
 generate_tables "$STAGING_DIR"
 
@@ -284,8 +251,6 @@ fi
 
 # Last, so a directory that carries this file is a finished build.
 write_build_info "${STAGING_DIR}/suffix-array" "$UNIPROT_VERSION" "$DATABASE_COMMIT" "$INDEX_COMMIT"
-printf 'sa-builder input bytes: %s\nsa-builder peak KiB: %s\n' "$SA_INPUT_BYTES" "$SA_PEAK_KIB" \
-    >> "${STAGING_DIR}/suffix-array/build-info.txt"
 
 swap_into_place "$STAGING_DIR" "$BUILD_DIR"
 

@@ -96,7 +96,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Install the pipeline's tools
-        run: sudo apt-get update && sudo apt-get install -y gawk lz4 pigz pv libxml2-utils zip unzip uuid-runtime time
+        run: sudo apt-get update && sudo apt-get install -y gawk lz4 pigz pv libxml2-utils zip unzip uuid-runtime
 
       # Actions starts steps with SIGPIPE ignored; luz relies on its default action.
       - name: Run the build suite
