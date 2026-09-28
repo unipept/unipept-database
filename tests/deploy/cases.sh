@@ -36,7 +36,7 @@ setup_checkout() {
     cp /repo/.deploy/opensearch/*.sh "${CHECKOUT}/.deploy/opensearch/"
     cp /repo/pipelines/lib/common.sh "${CHECKOUT}/pipelines/lib/"
     # What install.sh installs beside the loader, which is a stand-in below.
-    cp /repo/opensearch/bulk_load.py "${CHECKOUT}/opensearch/"
+    cp /repo/opensearch/lib.sh /repo/opensearch/bulk_load.py "${CHECKOUT}/opensearch/"
     cp /repo/opensearch/mappings/uniprot_entries.json "${CHECKOUT}/opensearch/mappings/"
     printf '{"sample":true}\n' > "${CHECKOUT}/assets/sampledata.json"
 
@@ -761,7 +761,8 @@ check "it succeeds" "$?" "0"
 check_true "the scripts a host runs are there" \
     test -x "${PREFIX_A}/bin/clone.sh" -a -x "${PREFIX_A}/bin/load.sh" -a -x "${PREFIX_A}/bin/verify.sh" -a -x "${PREFIX_A}/bin/prune.sh"
 check_true "and what they call" \
-    test -x "${PREFIX_A}/opensearch/activate.sh" -a -f "${PREFIX_A}/opensearch/mappings/uniprot_entries.json" -a -f "${PREFIX_A}/pipelines/lib/common.sh"
+    test -x "${PREFIX_A}/opensearch/activate.sh" -a -f "${PREFIX_A}/opensearch/lib.sh" \
+        -a -f "${PREFIX_A}/opensearch/mappings/uniprot_entries.json" -a -f "${PREFIX_A}/pipelines/lib/common.sh"
 check_true "but not build.sh, which needs the whole repository" test ! -e "${PREFIX_A}/bin/build.sh"
 check "the scripts belong to root, which alone changes them" "$(stat -c %U "${PREFIX_A}/bin/load.sh")" "root"
 check "their configuration to the user who edits it" "$(stat -c %U "${PREFIX_A}/etc/deploy.conf")" "$DEPLOY"
