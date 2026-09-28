@@ -97,7 +97,7 @@ need_value() {
 # root, they leave a database owned by root: one the next run as DEPLOY_USER cannot replace, and
 # one whose readability check passes only because root reads everything. verify.sh and load.sh
 # write nothing there, but both check through that same readability check, so they refuse root
-# for that reason alone.
+# for that reason alone. prune.sh removes databases, so it runs as the user who owns them.
 refuse_root() {
     [ "$(id -u)" -ne 0 ] \
         || die "do not run this as root. Run it as ${DEPLOY_USER}, for example: sudo -iu ${DEPLOY_USER}. Only .deploy/opensearch/install.sh needs root."

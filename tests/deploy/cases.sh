@@ -412,8 +412,8 @@ check_true "the directory is named" grep -q 'uniprot-2030-01' /work/last-output
 load_proteins --output-dir /work/nothing-here
 check "no database at all stops it" "$?" "2"
 
-# The loader drops the index the API queries before it writes the new one, so a database the API
-# cannot serve is refused before it is reached.
+# Refused before the loader is reached, so a database the API cannot serve never gets an index
+# that could be activated.
 rm "${OUT}/uniprot-2025-11/suffix-array/mapping.bin"
 load_proteins --output-dir "$OUT" --uniprot-version 2025-11
 check "a database that fails verification stops it" "$?" "2"

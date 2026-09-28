@@ -20,6 +20,7 @@ CURRENT_LOCATION="${BASH_SOURCE%/*}"
 ################################################################################
 
 source "${CURRENT_LOCATION}/../pipelines/lib/common.sh"
+source "${CURRENT_LOCATION}/lib.sh"
 
 ################################################################################
 #                            Variables and options                             #
@@ -37,8 +38,7 @@ UPLOAD_BATCH_SIZE=2500
 # The index this script drops, creates and fills. Nothing else on the instance is touched.
 INDEX_NAME="uniprot_entries"
 
-# The name the API queries, an index or an alias, and the mapping every index here is created from.
-readonly API_NAME="uniprot_entries"
+# The mapping every index here is created from.
 readonly MAPPING_FILE="${CURRENT_LOCATION}/mappings/uniprot_entries.json"
 
 # Whether the index the API queries through the alias may be dropped and reloaded. Off, a load
@@ -47,10 +47,6 @@ REPLACE_LIVE=false
 
 # Whether to only answer if INDEX_NAME was loaded to the end, rather than load anything.
 CHECK_COMPLETE=false
-
-# What an index carries in its mapping's _meta once every row is in. An index a load left part way
-# has documents too, so this is how activate.sh and a rollout tell a whole one from it.
-readonly COMPLETE_META='{"_meta":{"unipept_load":"complete"}}'
 
 # Rows to pass over, to continue an upload that stopped part way. Above zero the index is kept as
 # it is, because dropping it would discard the rows being skipped.
@@ -62,40 +58,6 @@ SKIP_ROWS=0
 
 trap terminateAndExit SIGINT
 trap errorAndExit ERR
-
-################################################################################
-# opensearch_request                                                           #
-#                                                                              #
-# Sends one request to OpenSearch. Exits with an error if the HTTP status is   #
-# not one of the accepted codes.                                               #
-#                                                                              #
-# Arguments:                                                                   #
-#   $1 - What the request does, used in the error message                      #
-#   $2 - The accepted status codes, separated by spaces                        #
-#   $3 - The HTTP method                                                       #
-#   $4 - The path after the OpenSearch URL                                     #
-#   $@ - Further curl arguments                                                #
-################################################################################
-opensearch_request() {
-    local what=$1 accepted=$2 method=$3 path=$4
-    local status
-    local curl_status=0
-    shift 4
-
-    status=$(curl -s -o /dev/null -w '%{http_code}' -X "$method" "${OPENSEARCH_URL}/${path}" "$@") || curl_status=$?
-
-    if [[ "$curl_status" -ne 0 ]]
-    then
-        echo "Error: ${what} failed: curl exited with ${curl_status}." 1>&2
-        exit 1
-    fi
-
-    if [[ " ${accepted} " != *" ${status} "* ]]
-    then
-        echo "Error: ${what} answered ${status}." 1>&2
-        exit 1
-    fi
-}
 
 ################################################################################
 #                               Main functions                                 #
@@ -115,24 +77,20 @@ opensearch_request() {
 #   None                                                                       #
 ################################################################################
 init_indices() {
-    if ! curl -s -f "${OPENSEARCH_URL}/_cluster/health" > /dev/null
-    then
-        echo "Error: OpenSearch is not reachable at ${OPENSEARCH_URL}. Start it and run this script again." 1>&2
-        exit 1
-    fi
+    require_opensearch
 
     # An alias cannot be dropped and recreated as an index, and dropping what it points at empties
     # the API's search until the load finishes.
     local live
-    live=$(curl -s "${OPENSEARCH_URL}/_cat/aliases/${API_NAME}?h=index")
-    if [[ -n "$live" && "$INDEX_NAME" == "$API_NAME" ]]
+    live=$(alias_target)
+    if [[ -n "$live" && "$INDEX_NAME" == "$ALIAS" ]]
     then
-        echo "Error: ${API_NAME} is an alias, for ${live}. Load into a versioned index with --index-name, and switch the alias with opensearch/activate.sh." 1>&2
+        echo "Error: ${ALIAS} is an alias, for ${live}. Load into a versioned index with --index-name, and switch the alias with opensearch/activate.sh." 1>&2
         exit 1
     fi
     if [[ -n "$live" && "$INDEX_NAME" == "$live" && "$REPLACE_LIVE" != true ]]
     then
-        echo "Error: ${INDEX_NAME} is the index the API queries through ${API_NAME}. Reloading it empties the API's search until the load finishes; pass --replace-live to do so anyway." 1>&2
+        echo "Error: ${INDEX_NAME} is the index the API queries through ${ALIAS}. Reloading it empties the API's search until the load finishes; pass --replace-live to do so anyway." 1>&2
         exit 1
     fi
 
@@ -140,7 +98,7 @@ init_indices() {
 
     # Only this index. The instance is allowed to hold indices that belong to something else.
     # 404 is a success: on a first run there is nothing to drop.
-    opensearch_request "dropping the ${INDEX_NAME} index" "200 404" DELETE "${INDEX_NAME}"
+    opensearch_request "dropping the ${INDEX_NAME} index" "200 404" DELETE "${INDEX_NAME}" > /dev/null
 
     log "Finished dropping the ${INDEX_NAME} index."
 
@@ -153,15 +111,15 @@ init_indices() {
     fi
 
     opensearch_request "creating the ${INDEX_NAME} index" "200" PUT "${INDEX_NAME}" \
-        -H 'Content-Type: application/json' -d @"${MAPPING_FILE}"
+        -H 'Content-Type: application/json' -d @"${MAPPING_FILE}" > /dev/null
 
     # Dropping an index drops the aliases on it, so the live index reloaded with --replace-live
     # gets its alias back at once, rather than leaving the API with no name to query.
     if [[ -n "$live" && "$INDEX_NAME" == "$live" ]]
     then
-        opensearch_request "pointing ${API_NAME} at ${INDEX_NAME} again" "200" POST _aliases \
+        opensearch_request "pointing ${ALIAS} at ${INDEX_NAME} again" "200" POST _aliases \
             -H 'Content-Type: application/json' \
-            -d "{\"actions\":[{\"add\":{\"index\":\"${INDEX_NAME}\",\"alias\":\"${API_NAME}\"}}]}"
+            -d "{\"actions\":[{\"add\":{\"index\":\"${INDEX_NAME}\",\"alias\":\"${ALIAS}\"}}]}" > /dev/null
     fi
 
     log "Finished creating the ${INDEX_NAME} index."
@@ -200,17 +158,6 @@ upload_uniprot_entries() {
         --skip "$SKIP_ROWS"
 
     log "Finished uploading UniProt entries."
-}
-
-# Marks INDEX_NAME as loaded to the end. Last, so an upload that fails leaves it unmarked.
-mark_complete() {
-    opensearch_request "marking ${INDEX_NAME} as loaded to the end" "200" PUT "${INDEX_NAME}/_mapping" \
-        -H 'Content-Type: application/json' -d "$COMPLETE_META"
-}
-
-# Whether INDEX_NAME was loaded to the end. Exits 0 when it was, 1 when it was not or is not there.
-check_complete() {
-    curl -s -f "${OPENSEARCH_URL}/${INDEX_NAME}/_mapping" 2> /dev/null | grep -q '"unipept_load":"complete"'
 }
 
 ################################################################################
@@ -328,7 +275,8 @@ parse_arguments "$@"
 # Only curl, so before the loader's own dependencies, which a host that only asks need not have.
 if [[ "$CHECK_COMPLETE" == true ]]
 then
-    if check_complete; then exit 0; else exit 1; fi
+    is_complete "$INDEX_NAME" && exit 0
+    exit 1
 fi
 
 # Check if all required dependencies are installed
@@ -351,4 +299,5 @@ else
 fi
 
 upload_uniprot_entries
-mark_complete
+# Last, so an upload that fails leaves the index unmarked.
+mark_complete "$INDEX_NAME"

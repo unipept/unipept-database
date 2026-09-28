@@ -101,8 +101,6 @@ if [ "$CHECK" = true ]; then
     exit 1
 fi
 
-check_loader_deps
-
 # Before the load, and so before anything can activate it: proteins loaded from a database the API
 # cannot serve would pair with files that are not there.
 verify_database "${DATABASE_DIR}/suffix-array" \
