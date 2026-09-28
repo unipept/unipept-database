@@ -7,6 +7,7 @@
 #   run-tests.sh shell      the helpers in pipelines/lib/common.sh
 #   run-tests.sh build      pipelines/suffix-array/build.sh end to end, offline
 #   run-tests.sh opensearch opensearch/load.sh, against a real OpenSearch
+#   run-tests.sh verify     .deploy/verify.sh against a fixture index
 
 set -uo pipefail
 
@@ -40,11 +41,16 @@ suite_opensearch() {
     "${HERE}/opensearch/load-suite.sh" || status=1
 }
 
+suite_verify() {
+    heading "verify suite"
+    "${HERE}/deploy/verify-suite.sh" || status=1
+}
+
 status=0
 
 case ${1:-all} in
-    all) suite_lz; suite_shell; suite_build; suite_opensearch ;;
-    lz | shell | build | opensearch) "suite_${1}" ;;
+    all) suite_lz; suite_shell; suite_verify; suite_build; suite_opensearch ;;
+    lz | shell | verify | build | opensearch) "suite_${1}" ;;
     *) echo "unknown suite '${1}'" >&2; exit 1 ;;
 esac
 

@@ -1,18 +1,22 @@
 # Deploying a Unipept database
 
-Two scripts build and distribute the database a Unipept API host serves. They orchestrate; the
-pipeline itself lives in `pipelines/` and the loader in `opensearch/`.
+Three scripts build, distribute and check the database a Unipept API host serves. They
+orchestrate; the pipeline itself lives in `pipelines/` and the loader in `opensearch/`.
 
 - `build.sh` builds everything on this host: the tables, the suffix array, the `datastore/` layout
   the API reads, and the proteins in OpenSearch.
 - `clone.sh` copies a finished database from another host and loads its proteins into the
   OpenSearch of this one. The build runs once; every other host clones the result.
+- `verify.sh` checks a finished database against the files the API needs. The other two make
+  the same checks, through the same `verify_database` in `lib.sh`, before they change anything
+  the API serves: `build.sh` before it loads OpenSearch, `clone.sh` on the remote host before it
+  copies and again on the copy. Run it by hand to check a database that is already there.
 
 ## Configuration
 
 Copy `deploy.conf.example` to `deploy.conf` and edit it. A flag wins over that file, and the file
-wins over the defaults in `lib.sh` for the settings both scripts have, and in `build.sh` or
-`clone.sh` for the settings one of them has:
+wins over the defaults in `lib.sh` for the settings the scripts share, and in each script for the
+settings only it has:
 
 ```sh
 cp .deploy/deploy.conf.example .deploy/deploy.conf
@@ -43,6 +47,19 @@ this host serves is only ever replaced by a finished one. A build whose version 
 stops and keeps its result in `.build/`; `--replace` lets it take the place of the old one. The
 same holds for `clone.sh`, through `${OUTPUT_DIR}/.clone/`. Both therefore need room for two
 databases at the moment they finish.
+
+## Checking a database
+
+```sh
+.deploy/verify.sh                              # the newest one under OUTPUT_DIR
+.deploy/verify.sh --uniprot-version 2026-03
+.deploy/verify.sh --index-dir /srv/data/uniprot-2026-03/suffix-array
+```
+
+It reports every file that is missing, empty or unreadable rather than the first, and exits
+non-zero if any of them is. A missing `kmer_table.bin` is a warning: the API runs without it and
+searches are slower. The list it checks is the one `unipept-api/.deploy/lib.sh` starts a service
+against, so a change on either side has to be made on both.
 
 `build-info.txt` records the UniProtKB version, the commit of this checkout, the commit of the
 unipept-index clone the build used, and the sources it read. unipept-index is cloned at the tip of

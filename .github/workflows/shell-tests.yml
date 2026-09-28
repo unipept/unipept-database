@@ -6,6 +6,7 @@ on:
   push:
     branches: [master]
     paths:
+      - '.deploy/**'
       - 'pipelines/**'
       - 'opensearch/**'
       - 'tests/**'
@@ -13,8 +14,11 @@ on:
       - 'Cargo.toml'
       - 'Cargo.lock'
       - '.github/workflows/shell-tests.yml'
+      # After the paths above, so it wins: a README change runs no suite.
+      - '!**/*.md'
   pull_request:
     paths:
+      - '.deploy/**'
       - 'pipelines/**'
       - 'opensearch/**'
       - 'tests/**'
@@ -22,6 +26,8 @@ on:
       - 'Cargo.toml'
       - 'Cargo.lock'
       - '.github/workflows/shell-tests.yml'
+      # After the paths above, so it wins: a README change runs no suite.
+      - '!**/*.md'
   workflow_dispatch:
 
 # A new push to a pull request cancels the older run. Runs on master are kept.
@@ -34,8 +40,9 @@ permissions:
 
 jobs:
   pipelines:
-    # lz() and luz() against a stand-in lz4. No container.
-    name: Pipeline suite
+    # lz() and luz() against a stand-in lz4, and .deploy/verify.sh against a fixture index
+    # directory. Both need nothing installed and run in seconds, so they share a runner.
+    name: Pipeline and verify suites
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -46,6 +53,11 @@ jobs:
       # Actions starts steps with SIGPIPE ignored; the suite needs its default action.
       - name: Run the pipeline suite
         run: env --default-signal=PIPE tests/run-tests.sh lz
+
+      # Even when the one above failed, so one run reports both.
+      - name: Run the verify suite
+        if: ${{ !cancelled() }}
+        run: tests/run-tests.sh verify
 
   shell:
     # The helpers in pipelines/lib/common.sh. No container.
