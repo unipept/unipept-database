@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Prepares a host to build, clone and hold a Unipept database: the user that owns the databases,
-# the tools build.sh and clone.sh run, and the OpenSearch instance the proteins are loaded into.
+# the tools build.sh, clone.sh and load.sh run, and the OpenSearch instance load.sh fills.
 # Run as root. Run it with --help for the options.
 #
 # This is the only step that needs root. Afterwards DEPLOY_USER owns OUTPUT_DIR and has every tool
@@ -15,7 +15,7 @@
 #   1. Check that this runs as root on a host with apt and systemd.
 #   2. Create DEPLOY_USER, or give an account that already exists a login shell: clone.sh copies
 #      over ssh as that user, and sshd needs a shell to run a remote command.
-#   3. Install the tools build.sh and clone.sh use, the ones not installed already.
+#   3. Install the tools build.sh, clone.sh and load.sh use, the ones not installed already.
 #   4. Create OUTPUT_DIR owned by DEPLOY_USER, and hand it the databases a run as root left.
 #   5. Add the OpenSearch APT repository, unless it is already there.
 #   6. Install the pinned version, and hold it so an unrelated upgrade cannot move it.
@@ -73,11 +73,11 @@ OPENSEARCH_READY_TIMEOUT=180
 
 read_conf
 
-# What build.sh and clone.sh run, by package: git, cmake and a C toolchain for the index build,
-# lz4, pv, pigz, gawk, unzip, uuidgen, xmllint and curl for the pipeline, python3-requests for the
-# loader, ssh and scp for the clone, and gnupg for the OpenSearch repository's key below. The Rust
-# toolchain is not here: the repository pins its own through rust-toolchain.toml, which rustup,
-# installed as DEPLOY_USER, follows.
+# What build.sh, clone.sh and load.sh run, by package: git, cmake and a C toolchain for the index
+# build, lz4, pv, pigz, gawk, unzip, uuidgen, xmllint and curl for the pipeline, python3-requests
+# for the loader, ssh and scp for the clone, and gnupg for the OpenSearch repository's key below.
+# The Rust toolchain is not here: the repository pins its own through rust-toolchain.toml, which
+# rustup, installed as DEPLOY_USER, follows.
 readonly TOOL_PACKAGES=(
     git cmake build-essential curl ca-certificates gnupg
     lz4 pv pigz gawk unzip uuid-runtime libxml2-utils
@@ -181,7 +181,7 @@ install_tools() {
     done
 
     if [ "${#missing[@]}" -eq 0 ]; then
-        log "The tools build.sh and clone.sh use are installed."
+        log "The tools build.sh, clone.sh and load.sh use are installed."
         return
     fi
 
@@ -399,7 +399,8 @@ single_node_settings "$(ready_url)"
 cat >&2 <<EOF
 
 Still to do on this host, as ${DEPLOY_USER} (sudo -iu ${DEPLOY_USER}), none of it as root:
-  1. Clone unipept-database, and run .deploy/build.sh and .deploy/clone.sh from that clone.
+  1. Clone unipept-database. From that clone, .deploy/build.sh or .deploy/clone.sh puts a database
+     in place, and .deploy/load.sh then loads its proteins into this OpenSearch.
   2. To build: install Rust with rustup (https://rustup.rs); the repository pins the toolchain.
   3. To clone from another host: an ssh key in ~/.ssh that ${DEPLOY_USER} on that host accepts.
 EOF

@@ -1,6 +1,7 @@
 # shellcheck shell=bash
 #
-# The stand-ins both deploy suites put where build.sh expects sa-builder and the OpenSearch loader.
+# The stand-ins both deploy suites put where build.sh expects sa-builder and load.sh expects the
+# OpenSearch loader.
 # One copy, so a new flag build.sh passes is taught to both suites at once. Sourced, never run, and
 # after tests/lib.sh.
 
