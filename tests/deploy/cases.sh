@@ -3,9 +3,10 @@
 # The deploy cases. Runs inside the container build-suite.sh starts, with the repository at /repo
 # read-only and everything this writes under /work.
 #
-# What is real here: build.sh, clone.sh, load.sh, verify.sh and install.sh themselves, git, ssh and
-# scp. What is stood in for: the pipeline, sa-builder and the OpenSearch loader, each of which has a
-# suite of its own, and the apt, dpkg, systemd and instance install.sh drives.
+# What is real here: build.sh, clone.sh, load.sh, verify.sh, distribute.sh and install.sh
+# themselves, git, ssh and scp. What is stood in for: the pipeline, sa-builder and the OpenSearch
+# loader, each of which has a suite of its own, and the apt, dpkg, systemd and instance install.sh
+# drives.
 #
 # The cases run as root, which setting up sshd and install.sh need. build.sh, clone.sh, load.sh and
 # verify.sh run as DEPLOY, as on a host, and refuse root.
@@ -87,7 +88,9 @@ setup_stubs() {
 setup_sshd() {
     mkdir -p /run/sshd
     ssh-keygen -A > /dev/null 2>&1
-    /usr/sbin/sshd
+    # Only on 4840: clone.sh's default, and what ~/.ssh/config says for distribute.sh below. A
+    # script that assumed port 22 rather than following either cannot pass here by landing on it.
+    /usr/sbin/sshd -p 4840
 
     as_deployer mkdir -p "${DEPLOY_HOME}/.ssh"
     as_deployer ssh-keygen -q -t ed25519 -N '' -f "${DEPLOY_HOME}/.ssh/id_test"
@@ -95,7 +98,8 @@ setup_sshd() {
 
     # clone.sh runs ssh without StrictHostKeyChecking=no, as it does on a real host, so the key has
     # to be known before it runs.
-    ssh-keyscan -H localhost 2>/dev/null | as_deployer tee -a "${DEPLOY_HOME}/.ssh/known_hosts" > /dev/null
+    ssh-keyscan -H -p 4840 localhost 2>/dev/null \
+        | as_deployer tee -a "${DEPLOY_HOME}/.ssh/known_hosts" > /dev/null
 }
 
 # For check_true, which runs a command rather than evaluating an expression.
@@ -112,7 +116,7 @@ build() {
 
 clone() {
     as_deployer "${CHECKOUT}/.deploy/clone.sh" \
-        --remote-address localhost --remote-user "$DEPLOY" --remote-port 22 \
+        --remote-address localhost --remote-user "$DEPLOY" \
         --local-ssh-key "${DEPLOY_HOME}/.ssh/id_test" "$@" > /work/last-output 2>&1
 }
 
@@ -814,6 +818,164 @@ printf 'OUTPUT_DIR=%s\n' "$OUT" > /opt/unipept-database/etc/deploy.conf
 as_deployer "${BARE}/.deploy/verify.sh" > /work/last-output 2>&1
 check "a checkout without its own deploy.conf reads the host's installed one" "$?" "0"
 check_true "and so checks the databases it names" grep -qF "Checking ${OUT}/uniprot-2026-03" /work/last-output
+
+
+# distribute.sh, with this container as the source and as every server, reached over the real sshd
+# as DEPLOY. The source is the install at /opt/unipept-database; each server is an install of its own,
+# made by install.sh under a prefix, with its own deploy.conf.
+as_deployer tee -a "${DEPLOY_HOME}/.ssh/config" > /dev/null <<'SSHCONFIG'
+Host localhost
+    IdentityFile ~/.ssh/id_test
+    Port 4840
+SSHCONFIG
+
+# A server: install.sh's scripts under a prefix of its own, a deploy.conf that reaches the source,
+# and a loader stand-in that remembers a load that finished, as the real one marks the index, and
+# answers --check-complete from that.
+make_server() {
+    local name="$1" output_dir="$2"
+    local root="/work/server-${name}"
+
+    rm -rf "$root" "/work/${name}-loaded" "/work/${name}-loader-calls"
+    install_opensearch --user "$DEPLOY" --output-dir "$output_dir" --prefix "$root" || return 1
+    printf 'OUTPUT_DIR=%s\nLOCAL_SSH_KEY=%s/.ssh/id_test\nREMOTE_USER=%s\n' \
+        "$output_dir" "$DEPLOY_HOME" "$DEPLOY" > "${root}/etc/deploy.conf"
+    cat > "${root}/opensearch/load.sh" <<LOADER
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >> /work/${name}-loader-calls
+case "\$*" in
+    *--check-complete*) [ -e /work/${name}-loaded ] ;;
+    *) touch /work/${name}-loaded ;;
+esac
+LOADER
+    chmod 755 "${root}/opensearch/load.sh"
+    touch "/work/${name}-loader-calls"
+    chmod 666 "/work/${name}-loader-calls"
+}
+
+distribute() {
+    as_deployer "${CHECKOUT}/.deploy/distribute.sh" --servers /work/servers.conf \
+        --from localhost "$@" > /work/last-output 2>&1
+}
+
+# The row distribute.sh prints for a server.
+row_says() {
+    grep -qE "^$1 +$2 +$3 +$4\$" /work/last-output
+}
+
+# The source: the host's own install, pointed at the databases the build above wrote.
+printf 'OUTPUT_DIR=%s\n' "$OUT" > /opt/unipept-database/etc/deploy.conf
+make_server a /work/a-data
+make_server b /work/b-data
+# The two servers most cases distribute to.
+reset_servers() { printf 'a localhost /work/server-a\nb localhost /work/server-b\n' > /work/servers.conf; }
+reset_servers
+
+
+section "distribute.sh to servers that have nothing"
+
+distribute --uniprot-version 2026-03
+check "it succeeds" "$?" "0"
+check_true "a is copied to and loaded" row_says a copied loaded ready
+check_true "b is copied to and loaded" row_says b copied loaded ready
+check_true "the copy lands where a's own deploy.conf says" test -s /work/a-data/uniprot-2026-03/suffix-array/sa.bin
+check_true "and passes verify.sh there" as_deployer /work/server-a/bin/verify.sh --uniprot-version 2026-03
+check_true "the load is of that copy, into the version's own index" \
+    grep -qF -- "--uniprot-entries /work/a-data/uniprot-2026-03/tables/uniprot_entries.tsv.lz4 --index-name uniprot_entries-2026-03" \
+    /work/a-loader-calls
+check_true "nothing switches the API to it" not grep -q -- '--activate' /work/a-loader-calls /work/b-loader-calls
+check_true "it says the rollout is what switches" grep -q "Switch the API to it with its rollout" /work/last-output
+
+
+section "distribute.sh a second time"
+
+printf 'do not lose me\n' | as_deployer tee /work/a-data/uniprot-2026-03/marker > /dev/null
+: > /work/a-loader-calls
+distribute --uniprot-version 2026-03
+check "it succeeds" "$?" "0"
+check_true "a already had both" row_says a had had ready
+check_true "b already had both" row_says b had had ready
+check_true "nothing is copied again" test -f /work/a-data/uniprot-2026-03/marker
+check "nothing is loaded again" "$(grep -c -- '--uniprot-entries' /work/a-loader-calls)" "0"
+
+rm /work/a-loaded
+distribute --uniprot-version 2026-03
+check "a server whose load did not finish is loaded" "$?" "0"
+check_true "without copying again" row_says a had loaded ready
+
+
+section "distribute.sh where a server is not whole"
+
+rm /work/b-data/uniprot-2026-03/suffix-array/mapping.bin /work/b-loaded
+distribute --uniprot-version 2026-03
+check "a copy that fails verification fails the run" "$?" "1"
+check_true "it is left alone, and --replace named" row_says b broken - "its copy fails verification; --replace copies it again"
+check_true "the other server is still ready" row_says a had had ready
+
+distribute --uniprot-version 2026-03 --replace
+check "--replace succeeds" "$?" "0"
+check_true "b is copied to again and loaded" row_says b copied loaded ready
+check_true "and whole" test -s /work/b-data/uniprot-2026-03/suffix-array/mapping.bin
+
+# A server whose deploy.conf gives clone.sh no key to reach the source with. Found before anything
+# is touched, rather than after the servers before it have copied and loaded.
+make_server c /work/c-data
+printf 'OUTPUT_DIR=/work/c-data\n' > /work/server-c/etc/deploy.conf
+printf 'a localhost /work/server-a\nc localhost /work/server-c\n' > /work/servers.conf
+rm -f /work/a-loaded
+distribute --uniprot-version 2026-03
+check "a server that could not clone stops it" "$?" "2"
+check_true "it is named" grep -q "cannot clone 2026-03 from localhost: c" /work/last-output
+check_true "before the server before it is touched" test ! -e /work/a-loaded
+touch /work/a-loaded
+
+# A copy that fails after the preflight passed: an output directory c cannot write into, which
+# clone.sh --check has no way to know. The server after it is still handled.
+make_server c /work/c-locked/data
+chown root: /work/c-locked/data
+printf 'c localhost /work/server-c\na localhost /work/server-a\n' > /work/servers.conf
+distribute --uniprot-version 2026-03
+check "a copy that fails fails the run" "$?" "1"
+check_true "and is reported" row_says c failed - "the copy failed"
+check_true "the server after it is still handled" row_says a had had ready
+
+# A server whose loader fails, which answers "not loaded" to --check-complete as well.
+make_server c /work/c-data
+printf '#!/usr/bin/env bash\nexit 1\n' > /work/server-c/opensearch/load.sh
+distribute --uniprot-version 2026-03
+check "a load that fails fails the run" "$?" "1"
+check_true "and is reported, after the copy" row_says c copied failed "the load failed"
+reset_servers
+
+
+section "what distribute.sh refuses before touching a server"
+
+: > /work/a-loader-calls
+distribute --uniprot-version 2030-01
+check "a version the source does not have stops it" "$?" "2"
+check_true "and says to build it there" grep -q 'Build it there with .deploy/build.sh first' /work/last-output
+check_true "no server is touched" not grep -q . /work/a-loader-calls
+
+printf 'a localhost /work/server-a\nnowhere localhost /work/no-install\n' > /work/servers.conf
+distribute --uniprot-version 2026-03
+check "a server without the scripts installed stops it" "$?" "2"
+check_true "it is named" grep -q 'on: nowhere' /work/last-output
+check_true "before the servers that are fine are touched" not grep -q . /work/a-loader-calls
+
+printf 'a localhost /work/server-a\na localhost /work/server-a\n' > /work/servers.conf
+distribute --uniprot-version 2026-03
+check "a server listed twice stops it" "$?" "2"
+reset_servers
+
+as_deployer "${CHECKOUT}/.deploy/distribute.sh" --servers /work/servers.conf --uniprot-version 2026-03 > /work/last-output 2>&1
+check "no --from stops it" "$?" "2"
+check_true "and says it does not build" grep -q 'This script does not build' /work/last-output
+distribute --uniprot-version 2026-3
+check "a version not written YYYY-MM stops it" "$?" "2"
+printf 'a localhost /work/x;rm\n' > /work/servers.conf
+distribute --uniprot-version 2026-03
+check "an install root a shell would read more into stops it" "$?" "2"
+reset_servers
 
 
 summary

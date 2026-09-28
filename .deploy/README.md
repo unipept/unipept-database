@@ -1,6 +1,6 @@
 # Deploying a Unipept database
 
-Four scripts build, distribute, load and check the database a Unipept API host serves. They
+These scripts build, distribute, load and check the database a Unipept API host serves. They
 orchestrate; the pipeline itself lives in `pipelines/` and the loader in `opensearch/`.
 
 - `build.sh` builds a database on this host: the tables, the suffix array and the `datastore/`
@@ -17,6 +17,9 @@ orchestrate; the pipeline itself lives in `pipelines/` and the loader in `opense
 
 A new database on a host is therefore two steps, `build.sh` or `clone.sh` and then `load.sh`. A
 load that fails is rerun on its own, without building or copying again.
+
+`distribute.sh` does those two steps on every API server at once, from wherever it is run. See
+[Distributing a database](#distributing-a-database).
 
 `install.sh` installs every script but `build.sh` in `/opt/unipept-database/bin`, so a host that
 only clones and serves needs no clone of this repository, and the path is the same on every host.
@@ -151,6 +154,45 @@ half, `INDEX_LOCATION` in its environment file. Until the API's rollout switches
 Reloading the version the alias points at is refused, because the loader drops it first and the API
 would search a partial index until it finishes. `--replace-live` does it anyway.
 
+## Distributing a database
+
+Once a build has finished on one host, from any machine that reaches the API servers over ssh as
+`unipept`:
+
+```sh
+cp .deploy/servers.conf.example .deploy/servers.conf     # once: the servers
+.deploy/distribute.sh --uniprot-version 2026-03 --from selma.ugent.be
+```
+
+It checks that the source has the version whole, then that every server answers, has the scripts
+installed, and, where it needs a copy, could make one: `clone.sh --check` there, which checks that
+server's settings, its key, and that it reaches the source and finds the version whole. All of that
+before it touches any server. Then, one server at a time, it copies the version with that server's
+own `clone.sh` where the server does not have it, and loads it with that server's own `load.sh`
+where it is not loaded to the end. Where each server keeps its databases, and how it reaches the
+source, is that server's own installed `deploy.conf`. It ends with a table of what each server had
+and what was done.
+
+It logs in to the source and the servers as `unipept`, or `--ssh-user`, and leaves the port and the
+key to `~/.ssh/config` on the machine it runs on, as unipept-api's rollout does: a host reached on
+another port says so there, once, for both. How each server then reaches the source is another
+connection, which that server's `deploy.conf` decides for its `clone.sh`, and which the preflight
+checks.
+
+Nothing it does changes what the API serves: the copy lands beside the database in use, and the
+load in an index of its own, so every server stays in rotation. The API's rollout switches them.
+
+- **It never builds.** A version the source does not have whole stops it, before any server is
+  touched.
+- **It is safe to rerun.** A server that has the version, or its proteins, is not given them again,
+  so a run that stopped part way is finished by running it again.
+- **A server whose copy fails verification is left alone**, since someone may be looking into it.
+  `--replace` copies it again.
+- **A server that fails does not stop the others.** The table says which failed, and the exit
+  status is 1.
+
+The copy and the load take hours, each over an ssh session. Run it in `tmux` or `screen`.
+
 ## Removing old versions
 
 ```sh
@@ -185,10 +227,11 @@ the warning is the time to prune.
 As `unipept`, like the others: it checks that the files can be read by the user the API runs
 as, and as root every file can.
 
-It reports every file that is missing, empty or unreadable rather than the first, and exits
-non-zero if any of them is. A missing `kmer_table.bin` is a warning: the API runs without it and
-searches are slower. The list it checks is the one `unipept-api/.deploy/lib.sh` starts a service
-against, so a change on either side has to be made on both.
+It reports every file that is missing, empty or unreadable rather than the first, and exits 1 if any
+of them is, or 3 when the database is not there at all. A missing `kmer_table.bin` is a warning: the
+API runs without it and searches are slower. The list it checks is the one
+`unipept-api/.deploy/lib.sh` starts a service against, so a change on either side has to be made on
+both.
 
 `build-info.txt` records the UniProtKB version, the commit of this checkout, the commit of the
 unipept-index clone the build used, and the sources it read. unipept-index is cloned at the tip of
