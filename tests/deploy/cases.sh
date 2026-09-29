@@ -454,9 +454,9 @@ load_proteins --output-dir "$OUT"
 check "reloading the version this host serves stops it" "$?" "2"
 check_true "and says why" grep -q '2026-03 is the version this host serves' /work/last-output
 check_true "before the loader drops anything" test ! -e /work/loader-calls
+check_true "and says to switch away first" grep -q 'Switch this host to another version with switch.sh first' /work/last-output
 load_proteins --output-dir "$OUT" --replace-live
-check "--replace-live reloads it anyway" "$?" "0"
-check_true "into its index" grep -q -- '--index-name uniprot_entries-2026-03$' /work/loader-calls
+check "--replace-live, which reloaded it under the running API, is gone" "$?" "2"
 load_proteins --output-dir "$OUT" --uniprot-version 2025-11
 check "another version loads beside it" "$?" "0"
 load_proteins --output-dir "$OUT" --skip 500

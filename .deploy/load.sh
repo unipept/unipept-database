@@ -29,10 +29,6 @@ UNIPROT_VERSION=
 # then keeps the index as it is rather than recreating it.
 SKIP_ROWS=
 
-# Whether the version this host serves may be reloaded. Off, that is refused: from the moment the
-# loader drops its index until the load finishes, the API searches a partial one.
-REPLACE_LIVE=false
-
 # Whether to only say if the version is loaded to the end, and load nothing. What distribute.sh and
 # switch.sh ask a host before they rely on its index.
 CHECK=false
@@ -47,8 +43,6 @@ Loads the proteins of a finished database into this host's OpenSearch.
   --output-dir DIR         where the databases are
   --opensearch-url URL     the instance the proteins are loaded into
   --skip ROWS              continue a load that stopped part way, passing over this many rows
-  --replace-live           allow reloading the version this host serves, which empties the API's
-                           protein search until the load finishes
   --check                  load nothing: exit 0 if the version is loaded to the end, 1 if not
   --help                   print this message
 
@@ -63,7 +57,6 @@ parse_arguments() {
             --output-dir) need_value "$1" "${2-}"; OUTPUT_DIR="$2"; shift 2 ;;
             --opensearch-url) need_value "$1" "${2-}"; OPENSEARCH_URL="$2"; shift 2 ;;
             --skip) need_value "$1" "${2-}"; SKIP_ROWS="$2"; shift 2 ;;
-            --replace-live) REPLACE_LIVE=true; shift ;;
             --check) CHECK=true; shift ;;
             --help) usage; exit 0 ;;
             *) die "unknown option '$1'" ;;
@@ -101,8 +94,8 @@ verify_database "${DATABASE_DIR}/suffix-array" \
 # The version the API serves is queried while it runs: dropping its index would empty the protein
 # search until the load finishes. Where a host has no current link yet, INDEX_LOCATION says which one
 # it serves. A load continued with --skip keeps its index, and drops nothing.
-if is_served "$UNIPROT_VERSION" && [ -z "$SKIP_ROWS" ] && [ "$REPLACE_LIVE" != true ]; then
-    die "${UNIPROT_VERSION} is the version this host serves. Reloading it empties the API's protein search until the load finishes; pass --replace-live to do so anyway."
+if is_served "$UNIPROT_VERSION" && [ -z "$SKIP_ROWS" ]; then
+    die "${UNIPROT_VERSION} is the version this host serves. Reloading it would empty the API's protein search until the load finishes. Switch this host to another version with switch.sh first, then load it again."
 fi
 
 # Held until the load ends, so switch.sh does not stop OpenSearch under it.

@@ -63,7 +63,7 @@ version_of_index() {
 
 # The index an alias of that name points at, or nothing where there is none.
 alias_target() {
-    curl -s "${OPENSEARCH_URL}/_cat/aliases/${ALIAS}?h=index" | tr -d '[:space:]' || true
+    curl -s --max-time 10 "${OPENSEARCH_URL}/_cat/aliases/${ALIAS}?h=index" 2> /dev/null | tr -d '[:space:]' || true
 }
 
 # open or close for an index of exactly this name, and nothing for anything else. By name, because
@@ -109,8 +109,11 @@ keep_as() {
         -H 'Content-Type: application/json' -d '{"index.blocks.write":true}' > /dev/null
     # No replica, whatever the old index asked for: a single node cannot place one. Nor the block the
     # clone needed, which it would otherwise copy: a load continued with --skip writes to it.
-    opensearch_request "keeping ${source} as ${target}" "200" POST "${source}/_clone/${target}" \
-        -H 'Content-Type: application/json' -d '{"settings":{"index.number_of_replicas":0,"index.blocks.write":null}}' > /dev/null
+    # In a subshell, since a refused request stops the script it is in, and the block has to come off
+    # the source first.
+    ( opensearch_request "keeping ${source} as ${target}" "200" POST "${source}/_clone/${target}" \
+        -H 'Content-Type: application/json' -d '{"settings":{"index.number_of_replicas":0,"index.blocks.write":null}}' > /dev/null ) \
+        || { allow_writes "$source"; exit 1; }
     # The clone recovers from the source's files, so the source takes no writes until it is ready,
     # and takes them again whether it becomes ready or not.
     if ! index_ready "$target" "$timeout"; then

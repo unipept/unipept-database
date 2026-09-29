@@ -170,7 +170,7 @@ prune() {
 
 prune "${WORK}/prune-dry.log" --keep 2 --dry-run
 check_true "a dry run succeeds" [ "$rc" -eq 0 ]
-check_true "and names what it would remove, newest first" grep -q 'Removing: 2026-03 2026-02 2026-01 legacy' "${WORK}/prune-dry.log"
+check_true "and names what it would remove, newest first" grep -q 'Removing: 2026-03 2026-02 2026-01$' "${WORK}/prune-dry.log"
 check "without removing an index" "$(status_of uniprot_entries-2026-01)" "open"
 check_true "or a directory" test -d "${DATA}/uniprot-2026-03"
 
@@ -181,7 +181,9 @@ check "the version this host serves is kept" "$(documents_in uniprot_entries-202
 check "the two before it are kept, index and files" \
     "$(status_of uniprot_entries-2026-05) $(status_of uniprot_entries-2026-04) $([ -d "${DATA}/uniprot-2026-04" ] && echo kept)" \
     "open open kept"
-check "older ones lose their index" "$(status_of uniprot_entries-2026-03)$(status_of uniprot_entries-2026-01)$(status_of uniprot_entries-legacy)" ""
+check "older ones lose their index" "$(status_of uniprot_entries-2026-03)$(status_of uniprot_entries-2026-01)" ""
+# Nothing says INDEX_LOCATION goes through current here, so an older API may still query it.
+check "uniprot_entries-legacy is kept, which may be the only copy of what an older API serves" "$(status_of uniprot_entries-legacy)" "open"
 check "and their files" "$([ -e "${DATA}/uniprot-2026-03" ] && echo left || echo removed)" "removed"
 check "current is left as it is" "$(readlink "${DATA}/current")" "uniprot-2026-07"
 
@@ -208,7 +210,7 @@ prune_with_api() {
 }
 prune_with_api "${WORK}/prune-inuse.log" --keep 0
 check_true "it succeeds" [ "$rc" -eq 0 ]
-check_true "and says what INDEX_LOCATION names" grep -q 'INDEX_LOCATION names 2026-04' "${WORK}/prune-inuse.log"
+check_true "and counts what INDEX_LOCATION names as served" grep -q 'This host serves 2026-07 2026-04' "${WORK}/prune-inuse.log"
 check "that version is kept, with its files" "$(status_of uniprot_entries-2026-04) $([ -d "${DATA}/uniprot-2026-04" ] && echo kept)" "open kept"
 check "and uniprot_entries itself, which an API reading it that way may still query" "$(status_of uniprot_entries)" "open"
 
@@ -218,6 +220,19 @@ printf 'INDEX_LOCATION=%s/current/suffix-array\n' "$DATA" > /tmp/prune-api.env
 prune_with_api "${WORK}/prune-plain.log" --keep 1 --dry-run
 check_true "uniprot_entries itself is then removed as the oldest" grep -q 'Removing:.* plain$' "${WORK}/prune-plain.log"
 check "not on a dry run" "$(status_of uniprot_entries)" "open"
+
+# Unless the index of the version it serves is not whole to serve from: then it may be the only copy.
+curl -s -X POST "${OPENSEARCH_URL}/uniprot_entries-2026-07/_close" > /dev/null
+prune_with_api "${WORK}/prune-notwhole.log" --keep 1 --dry-run
+check "while the served version's index is not open, uniprot_entries itself is not a candidate" \
+    "$(grep -c 'plain' "${WORK}/prune-notwhole.log")" "0"
+curl -s -X POST "${OPENSEARCH_URL}/uniprot_entries-2026-07/_open" > /dev/null
+
+# With the API's own settings the ones that say what it reads, it will not guess past them.
+chmod 600 /tmp/prune-api.env
+prune_with_api "${WORK}/prune-unreadable.log" --keep 0
+check "settings it cannot read stop it" "$rc" "2"
+check_true "and say so" grep -q 'cannot read /tmp/prune-api.env' "${WORK}/prune-unreadable.log"
 rm -f /tmp/prune-api.env
 
 
@@ -613,7 +628,7 @@ check_true "it says to point INDEX_LOCATION through current" grep -qxF "  INDEX_
 
 # With a slash at the end, which names the same directory.
 printf 'INDEX_LOCATION=%s/data/current/suffix-array/\n' "$MIG" > "${MIG}/api.env"
-migrate "${WORK}/migrate-again.log"
+migrate "${WORK}/migrate-again.log" --output-dir "${MIG}/data/"
 check "a second run succeeds" "$rc" "0"
 check_true "and says the host is set up" grep -q 'This host is set up for switch.sh' "${WORK}/migrate-again.log"
 check "with nothing left to do" "$(grep -c 'Still to do' "${WORK}/migrate-again.log")" "0"
@@ -639,6 +654,26 @@ mv "${MIG}/api.env.away" "${MIG}/api.env"
 env API_ENV_FILE="${MIG}/api.env" "${REPO}/.deploy/migrate.sh" --output-dir "${MIG}/data" > /dev/null 2>&1
 check "as root it stops" "$?" "2"
 
+# A switch or a prune holds the lock; cloning under either could lose what it clones from.
+# shellcheck disable=SC2016 # $1 belongs to the inner shell
+setpriv --reuid unipept --regid unipept --init-groups bash -c 'exec 9>> "$1"; flock -s 9; exec sleep 30' _ /run/lock/unipept-opensearch.lock &
+holder=$!
+for _ in $(seq 50); do
+    runuser -u unipept -- flock -n -x /run/lock/unipept-opensearch.lock true 2> /dev/null || break
+    sleep 0.1
+done
+migrate "${WORK}/migrate-locked.log"
+check "a load, a switch or a prune running stops it" "$rc" "2"
+check_true "and says so" grep -q 'a load, a switch or a prune is running' "${WORK}/migrate-locked.log"
+kill "$holder"
+wait "$holder" 2> /dev/null
+
+# A clone OpenSearch refuses leaves no write block on what it would have been made from.
+ensure 2099-ZZ
+check "a clone that is refused fails it" "$rc" "1"
+check "and uniprot_entries takes writes again" \
+    "$(curl -s -o /dev/null -w '%{http_code}' -X PUT "${OPENSEARCH_URL}/uniprot_entries/_doc/P00097" -H 'Content-Type: application/json' -d '{"uniprot_accession_number":"P00097"}')" "201"
+
 
 section ".deploy/prune.sh keeps what an alias of the old name points at"
 # A host an earlier release left with the alias on uniprot_entries-legacy, whose API is still from
@@ -649,7 +684,7 @@ curl -s -X POST "${OPENSEARCH_URL}/_aliases" -H 'Content-Type: application/json'
     -d '{"actions":[{"add":{"index":"uniprot_entries-legacy","alias":"uniprot_entries"}}]}' > /dev/null
 prune "${WORK}/prune-alias.log" --keep 0
 check_true "it succeeds" [ "$rc" -eq 0 ]
-check_true "and says where the alias points" grep -q 'the old alias points at legacy' "${WORK}/prune-alias.log"
+check_true "and counts what the alias points at as served" grep -q 'This host serves 2026-07 legacy' "${WORK}/prune-alias.log"
 check "that index is kept, though --keep is 0" "$(status_of uniprot_entries-legacy)" "open"
 
 

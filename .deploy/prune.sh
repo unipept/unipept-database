@@ -25,8 +25,6 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # shellcheck source=lib.sh
 source "${HERE}/lib.sh"
-# shellcheck source=../opensearch/lib.sh
-source "${HERE}/../opensearch/lib.sh"
 
 trap errorAndExit ERR
 trap 'exit 2' USR1
@@ -89,31 +87,36 @@ esac
 
 SERVED=$(linked_version "$(current_link)" 2> /dev/null) \
     || die "there is no $(current_link) pointing at a version, so which one this host serves is not known. Nothing is removed."
+[ ! -e "$API_ENV_FILE" ] || [ -r "$API_ENV_FILE" ] \
+    || die "cannot read ${API_ENV_FILE}, so which files the API reads is not known. Nothing is removed."
 BEFORE=$(linked_version "$(previous_link)" 2> /dev/null) || BEFORE=''
-# What INDEX_LOCATION names, where it names a version rather than current: the files the API reads
-# until it is pointed through the link, which removing would take from under it.
-IN_USE=$(database_version_of "$(api_index_location)" 2> /dev/null) || IN_USE=''
-# What an alias of the old name points at, where an earlier release left one: an API from before
-# versioned indices queries through it, whatever INDEX_LOCATION says.
-ALIASED=$(version_of_index "$(alias_target)")
 
-# Kept whatever --keep says. The oldest of the versioned ones is where what is kept is counted from;
-# legacy has no place in that order, and is kept by name.
-PINNED=" ${SERVED} ${BEFORE} ${IN_USE} ${ALIASED} "
+# Kept whatever --keep says: every version this host serves, by served_versions, and the one before,
+# which switch.sh --back goes to. The oldest of the versioned ones is where what is kept is counted
+# from; legacy has no place in that order, and is kept by name.
+SERVING=$(served_versions | awk 'NF && !seen[$0]++' | tr '\n' ' ')
+PINNED=" ${SERVING}${BEFORE} "
 ACTIVE="$SERVED"
-for version in "$BEFORE" "$IN_USE" "$ALIASED"; do
+for version in $SERVING $BEFORE; do
     if [[ "$version" =~ ^[0-9]{4}-[0-9]{2}$ ]] && [[ "$version" < "$ACTIVE" ]]; then
         ACTIVE="$version"
     fi
 done
 
+# What a host loaded before versioned indices kept, uniprot_entries itself and uniprot_entries-legacy,
+# is only a candidate once nothing may still query it: INDEX_LOCATION names the suffix array through
+# current, and the index of the version it serves holds its proteins whole. Until then it may be the
+# only copy of them.
+OLD_INDICES_GO=false
+if api_follows_current && [ "$(index_status "${ALIAS}-${SERVED}")" = open ] && is_complete "${ALIAS}-${SERVED}"; then
+    OLD_INDICES_GO=true
+fi
+
 # Every version this host holds anything of, files or index, newest first. legacy and plain sort
-# last, because they predate every versioned one, plain before legacy. plain, the index
-# uniprot_entries itself, is only a candidate once INDEX_LOCATION names the suffix array through
-# current: until then an API from before versioned indices may still query it.
+# last, because they predate every versioned one, plain before legacy.
 versions=$(
     {
-        if api_follows_current && [ -n "$(index_status "$ALIAS")" ]; then
+        if [ "$OLD_INDICES_GO" = true ] && [ -n "$(index_status "$ALIAS")" ]; then
             echo plain
         fi
         # shellcheck disable=SC2231 # DATABASE_GLOB is a glob, and has to expand
@@ -121,9 +124,11 @@ versions=$(
             [ -d "$directory" ] && database_version_of "$directory"
         done
         curl -s -f "${OPENSEARCH_URL}/_cat/indices/${ALIAS}-*?h=index&expand_wildcards=all" | while read -r index; do
-            version_of_index "$index"
+            version=$(version_of_index "$index")
+            [ "$version" != legacy ] || [ "$OLD_INDICES_GO" = true ] || continue
+            printf '%s\n' "$version"
         done || true
-    } | sed 's/^legacy$/0000-01 legacy/; s/^plain$/0000-00 plain/; s/^\([0-9-]*\)$/\1 \1/' | sort -u -r -k1,1 | awk '{ print $2 }'
+    } | sed 's/^legacy$/0000-01 legacy/; s/^plain$/0000-00 plain/; s/^\([0-9-]*\)$/\1 \1/' | sort -u -r -k1,1 | awk 'NF == 2 { print $2 }'
 )
 
 # Newer than the older of what is served is kept: the other of the two, or loaded ahead of a switch.
@@ -148,7 +153,7 @@ for version in $versions; do
     fi
 done
 
-log "This host serves ${SERVED}${BEFORE:+, and switched from ${BEFORE}}${IN_USE:+; INDEX_LOCATION names ${IN_USE}}${ALIASED:+; the old alias points at ${ALIASED}}. Keeping:${keep% }"
+log "This host serves ${SERVING% }${BEFORE:+, and switched from ${BEFORE}}. Keeping:${keep% }"
 if [ -z "$remove" ]; then
     log "Nothing to remove."
     exit 0

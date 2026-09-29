@@ -9,6 +9,9 @@ DEPLOY_DIR="${BASH_SOURCE%/*}"
 # log, checkdep and errorAndExit, the same ones the pipelines and the OpenSearch loader use.
 # shellcheck source=../pipelines/lib/common.sh
 source "${DEPLOY_DIR}/../pipelines/lib/common.sh"
+# The names of the indices, and the requests to OpenSearch every script here shares.
+# shellcheck source=../opensearch/lib.sh
+source "${DEPLOY_DIR}/../opensearch/lib.sh"
 
 ################################################################################
 #                                   Settings                                   #
@@ -314,8 +317,8 @@ INFO
 # names the suffix array through it, so switch.sh switches by moving the link. `previous` is the one
 # before, for switch.sh --back. Neither is named uniprot-*, so DATABASE_GLOB never takes them for a
 # version. Functions rather than settings, since OUTPUT_DIR is only final once the flags are read.
-current_link() { echo "${OUTPUT_DIR}/current"; }
-previous_link() { echo "${OUTPUT_DIR}/previous"; }
+current_link() { echo "${OUTPUT_DIR%/}/current"; }
+previous_link() { echo "${OUTPUT_DIR%/}/previous"; }
 
 # The version a link points at, as YYYY-MM. Fails for no link, or one to no version's directory.
 linked_version() {
@@ -340,15 +343,15 @@ api_index_location() {
     sed -n 's/^INDEX_LOCATION=//p' "$API_ENV_FILE" | tail -n 1
 }
 
-# The versions this host serves, as YYYY-MM, one per line: what current points at, what
+# The versions this host serves, one per line, in this order: what current points at, what
 # INDEX_LOCATION names where it names a version's directory itself, as on a host not yet pointed
-# through current, and what an alias uniprot_entries an earlier release left points at, which an API
-# from before versioned indices queries. Often the same one more than once. Nothing where none says.
+# through current, and what an alias of the old name an earlier release left points at, which an API
+# from before versioned indices queries, legacy included. The one definition of served, which
+# load.sh, build.sh, clone.sh and prune.sh all go by. Often the same one more than once.
 served_versions() {
     linked_version "$(current_link)" 2> /dev/null || true
     database_version_of "$(api_index_location)" 2> /dev/null || true
-    curl -s -f --max-time 10 "${OPENSEARCH_URL}/_cat/aliases/uniprot_entries?h=index" 2> /dev/null \
-        | sed -n 's/^uniprot_entries-\([0-9]\{4\}-[0-9]\{2\}\)[[:space:]]*$/\1/p' || true
+    version_of_index "$(alias_target)"
 }
 
 # Whether this host serves a version, by any of them. Not grep -q: it would stop reading at the first
@@ -364,11 +367,15 @@ refuse_replacing_served() {
         || die "${1} is the version this host serves, so its files are not replaced under the running API. ${2}Switch this host to another version with switch.sh first."
 }
 
-# Whether INDEX_LOCATION names the suffix array through current, so the API follows a switch.
+# Whether INDEX_LOCATION names the suffix array through current, so the API follows a switch. By
+# the directories they resolve to, the one holding current, so a trailing slash or a path through a
+# link to OUTPUT_DIR says the same.
 api_follows_current() {
     local location
     location=$(api_index_location)
-    [ "${location%/}" = "$(current_link)/suffix-array" ]
+    location="${location%/}"
+    [[ "$location" == */current/suffix-array ]] || return 1
+    [ "$(readlink -f "${location%/current/suffix-array}")" = "$(readlink -f "$OUTPUT_DIR")" ]
 }
 
 # Loads and switches exclude each other: a switch stops OpenSearch, which breaks a load running then.

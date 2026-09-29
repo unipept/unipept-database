@@ -28,8 +28,6 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # shellcheck source=lib.sh
 source "${HERE}/lib.sh"
-# shellcheck source=../opensearch/lib.sh
-source "${HERE}/../opensearch/lib.sh"
 
 trap errorAndExit ERR
 trap 'exit 2' USR1
@@ -66,6 +64,14 @@ parse_arguments() {
 
 parse_arguments "$@"
 refuse_root
+
+# It clones and opens indices, so no switch stops OpenSearch under it and no prune removes what it
+# clones from.
+checkdep flock "util-linux"
+take_opensearch_lock -x || case $? in
+    1) die "a load, a switch or a prune is running on this host. Run this once it has finished." ;;
+    *) die "without the lock, a switch or a prune could run while this clones. Make ${OPENSEARCH_LOCK} writable for $(id -un), or set OPENSEARCH_LOCK." ;;
+esac
 
 [ -f "$API_ENV_FILE" ] || die "there is no ${API_ENV_FILE}, so this host runs no API and has nothing to switch."
 [ -r "$API_ENV_FILE" ] || die "cannot read ${API_ENV_FILE}. Run this as the user the API runs as."

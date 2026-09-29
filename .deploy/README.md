@@ -173,10 +173,11 @@ and keeps the index as it is. The loader marks an index once its last row is in,
 `opensearch/load.sh`, which this calls, is the loader alone: it drops and fills the index it is
 named, with none of these checks and no lock. Load through `bin/load.sh`.
 
-Reloading the version this host serves is refused, because the loader drops its index first and the
-API would search a partial one until it finishes. `--replace-live` does it anyway. Which version that
-is, `current` says, and `INDEX_LOCATION` where it names a version's directory itself. A load continued with `--skip`
-drops nothing, and goes ahead.
+Reloading a version this host serves is refused, because the loader drops its index first and the
+API would search a partial one until it finishes: switch away from it with `switch.sh` first, as any
+change to what the API serves goes through a stop. Which versions those are, `current` says,
+`INDEX_LOCATION` where it names a version's directory itself, and an alias `uniprot_entries` an
+earlier release left. A load continued with `--skip` drops nothing, and goes ahead.
 
 ## Switching the API to another version
 
@@ -297,9 +298,12 @@ It keeps the version `current` points at, the one `previous` points at, the one 
 names where it names one rather than going through `current`, every version newer than the oldest of
 those, since those are loaded ahead of a switch still to come, and the `--keep` newest ones older
 than that. What a host loaded before versioned indices kept, `uniprot_entries-legacy` and
-`uniprot_entries` itself, counts as the oldest; `uniprot_entries` only once `INDEX_LOCATION` goes
-through `current`, since an API from before then may still query it. Whatever an alias of the old
-name still points at is kept too, for the same reason. Without a `current` link it removes nothing.
+`uniprot_entries` itself, counts as the oldest, and only once nothing may still need it:
+`INDEX_LOCATION` goes through `current`, and the index of the version `current` points at is open
+and loaded to the end. Until then it may be the only copy of the proteins an API serves. Whatever
+an alias of the old name still points at is kept too. Without a `current` link, or with API settings
+it cannot read, it removes nothing. It takes the same lock as a load and a switch, and `migrate.sh`
+takes it too.
 
 `load.sh` warns when OpenSearch's disk is past its low watermark, 85% unless the cluster sets
 another. At 95% OpenSearch makes every index read-only, and a load running then fails part way, so

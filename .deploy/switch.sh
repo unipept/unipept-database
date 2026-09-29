@@ -31,8 +31,6 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # shellcheck source=lib.sh
 source "${HERE}/lib.sh"
-# shellcheck source=../opensearch/lib.sh
-source "${HERE}/../opensearch/lib.sh"
 
 trap errorAndExit ERR
 trap 'exit 2' USR1
