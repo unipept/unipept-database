@@ -19,8 +19,8 @@
 #      over ssh as that user, and sshd needs a shell to run a remote command.
 #   3. Install the tools build.sh, clone.sh and load.sh use, the ones not installed already.
 #   4. Create OUTPUT_DIR owned by DEPLOY_USER, and hand it the databases a run as root left.
-#   5. Install clone.sh, load.sh, verify.sh, prune.sh, switch.sh and what they call into
-#      INSTALL_ROOT, from this checkout, and write etc/deploy.conf there unless it is already there.
+#   5. Install clone.sh, load.sh, verify.sh, prune.sh, switch.sh, migrate.sh and what they call
+#      into INSTALL_ROOT, from this checkout, and write etc/deploy.conf there unless it is already there.
 #      Allow DEPLOY_USER to stop and start OpenSearch through sudo, and nothing else, which is what
 #      switch.sh needs to switch without root.
 #   6. Add the OpenSearch APT repository, unless it is already there.
@@ -33,11 +33,7 @@
 #  10. Enable and start the service, restarting it only when something above changed, and wait
 #      for it to answer.
 #  11. Set every index to hold no replica.
-#  12. On a host that runs the API, set up what switch.sh switches, once: point the `current` link in
-#      OUTPUT_DIR at the version the API's INDEX_LOCATION names, and keep the proteins of that
-#      version in the index named after it, where a host loaded before versioned indices has them
-#      elsewhere. Neither changes what the API serves.
-#  13. Say what is left to do, on this host.
+#  12. Say what is left to do, on this host.
 #
 # A second run with the same settings changes nothing and restarts nothing.
 
@@ -48,8 +44,6 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # shellcheck source=../lib.sh
 source "${HERE}/../lib.sh"
-# shellcheck source=../../opensearch/lib.sh
-source "${HERE}/../../opensearch/lib.sh"
 
 trap errorAndExit ERR
 trap 'exit 2' USR1
@@ -287,7 +281,7 @@ install_scripts() {
     local repository="${HERE}/../.." commit
 
     install -d -m 0755 "$PREFIX" "${PREFIX}/bin" "${PREFIX}/opensearch/mappings" "${PREFIX}/pipelines/lib"
-    install -m 0755 "${repository}/.deploy/"{lib.sh,clone.sh,load.sh,verify.sh,prune.sh,switch.sh} "${PREFIX}/bin/"
+    install -m 0755 "${repository}/.deploy/"{lib.sh,clone.sh,load.sh,verify.sh,prune.sh,switch.sh,migrate.sh} "${PREFIX}/bin/"
     install -m 0755 "${repository}/opensearch/load.sh" "${PREFIX}/opensearch/"
     # What an earlier release installed: it moved an alias the API no longer queries, and closed the
     # index the API did.
@@ -326,38 +320,6 @@ allow_opensearch_restart() {
     install -m 0440 -o root -g root "$staged" "$SUDOERS_FILE"
     rm -f "$staged"
     log "Allowed ${DEPLOY_USER} to stop and start OpenSearch through sudo, for switch.sh."
-}
-
-# On a host that runs the API, the `current` link switch.sh moves, and the index of the version it
-# points at. Once: a host that has the link keeps what it points at, which is switch.sh's to change.
-# Neither changes what the API serves: the link names the files it reads already, and the index
-# holds the proteins it queries already, now also under the name the API queries them by.
-set_up_current() {
-    local link location version directory target
-
-    [ -f "$API_ENV_FILE" ] || return 0
-    link=$(current_link)
-
-    if [ ! -L "$link" ]; then
-        location=$(api_index_location)
-        version=$(database_version_of "$location") || {
-            log "INDEX_LOCATION in ${API_ENV_FILE} is '${location}', which names no version, so ${link} is not set up. Point it at the version the API serves, as ${DEPLOY_USER}: ln -s uniprot-YYYY-MM ${link}"
-            return 0
-        }
-        directory="${location%/}"
-        directory="${directory%/suffix-array}"
-        target="$directory"
-        [ "$directory" != "${OUTPUT_DIR}/uniprot-${version}" ] || target="uniprot-${version}"
-        ln -s "$target" "$link"
-        chown -h "${DEPLOY_USER}:" "$link"
-        log "Pointed ${link} at ${target}, the version the API serves."
-    fi
-
-    version=$(linked_version "$link") || { log "${link} points at no version's directory. switch.sh cannot switch from it."; return 0; }
-    # In a subshell, since a request that fails stops the script it is in, and the rest of the host
-    # is set up already: what is left is said below, and running this again finishes it.
-    ( OPENSEARCH_URL="$(ready_url)" ensure_versioned_index "$version" "$OPENSEARCH_READY_TIMEOUT" ) \
-        || log "The proteins of ${version} are not in ${ALIAS}-${version} (above). The API queries that index by name."
 }
 
 add_repository() {
@@ -602,7 +564,6 @@ write_config
 write_unit_dropin
 start_opensearch
 single_node_settings "$(ready_url)"
-set_up_current
 
 cat >&2 <<EOF
 
@@ -614,12 +575,6 @@ As ${DEPLOY_USER} (sudo -iu ${DEPLOY_USER}), none of it as root:
   3. To build: clone unipept-database, which build.sh needs whole, and install Rust with rustup
      (https://rustup.rs); the repository pins the toolchain. .deploy/build.sh in that clone reads
      the same deploy.conf.
+  4. On a host that runs the API, once: ${PREFIX}/bin/migrate.sh, which sets it up for switch.sh.
 EOF
-location=$(api_index_location)
-if [ -f "$API_ENV_FILE" ] && [ "${location%/}" != "$(current_link)/suffix-array" ]; then
-    cat >&2 <<EOF
-  4. So the API follows switch.sh: set INDEX_LOCATION=$(current_link)/suffix-array in
-     ${API_ENV_FILE}. It names the same files, so nothing changes until the API next starts.
-EOF
-fi
 log "The host is ready."

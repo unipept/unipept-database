@@ -207,12 +207,17 @@ OpenSearch is a system service, so stopping it takes root. `install.sh` allows `
 
 ### Setting up a host for it
 
-`install.sh` does this once, on a host that runs the API. It points `current` at the version the
-API's `INDEX_LOCATION` names, and, on a host loaded before versioned indices, keeps the proteins it
-serves in the index named after that version too: a clone of `uniprot_entries`, or of
-`uniprot_entries-legacy` where an alias of that name points there, as an earlier release of these
-scripts left it, which costs no copy. Neither changes what the
-API serves. What is left is one line in the API's environment file, which it asks for:
+Once, on a host that runs the API, as `unipept`:
+
+```sh
+bin/migrate.sh
+```
+
+It points `current` at the version the API's `INDEX_LOCATION` names, and, on a host loaded before
+versioned indices, keeps the proteins it serves in the index named after that version too: a clone
+of `uniprot_entries`, or of `uniprot_entries-legacy` where an alias of that name points there, as
+an earlier release of these scripts left it, which costs no copy. Neither changes what the API
+serves, and running it again changes nothing on a host that is set up. What is left is one line in the API's environment file, which it asks for:
 
 ```sh
 INDEX_LOCATION=/mnt/data/current/suffix-array
