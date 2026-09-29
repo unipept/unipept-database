@@ -362,6 +362,7 @@ printf 'do not lose me\n' | as_deployer tee "${LOCAL}/uniprot-2026-03/marker" > 
 clone --remote-output-dir "$REMOTE" --output-dir "$LOCAL" --replace
 check "a switch to it during the copy stops it before the copy replaces it" "$?" "2"
 check_true "and says so" grep -q '2026-03 is the version this host serves' /work/last-output
+check_true "and that the copy is not kept" grep -q 'is not kept: the next clone.sh starts it again' /work/last-output
 check_true "the files the API reads are untouched" test -f "${LOCAL}/uniprot-2026-03/marker"
 as_deployer unlink "${LOCAL}/current"
 as_deployer rm -f "${LOCAL}/uniprot-2026-03/marker"
@@ -471,6 +472,10 @@ check_true "and says why" grep -q '2026-03 is the version this host serves' /wor
 as_deployer ln -s uniprot-2025-11 "${OUT}/current"
 load_proteins --output-dir "$OUT"
 check "and so it is where current points elsewhere" "$?" "2"
+as_deployer ln -sfn uniprot-2026-03 "${OUT}/current"
+load_proteins --output-dir "$OUT"
+check "and where current and INDEX_LOCATION name the same one" "$?" "2"
+check_true "saying so" grep -q '2026-03 is the version this host serves' /work/last-output
 as_deployer unlink "${OUT}/current"
 rm -f /opt/unipept-api/etc/unipept-api.env
 

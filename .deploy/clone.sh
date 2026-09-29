@@ -190,7 +190,7 @@ COPIED_DIR="${STAGING_DIR}/uniprot-${UNIPROT_VERSION}"
 check_database "$COPIED_DIR" "$REMOTE_DIR"
 
 # Again, since the copy took hours in which this host may have switched to the version.
-[ ! -e "$BUILD_DIR" ] || refuse_replacing_served "$UNIPROT_VERSION" "The copy is in ${COPIED_DIR}. "
+[ ! -e "$BUILD_DIR" ] || refuse_replacing_served "$UNIPROT_VERSION" "The copy in ${STAGING_DIR} is not kept: the next clone.sh starts it again. "
 swap_into_place "$COPIED_DIR" "$BUILD_DIR"
 rm -rf "${STAGING_DIR:?}"
 

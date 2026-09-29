@@ -113,7 +113,7 @@ done
 # current: until then an API from before versioned indices may still query it.
 versions=$(
     {
-        if [ "$(api_index_location)" = "$(current_link)/suffix-array" ] && [ -n "$(index_status "$ALIAS")" ]; then
+        if api_follows_current && [ -n "$(index_status "$ALIAS")" ]; then
             echo plain
         fi
         # shellcheck disable=SC2231 # DATABASE_GLOB is a glob, and has to expand

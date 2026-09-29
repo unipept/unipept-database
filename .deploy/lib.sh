@@ -340,17 +340,21 @@ api_index_location() {
     sed -n 's/^INDEX_LOCATION=//p' "$API_ENV_FILE" | tail -n 1
 }
 
-# The versions this host serves, as YYYY-MM, one per line: what current points at, and what
+# The versions this host serves, as YYYY-MM, one per line: what current points at, what
 # INDEX_LOCATION names where it names a version's directory itself, as on a host not yet pointed
-# through current. The two are one where it is. Nothing where neither says.
+# through current, and what an alias uniprot_entries an earlier release left points at, which an API
+# from before versioned indices queries. Often the same one more than once. Nothing where none says.
 served_versions() {
     linked_version "$(current_link)" 2> /dev/null || true
     database_version_of "$(api_index_location)" 2> /dev/null || true
+    curl -s -f --max-time 10 "${OPENSEARCH_URL}/_cat/aliases/uniprot_entries?h=index" 2> /dev/null \
+        | sed -n 's/^uniprot_entries-\([0-9]\{4\}-[0-9]\{2\}\)[[:space:]]*$/\1/p' || true
 }
 
-# Whether this host serves a version, by either.
+# Whether this host serves a version, by any of them. Not grep -q: it would stop reading at the first
+# match, and the write of a later line would then fail the pipeline under pipefail.
 is_served() {
-    served_versions | grep -qx "$1"
+    served_versions | grep -x "$1" > /dev/null
 }
 
 # Replacing the files of a version this host serves, under an API that has them open, is not a

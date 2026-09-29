@@ -88,6 +88,7 @@ check "the index was not dropped and the rest was added" "$(documents_in uniprot
 alias_target() { curl -s "${OPENSEARCH_URL}/_cat/aliases/uniprot_entries?h=index" | tr -d '[:space:]'; }
 
 not_in() { ! grep -q "$1" "$2"; }
+not_served() { ! served "$@"; }
 not_ready() { ! ready "$@"; }
 
 # open, close, or nothing for an index that is not there.
@@ -439,8 +440,7 @@ check "its closed index was opened" "$(status_of uniprot_entries-2027-02)" "open
 check "the one it left stays open, to go back to" "$(status_of uniprot_entries-2027-01)" "open"
 check "one loaded ahead stays open" "$(status_of uniprot_entries-2027-04)" "open"
 check "older ones are closed" "$(status_of uniprot_entries-2026-09)" "close"
-check "the alias of the old name is removed, which the API no longer queries" "$(alias_target)" ""
-check_true "and it says so" grep -q 'Removed the alias uniprot_entries' "${WORK}/switch.log"
+check "no alias of the old name is left, which the API no longer queries" "$(alias_target)" ""
 
 switch "${WORK}/switch-again.log" --uniprot-version 2027-02
 check "switching to what it serves succeeds" "$rc" "0"
@@ -651,6 +651,19 @@ prune "${WORK}/prune-alias.log" --keep 0
 check_true "it succeeds" [ "$rc" -eq 0 ]
 check_true "and says where the alias points" grep -q 'the old alias points at legacy' "${WORK}/prune-alias.log"
 check "that index is kept, though --keep is 0" "$(status_of uniprot_entries-legacy)" "open"
+
+
+section "a host serves what an alias of the old name points at"
+# An API from before versioned indices queries through the alias, whatever INDEX_LOCATION and
+# current say: load.sh, build.sh and clone.sh leave that version alone too.
+curl -s -X POST "${OPENSEARCH_URL}/_aliases" -H 'Content-Type: application/json' \
+    -d '{"actions":[{"remove":{"index":"*","alias":"uniprot_entries"}},{"add":{"index":"uniprot_entries-2027-02","alias":"uniprot_entries"}}]}' > /dev/null
+served() {
+    local url="$OPENSEARCH_URL"
+    ( source "${REPO}/.deploy/lib.sh" && OPENSEARCH_URL="$url" OUTPUT_DIR=/nonexistent API_ENV_FILE=/nonexistent is_served "$1" ) > /dev/null 2>&1
+}
+check_true "the version it points at is served" served 2027-02
+check_true "another is not" not_served 2027-01
 
 
 summary
