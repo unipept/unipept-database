@@ -145,10 +145,10 @@ the build, and stops, naming every problem, when it does not:
   less than 1.2 times that size in memory. The previous database is the measure of the next; a
   first build has none, and is only checked for the API and OpenSearch.
 
-Take the host out of the pool, and stop both before building:
+Stop both before building:
 
 ```sh
-sudo systemctl --user -M unipept@ stop unipept-api
+/opt/unipept-api/lib/deploy.sh stop
 sudo systemctl stop opensearch
 ```
 

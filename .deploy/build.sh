@@ -196,16 +196,16 @@ check_host() {
     [ -z "$problems" ] && return 0
     die "this host has no room for a build:${problems}
 
-Take the host out of the pool and free what is named above: remove what is not needed from
-${OUTPUT_DIR}, and stop the API and OpenSearch:
+Free what is named above: remove what is not needed from ${OUTPUT_DIR}, and stop the API and
+OpenSearch:
 
-  sudo systemctl --user -M ${DEPLOY_USER}@ stop unipept-api
+  ${API_DEPLOY} stop
   sudo systemctl stop opensearch
 
-Build again, then start them, OpenSearch first, and put the host back in the pool:
+Build again, then start them, OpenSearch first:
 
   sudo systemctl start opensearch
-  sudo systemctl --user -M ${DEPLOY_USER}@ start unipept-api
+  ${API_DEPLOY} start
 
 --skip-checks builds anyway."
 }

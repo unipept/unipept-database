@@ -220,10 +220,10 @@ check "a running API and OpenSearch stop it" "$?" "2"
 check_true "naming the API" grep -q 'The Unipept API is running' /work/last-output
 check_true "and OpenSearch" grep -q 'OpenSearch is running' /work/last-output
 # Each command on a line of its own, so a line copied from the message runs as it is.
-check_true "saying how to stop the API" grep -qx "  sudo systemctl --user -M ${DEPLOY}@ stop unipept-api" /work/last-output
+check_true "saying how to stop the API" grep -qx "  /opt/unipept-api/lib/deploy.sh stop" /work/last-output
 check_true "and OpenSearch" grep -qx "  sudo systemctl stop opensearch" /work/last-output
 check_true "and to start them again afterwards" grep -qx "  sudo systemctl start opensearch" /work/last-output
-check_true "both of them" grep -qx "  sudo systemctl --user -M ${DEPLOY}@ start unipept-api" /work/last-output
+check_true "both of them" grep -qx "  /opt/unipept-api/lib/deploy.sh start" /work/last-output
 check_true "nothing is built" test ! -e "${CHECK_OUT}/uniprot-2026-03"
 check_true "and before what an earlier build left is removed" test -e "${CHECK_OUT}/.build/kept"
 kill "$api_pid" 2> /dev/null; wait "$api_pid" 2> /dev/null
