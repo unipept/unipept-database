@@ -329,6 +329,23 @@ check "files included" "$(find "$DATA" -mindepth 1 -maxdepth 1 -printf '%f\n' | 
 section ".deploy/prune.sh refuses what it cannot decide"
 prune "${WORK}/prune-nokeep.log"
 check "without --keep it stops" "$rc" "2"
+
+# A load or a switch holds the lock; removing versions under either could take what it works on.
+mkdir -p /run/lock
+chmod 1777 /run/lock
+runuser -u unipept -- touch /run/lock/unipept-opensearch.lock
+# shellcheck disable=SC2016 # $1 belongs to the inner shell
+setpriv --reuid unipept --regid unipept --init-groups bash -c 'exec 9>> "$1"; flock -s 9; exec sleep 30' _ /run/lock/unipept-opensearch.lock &
+holder=$!
+for _ in $(seq 50); do
+    runuser -u unipept -- flock -n -x /run/lock/unipept-opensearch.lock true 2> /dev/null || break
+    sleep 0.1
+done
+prune "${WORK}/prune-locked.log" --keep 0
+check "a load or a switch running stops it" "$rc" "2"
+check_true "and says so" grep -q 'a load or a switch is running on this host' "${WORK}/prune-locked.log"
+kill "$holder"
+wait "$holder" 2> /dev/null
 curl -s -X POST "${OPENSEARCH_URL}/_aliases" -H 'Content-Type: application/json' \
     -d '{"actions":[{"remove":{"index":"uniprot_entries-2026-07","alias":"uniprot_entries"}}]}' > /dev/null
 prune "${WORK}/prune-noalias.log" --keep 0
@@ -521,6 +538,8 @@ check "its closed index was opened" "$(status_of uniprot_entries-2027-02)" "open
 check "the one it left stays open, to go back to" "$(status_of uniprot_entries-2027-01)" "open"
 check "one loaded ahead stays open" "$(status_of uniprot_entries-2027-04)" "open"
 check "older ones are closed" "$(status_of uniprot_entries-2026-09)" "close"
+check "the alias of the old name is removed, which the API no longer queries" "$(alias_target)" ""
+check_true "and it says so" grep -q 'Removed the alias uniprot_entries' "${WORK}/switch.log"
 
 switch "${WORK}/switch-again.log" --uniprot-version 2027-02
 check "switching to what it serves succeeds" "$rc" "0"
@@ -613,6 +632,16 @@ ensure 2027-01
 check "an index already there is left as it is" "$rc" "0"
 check "without a word" "$(cat "${WORK}/ensure.log")" ""
 
+# What an interrupted run leaves: the clone, and the block on what it was cloned from.
+load_version uniprot_entries-legacy P00007
+curl -s -X PUT "${OPENSEARCH_URL}/uniprot_entries-legacy/_settings" -H 'Content-Type: application/json' \
+    -d '{"index.blocks.write":true}' > /dev/null
+ensure 2027-01
+check "run again, it succeeds" "$rc" "0"
+check "and lifts the block" \
+    "$(curl -s -o /dev/null -w '%{http_code}' -X PUT "${OPENSEARCH_URL}/uniprot_entries-legacy/_doc/P00098" -H 'Content-Type: application/json' -d '{"uniprot_accession_number":"P00098"}')" "201"
+curl -s -X DELETE "${OPENSEARCH_URL}/uniprot_entries-legacy" > /dev/null
+
 curl -s -X POST "${OPENSEARCH_URL}/uniprot_entries-2027-01/_close" > /dev/null
 ensure 2027-01
 check "one that is closed" "$rc" "0"
@@ -628,7 +657,7 @@ curl -s -X DELETE "${OPENSEARCH_URL}/uniprot_entries-2027-05" > /dev/null
 # A host whose alias points at the old index activate.sh kept.
 load_version uniprot_entries-legacy P00001 P00002
 curl -s -X POST "${OPENSEARCH_URL}/_aliases" -H 'Content-Type: application/json' \
-    -d '{"actions":[{"remove":{"index":"uniprot_entries-2026-07","alias":"uniprot_entries"}},{"add":{"index":"uniprot_entries-legacy","alias":"uniprot_entries"}}]}' > /dev/null
+    -d '{"actions":[{"add":{"index":"uniprot_entries-legacy","alias":"uniprot_entries"}}]}' > /dev/null
 ensure 2025-04
 check "the proteins behind the alias are kept" "$rc" "0"
 check "under the version's name" "$(documents_in uniprot_entries-2025-04)" "2"
@@ -679,7 +708,8 @@ check "the proteins are in the index named after it" "$(documents_in uniprot_ent
 check "what the API reads is not touched" "$(sed -n 's/^INDEX_LOCATION=//p' "${MIG}/api.env")" "${MIG}/data/uniprot-2024-12/suffix-array"
 check_true "it says to point INDEX_LOCATION through current" grep -qxF "  INDEX_LOCATION=${MIG}/data/current/suffix-array" "${WORK}/migrate.log"
 
-printf 'INDEX_LOCATION=%s/data/current/suffix-array\n' "$MIG" > "${MIG}/api.env"
+# With a slash at the end, which names the same directory.
+printf 'INDEX_LOCATION=%s/data/current/suffix-array/\n' "$MIG" > "${MIG}/api.env"
 migrate "${WORK}/migrate-again.log"
 check "a second run succeeds" "$rc" "0"
 check_true "and says the host is set up" grep -q 'This host is set up for switch.sh' "${WORK}/migrate-again.log"

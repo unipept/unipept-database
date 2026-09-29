@@ -220,8 +220,10 @@ the files and the proteins always change together.
 - **A start that fails, a link that cannot be moved, or an interrupt**, points the links back and
   starts both on the version it left, so the host serves what it served. It says which of the two
   it ended on.
-- **Once the API serves, it closes the indices of versions older than both**, which frees their
-  memory. It deletes nothing; `prune.sh` does.
+- **Once the API serves, it removes the alias `uniprot_entries`** an earlier release of these
+  scripts left, which only an API from before versioned indices queried, and **closes the indices
+  of versions older than both**, which frees their memory. It deletes nothing; `prune.sh` does, and
+  takes the same lock, so it never removes a version a load or a switch is working on.
 
 It knows nothing of a load balancer: take the host out of the pool first where it is in one.
 

@@ -115,9 +115,19 @@ keep_as() {
     # clone needed, which it would otherwise copy: a load continued with --skip writes to it.
     opensearch_request "keeping ${source} as ${target}" "200" POST "${source}/_clone/${target}" \
         -H 'Content-Type: application/json' -d '{"settings":{"index.number_of_replicas":0,"index.blocks.write":null}}' > /dev/null
-    opensearch_request "allowing writes to ${source} again" "200" PUT "${source}/_settings" \
-        -H 'Content-Type: application/json' -d '{"index.blocks.write":null}' > /dev/null
-    wait_until_ready "$target" "$timeout"
+    # The clone recovers from the source's files, so the source takes no writes until it is ready,
+    # and takes them again whether it becomes ready or not.
+    if ! index_ready "$target" "$timeout"; then
+        allow_writes "$source"
+        opensearch_fail "${target} was not ready within ${timeout} seconds. Delete it, and run this again."
+    fi
+    allow_writes "$source"
+}
+
+# Lifts the write block keep_as puts on an index, where it is there. Quietly: nothing depends on it.
+allow_writes() {
+    curl -s -o /dev/null -X PUT "${OPENSEARCH_URL}/$1/_settings" \
+        -H 'Content-Type: application/json' -d '{"index.blocks.write":null}' || true
 }
 
 # Makes sure the proteins of a version are in its own index, uniprot_entries-<version>, which is
@@ -135,9 +145,13 @@ ensure_versioned_index() {
             || opensearch_fail "${index} is there and was not loaded to the end. Load it again with load.sh --uniprot-version ${version}, or continue its load with --skip."
         if [ "$status" = close ]; then
             opensearch_request "opening ${index}" "200" POST "${index}/_open" > /dev/null
-            wait_until_ready "$index" "$timeout"
             echo "Opened ${index}, which was closed." 1>&2
         fi
+        # A clone an interrupted run left carries the mark it was cloned with, ready or not.
+        wait_until_ready "$index" "$timeout"
+        # And the block that run put on what it cloned from.
+        [ -z "$(index_status "$ALIAS")" ] || allow_writes "$ALIAS"
+        [ -z "$(index_status "$LEGACY")" ] || allow_writes "$LEGACY"
         return 0
     fi
 

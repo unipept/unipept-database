@@ -85,6 +85,13 @@ refuse_root
 [ -n "$OUTPUT_DIR" ] || die "--output-dir requires a value."
 require_opensearch
 
+# Held until it ends, so no switch moves to a version, and no load fills one, while it removes them.
+checkdep flock "util-linux"
+take_opensearch_lock -x || case $? in
+    1) die "a load or a switch is running on this host. Prune once it has finished." ;;
+    *) die "without the lock, a load or a switch could run while this removes versions. Make ${OPENSEARCH_LOCK} writable for $(id -un), or set OPENSEARCH_LOCK." ;;
+esac
+
 active_index=$(alias_target)
 QUERIED=$(version_of_index "$active_index")
 [ -n "$QUERIED" ] \
