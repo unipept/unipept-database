@@ -527,7 +527,7 @@ check "and the API was started on it" "$(cat "${SW_STATE}/started-on")" "uniprot
 mv "${SW_DATA}/current" "${SW}/current.away"
 switch "${WORK}/switch-nocurrent.log" --uniprot-version 2027-02
 check "a host without current stops it" "$rc" "2"
-check_true "and says install.sh sets it up" grep -q 'Run .deploy/opensearch/install.sh again, as root' "${WORK}/switch-nocurrent.log"
+check_true "and says migrate.sh sets it up" grep -q 'Run migrate.sh once' "${WORK}/switch-nocurrent.log"
 mv "${SW}/current.away" "${SW_DATA}/current"
 
 "${REPO}/.deploy/switch.sh" --output-dir "$SW_DATA" --uniprot-version 2027-02 > /dev/null 2>&1
@@ -569,5 +569,58 @@ curl -s -X DELETE "${OPENSEARCH_URL}/uniprot_entries" > /dev/null
 ensure 2025-02
 check "no index holding them fails it" "$rc" "1"
 check_true "and says to load them" grep -q 'no index holds the proteins of 2025-02' "${WORK}/ensure.log"
+
+section ".deploy/migrate.sh"
+# A host set up before switch.sh: INDEX_LOCATION names the version's directory itself, and its
+# proteins are in the index uniprot_entries.
+MIG=/tmp/migrate
+rm -rf "${MIG:?}"
+mkdir -p "${MIG}/data/uniprot-2024-12/suffix-array"
+printf 'INDEX_LOCATION=%s/data/uniprot-2024-12/suffix-array\n' "$MIG" > "${MIG}/api.env"
+chown -R unipept: "$MIG"
+load_version uniprot_entries P24001 P24002
+migrate() {
+    local logfile=$1
+    shift
+    runuser -u unipept -- env API_ENV_FILE="${MIG}/api.env" "${REPO}/.deploy/migrate.sh" \
+        --output-dir "${MIG}/data" --opensearch-url "$OPENSEARCH_URL" "$@" > "$logfile" 2>&1
+    rc=$?
+}
+
+migrate "${WORK}/migrate.log"
+check "it succeeds" "$rc" "0"
+check "current points at the version the API serves" "$(readlink "${MIG}/data/current")" "uniprot-2024-12"
+check "and belongs to the user the API runs as" "$(stat -c %U "${MIG}/data/current")" "unipept"
+check "the proteins are in the index named after it" "$(documents_in uniprot_entries-2024-12)" "2"
+check "what the API reads is not touched" "$(sed -n 's/^INDEX_LOCATION=//p' "${MIG}/api.env")" "${MIG}/data/uniprot-2024-12/suffix-array"
+check_true "it says to point INDEX_LOCATION through current" grep -qxF "  INDEX_LOCATION=${MIG}/data/current/suffix-array" "${WORK}/migrate.log"
+
+printf 'INDEX_LOCATION=%s/data/current/suffix-array\n' "$MIG" > "${MIG}/api.env"
+migrate "${WORK}/migrate-again.log"
+check "a second run succeeds" "$rc" "0"
+check_true "and says the host is set up" grep -q 'This host is set up for switch.sh' "${WORK}/migrate-again.log"
+check "with nothing left to do" "$(grep -c 'Still to do' "${WORK}/migrate-again.log")" "0"
+
+# Where switch.sh has moved it since, it stays.
+runuser -u unipept -- ln -sfn uniprot-2027-01 "${MIG}/data/current"
+migrate "${WORK}/migrate-moved.log"
+check "a link switch.sh moved is left" "$(readlink "${MIG}/data/current")" "uniprot-2027-01"
+
+runuser -u unipept -- unlink "${MIG}/data/current"
+printf 'INDEX_LOCATION=/srv/index\n' > "${MIG}/api.env"
+migrate "${WORK}/migrate-noversion.log"
+check "an INDEX_LOCATION that names no version stops it" "$rc" "2"
+check_true "and says how to set it up by hand" grep -q "Point ${MIG}/data/current at it yourself" "${WORK}/migrate-noversion.log"
+check_true "setting up no link" test ! -L "${MIG}/data/current"
+
+mv "${MIG}/api.env" "${MIG}/api.env.away"
+migrate "${WORK}/migrate-noapi.log"
+check "a host without the API stops it" "$rc" "2"
+check_true "and says so" grep -q 'this host runs no API' "${WORK}/migrate-noapi.log"
+mv "${MIG}/api.env.away" "${MIG}/api.env"
+
+env API_ENV_FILE="${MIG}/api.env" "${REPO}/.deploy/migrate.sh" --output-dir "${MIG}/data" > /dev/null 2>&1
+check "as root it stops" "$?" "2"
+
 
 summary

@@ -238,7 +238,7 @@ CURRENT=$(current_link)
 PREVIOUS=$(previous_link)
 
 [ -L "$CURRENT" ] \
-    || die "there is no ${CURRENT}, so which version this host serves is not known. Run .deploy/opensearch/install.sh again, as root: it sets it up from the API's INDEX_LOCATION."
+    || die "there is no ${CURRENT}, so which version this host serves is not known. Run migrate.sh once: it sets it up from the API's INDEX_LOCATION."
 FROM_LINK=$(readlink "$CURRENT")
 FROM=$(linked_version "$CURRENT") || die "${CURRENT} points at ${FROM_LINK}, which is no version's directory."
 FROM_INDEX="${ALIAS}-${FROM}"

@@ -865,7 +865,7 @@ install_opensearch --user "$DEPLOY" --output-dir "$OUT" --prefix "$PREFIX_A"
 check "it succeeds" "$?" "0"
 check_true "the scripts a host runs are there" \
     test -x "${PREFIX_A}/bin/clone.sh" -a -x "${PREFIX_A}/bin/load.sh" -a -x "${PREFIX_A}/bin/verify.sh" -a -x "${PREFIX_A}/bin/prune.sh" \
-        -a -x "${PREFIX_A}/bin/switch.sh"
+        -a -x "${PREFIX_A}/bin/switch.sh" -a -x "${PREFIX_A}/bin/migrate.sh"
 check_true "and what they call" \
     test -x "${PREFIX_A}/opensearch/activate.sh" -a -f "${PREFIX_A}/opensearch/lib.sh" \
         -a -f "${PREFIX_A}/opensearch/mappings/uniprot_entries.json" -a -f "${PREFIX_A}/pipelines/lib/common.sh"
@@ -901,41 +901,6 @@ touch -d '2000-01-01' "$SUDOERS"
 install_opensearch --user "$DEPLOY" --output-dir "$OUT" --prefix "$PREFIX_A"
 check "a second run succeeds" "$?" "0"
 check "and leaves the rule as it is" "$(stat -c %Y "$SUDOERS")" "$(date -d '2000-01-01' +%s)"
-
-
-section "install.sh sets up what switch.sh switches, on a host that runs the API"
-
-API_ENV=/opt/unipept-api/etc/unipept-api.env
-mkdir -p "$(dirname "$API_ENV")"
-printf 'PORT=8080\nINDEX_LOCATION=%s/uniprot-2026-03/suffix-array\n' "$OUT" > "$API_ENV"
-install_opensearch --user "$DEPLOY" --output-dir "$OUT" --prefix "$PREFIX_A"
-check "it succeeds" "$?" "0"
-check "current points at the version the API serves" "$(readlink "${OUT}/current")" "uniprot-2026-03"
-check "and belongs to the deploy user" "$(stat -c %U "${OUT}/current")" "$DEPLOY"
-check_true "it says to point INDEX_LOCATION through it" grep -qF "set INDEX_LOCATION=${OUT}/current/suffix-array" /work/last-output
-# The stand-in OpenSearch answers nothing, so no index holds the proteins, which it says.
-check_true "and that the proteins are not in the version's index" grep -q 'The proteins of 2026-03 are not in uniprot_entries-2026-03' /work/last-output
-check "what the API reads is not touched" "$(sed -n 's/^INDEX_LOCATION=//p' "$API_ENV")" "${OUT}/uniprot-2026-03/suffix-array"
-
-# Once the API reads through it, and switch.sh has moved it on: it is left where it points.
-sed -i "s#^INDEX_LOCATION=.*#INDEX_LOCATION=${OUT}/current/suffix-array#" "$API_ENV"
-as_deployer ln -sfn uniprot-2025-11 "${OUT}/current"
-install_opensearch --user "$DEPLOY" --output-dir "$OUT" --prefix "$PREFIX_A"
-check "a second run succeeds" "$?" "0"
-check "and leaves current where switch.sh put it" "$(readlink "${OUT}/current")" "uniprot-2025-11"
-check_true "with nothing left to do about INDEX_LOCATION" not grep -q 'set INDEX_LOCATION' /work/last-output
-
-rm -f "${OUT:?}/current"
-printf 'INDEX_LOCATION=/srv/index\n' > "$API_ENV"
-install_opensearch --user "$DEPLOY" --output-dir "$OUT" --prefix "$PREFIX_A"
-check "an INDEX_LOCATION that names no version succeeds" "$?" "0"
-check_true "sets up no link" test ! -L "${OUT}/current"
-check_true "and says how to" grep -q "which names no version, so ${OUT}/current is not set up" /work/last-output
-
-rm -f "$API_ENV"
-install_opensearch --user "$DEPLOY" --output-dir "$OUT" --prefix "$PREFIX_A"
-check "a host without the API succeeds" "$?" "0"
-check_true "and sets up nothing for it" test ! -L "${OUT}/current"
 rm -f /work/loader-calls
 as_deployer "${PREFIX_A}/bin/load.sh" --check > /work/last-output 2>&1
 check "the installed load.sh reaches the installed loader" "$?" "0"
