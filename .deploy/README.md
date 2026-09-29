@@ -170,9 +170,12 @@ fails can be rerun at any time. `--skip` passes over the rows a load that stoppe
 and keeps the index as it is. The loader marks an index once its last row is in, and
 `load.sh --check` asks for that mark.
 
+`opensearch/load.sh`, which this calls, is the loader alone: it drops and fills the index it is
+named, with none of these checks and no lock. Load through `bin/load.sh`.
+
 Reloading the version this host serves is refused, because the loader drops its index first and the
 API would search a partial one until it finishes. `--replace-live` does it anyway. Which version that
-is, `current` says, or on a host set up before it, `INDEX_LOCATION`. A load continued with `--skip`
+is, `current` says, and `INDEX_LOCATION` where it names a version's directory itself. A load continued with `--skip`
 drops nothing, and goes ahead.
 
 ## Switching the API to another version
@@ -293,8 +296,8 @@ names where it names one rather than going through `current`, every version newe
 those, since those are loaded ahead of a switch still to come, and the `--keep` newest ones older
 than that. What a host loaded before versioned indices kept, `uniprot_entries-legacy` and
 `uniprot_entries` itself, counts as the oldest; `uniprot_entries` only once `INDEX_LOCATION` goes
-through `current`, since an API from before then may still query it. Without a `current` link it
-removes nothing.
+through `current`, since an API from before then may still query it. Whatever an alias of the old
+name still points at is kept too, for the same reason. Without a `current` link it removes nothing.
 
 `load.sh` warns when OpenSearch's disk is past its low watermark, 85% unless the cluster sets
 another. At 95% OpenSearch makes every index read-only, and a load running then fails part way, so

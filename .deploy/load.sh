@@ -101,7 +101,7 @@ verify_database "${DATABASE_DIR}/suffix-array" \
 # The version the API serves is queried while it runs: dropping its index would empty the protein
 # search until the load finishes. Where a host has no current link yet, INDEX_LOCATION says which one
 # it serves. A load continued with --skip keeps its index, and drops nothing.
-if [ "$(served_version)" = "$UNIPROT_VERSION" ] && [ -z "$SKIP_ROWS" ] && [ "$REPLACE_LIVE" != true ]; then
+if is_served "$UNIPROT_VERSION" && [ -z "$SKIP_ROWS" ] && [ "$REPLACE_LIVE" != true ]; then
     die "${UNIPROT_VERSION} is the version this host serves. Reloading it empties the API's protein search until the load finishes; pass --replace-live to do so anyway."
 fi
 

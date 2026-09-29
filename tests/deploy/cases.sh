@@ -351,6 +351,22 @@ check_true "it says to switch away first" grep -q '2026-03 is the version this h
 check_true "before copying anything" test ! -e "${LOCAL}/.clone"
 as_deployer unlink "${LOCAL}/current"
 
+# A switch to the version while it is being copied, which takes hours on a real one.
+cat > "${STUBS}/scp" <<SCP
+#!/usr/bin/env bash
+/usr/bin/scp "\$@" || exit
+ln -sfn uniprot-2026-03 ${LOCAL}/current
+SCP
+chmod +x "${STUBS}/scp"
+printf 'do not lose me\n' | as_deployer tee "${LOCAL}/uniprot-2026-03/marker" > /dev/null
+clone --remote-output-dir "$REMOTE" --output-dir "$LOCAL" --replace
+check "a switch to it during the copy stops it before the copy replaces it" "$?" "2"
+check_true "and says so" grep -q '2026-03 is the version this host serves' /work/last-output
+check_true "the files the API reads are untouched" test -f "${LOCAL}/uniprot-2026-03/marker"
+as_deployer unlink "${LOCAL}/current"
+as_deployer rm -f "${LOCAL}/uniprot-2026-03/marker"
+rm "${STUBS}/scp"
+
 # An scp that loses the k-mer table on the way, which the remote has.
 cat > "${STUBS}/scp" <<SCP
 #!/usr/bin/env bash
@@ -452,6 +468,10 @@ printf 'INDEX_LOCATION=%s/uniprot-2026-03/suffix-array\n' "$OUT" > /opt/unipept-
 load_proteins --output-dir "$OUT"
 check "without current, the version INDEX_LOCATION names is refused too" "$?" "2"
 check_true "and says why" grep -q '2026-03 is the version this host serves' /work/last-output
+as_deployer ln -s uniprot-2025-11 "${OUT}/current"
+load_proteins --output-dir "$OUT"
+check "and so it is where current points elsewhere" "$?" "2"
+as_deployer unlink "${OUT}/current"
 rm -f /opt/unipept-api/etc/unipept-api.env
 
 rm -f /work/loader-calls

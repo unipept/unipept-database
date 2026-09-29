@@ -86,11 +86,16 @@ BEFORE=$(linked_version "$(previous_link)" 2> /dev/null) || BEFORE=''
 # What INDEX_LOCATION names, where it names a version rather than current: the files the API reads
 # until it is pointed through the link, which removing would take from under it.
 IN_USE=$(database_version_of "$(api_index_location)" 2> /dev/null) || IN_USE=''
+# What an alias of the old name points at, where an earlier release left one: an API from before
+# versioned indices queries through it, whatever INDEX_LOCATION says.
+ALIASED=$(version_of_index "$(alias_target)")
 
-# The oldest of these: what is kept is counted from there.
+# Kept whatever --keep says. The oldest of the versioned ones is where what is kept is counted from;
+# legacy has no place in that order, and is kept by name.
+PINNED=" ${SERVED} ${BEFORE} ${IN_USE} ${ALIASED} "
 ACTIVE="$SERVED"
-for version in "$BEFORE" "$IN_USE"; do
-    if [ -n "$version" ] && [[ "$version" < "$ACTIVE" ]]; then
+for version in "$BEFORE" "$IN_USE" "$ALIASED"; do
+    if [[ "$version" =~ ^[0-9]{4}-[0-9]{2}$ ]] && [[ "$version" < "$ACTIVE" ]]; then
         ACTIVE="$version"
     fi
 done
@@ -124,6 +129,8 @@ for version in $versions; do
     if [ "$version" = "$ACTIVE" ]; then
         keep+="${version} "
         seen_active=true
+    elif [[ "$PINNED" == *" ${version} "* ]]; then
+        keep+="${version} "
     elif [ "$seen_active" = false ]; then
         keep+="${version} "
     elif [ "$kept_older" -lt "$KEEP" ]; then
@@ -134,7 +141,7 @@ for version in $versions; do
     fi
 done
 
-log "This host serves ${SERVED}${BEFORE:+, and switched from ${BEFORE}}${IN_USE:+; INDEX_LOCATION names ${IN_USE}}. Keeping:${keep% }"
+log "This host serves ${SERVED}${BEFORE:+, and switched from ${BEFORE}}${IN_USE:+; INDEX_LOCATION names ${IN_USE}}${ALIASED:+; the old alias points at ${ALIASED}}. Keeping:${keep% }"
 if [ -z "$remove" ]; then
     log "Nothing to remove."
     exit 0

@@ -340,18 +340,23 @@ api_index_location() {
     sed -n 's/^INDEX_LOCATION=//p' "$API_ENV_FILE" | tail -n 1
 }
 
-# The version this host serves, as YYYY-MM: what current points at, or, on a host that has no current
-# link yet, what INDEX_LOCATION names. Nothing where neither says.
-served_version() {
-    linked_version "$(current_link)" 2> /dev/null \
-        || database_version_of "$(api_index_location)" 2> /dev/null \
-        || true
+# The versions this host serves, as YYYY-MM, one per line: what current points at, and what
+# INDEX_LOCATION names where it names a version's directory itself, as on a host not yet pointed
+# through current. The two are one where it is. Nothing where neither says.
+served_versions() {
+    linked_version "$(current_link)" 2> /dev/null || true
+    database_version_of "$(api_index_location)" 2> /dev/null || true
 }
 
-# Replacing the files of the version this host serves, under an API that has them open, is not a
+# Whether this host serves a version, by either.
+is_served() {
+    served_versions | grep -qx "$1"
+}
+
+# Replacing the files of a version this host serves, under an API that has them open, is not a
 # switch: it would serve other files from its next start, with nothing checked. Switch away first.
 refuse_replacing_served() {
-    [ "$(served_version)" != "$1" ] \
+    ! is_served "$1" \
         || die "${1} is the version this host serves, so its files are not replaced under the running API. ${2}Switch this host to another version with switch.sh first."
 }
 

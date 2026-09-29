@@ -611,4 +611,17 @@ env API_ENV_FILE="${MIG}/api.env" "${REPO}/.deploy/migrate.sh" --output-dir "${M
 check "as root it stops" "$?" "2"
 
 
+section ".deploy/prune.sh keeps what an alias of the old name points at"
+# A host an earlier release left with the alias on uniprot_entries-legacy, whose API is still from
+# before versioned indices and queries through it.
+curl -s -X DELETE "${OPENSEARCH_URL}/uniprot_entries" > /dev/null
+[ -n "$(status_of uniprot_entries-legacy)" ] || load_version uniprot_entries-legacy P00001
+curl -s -X POST "${OPENSEARCH_URL}/_aliases" -H 'Content-Type: application/json' \
+    -d '{"actions":[{"add":{"index":"uniprot_entries-legacy","alias":"uniprot_entries"}}]}' > /dev/null
+prune "${WORK}/prune-alias.log" --keep 0
+check_true "it succeeds" [ "$rc" -eq 0 ]
+check_true "and says where the alias points" grep -q 'the old alias points at legacy' "${WORK}/prune-alias.log"
+check "that index is kept, though --keep is 0" "$(status_of uniprot_entries-legacy)" "open"
+
+
 summary
