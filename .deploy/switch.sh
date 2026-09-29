@@ -17,10 +17,11 @@
 #   2. Stop the API, then OpenSearch.
 #   3. Point `current` at the new version, and `previous` at the one it pointed at.
 #   4. Start OpenSearch, and wait for it and for the new version's index.
-#   5. Close the indices of versions older than both of those, which frees the memory they hold.
-#      Nothing is deleted: .deploy/prune.sh removes old versions.
-#   6. Start the API, which checks the host once more and waits until it serves.
-#   A failure in 4 or 6, or an interrupt from 2 on, points the links back and starts both on the
+#   5. Start the API, which checks the host once more and waits until it serves.
+#   6. Remove the alias of the old name an earlier release left, which only an API from before
+#      versioned indices queried, and close the indices of versions older than both, which frees the
+#      memory they hold. Nothing is deleted: .deploy/prune.sh removes old versions.
+#   A failure in 3, 4 or 5, or an interrupt from 2 on, points the links back and starts both on the
 #   version it left, so the host serves what it served before.
 
 set -eo pipefail
@@ -106,7 +107,7 @@ problem() {
 # OpenSearch still run, so a host that cannot switch keeps serving exactly as it did. Every problem is
 # reported.
 check_host() {
-    local location usage_text
+    local usage_text
 
     [ -d "$TARGET_DIR" ] \
         || problem "there is no ${TARGET_DIR}. Copy it with clone.sh, or build it, first."
@@ -121,9 +122,8 @@ check_host() {
             || problem "${API_DEPLOY} has no stop and start: update unipept-api on this host first."
     fi
 
-    location=$(api_index_location)
-    [ "${location%/}" = "${CURRENT}/suffix-array" ] \
-        || problem "INDEX_LOCATION in ${API_ENV_FILE} is '${location}', so the API would not follow the switch. Set it to ${CURRENT}/suffix-array."
+    api_follows_current \
+        || problem "INDEX_LOCATION in ${API_ENV_FILE} is '$(api_index_location)', so the API would not follow the switch. Set it to ${CURRENT}/suffix-array."
 
     # The links are moved once both are stopped, where a failure would leave the host down.
     [ -w "$OUTPUT_DIR" ] || problem "${OUTPUT_DIR} is not writable by $(id -un), so ${CURRENT} cannot be moved."
@@ -193,6 +193,23 @@ start_opensearch() {
     wait_for_opensearch || { echo "OpenSearch did not answer within ${OPENSEARCH_START_TIMEOUT} seconds." 1>&2; return 1; }
 }
 
+# The alias of the old name an earlier release of these scripts left, which an API from before
+# versioned indices queries. An API that has just started on a switched version queries the index
+# of that version instead, so nothing needs the alias any more, and removing it lets prune.sh reclaim
+# what it points at. A failure is only reported.
+drop_old_alias() {
+    local target
+    target=$(alias_target)
+    [ -n "$target" ] || return 0
+
+    if curl -s -f -o /dev/null -X POST "${OPENSEARCH_URL}/_aliases" -H 'Content-Type: application/json' \
+        -d "{\"actions\":[{\"remove\":{\"index\":\"*\",\"alias\":\"${ALIAS}\"}}]}"; then
+        log "Removed the alias ${ALIAS}, from ${target}, which nothing queries any more."
+    else
+        echo "WARN could not remove the alias ${ALIAS}; prune.sh keeps ${target} while it is there." 1>&2
+    fi
+}
+
 # The indices of versions older than both the one switched to and the one left: neither the API nor
 # a --back needs them, and an open index holds memory. Versions newer than the one switched to are
 # loaded ahead of a switch and stay open. uniprot_entries itself, which a host loaded before
@@ -203,7 +220,8 @@ close_older_indices() {
     local oldest="$TARGET" index status version
 
     [[ "$FROM" > "$oldest" ]] || oldest="$FROM"
-    curl -s -f "${OPENSEARCH_URL}/_cat/indices/${ALIAS},${ALIAS}-*?h=index,status&expand_wildcards=all&ignore_unavailable=true" 2> /dev/null \
+    # Every index, filtered by name here: a name pattern would also expand an alias to what it names.
+    curl -s -f "${OPENSEARCH_URL}/_cat/indices?h=index,status&expand_wildcards=all" 2> /dev/null \
         | while read -r index status; do
             [ "$status" = open ] || continue
             version=$(version_of_index "$index")
@@ -307,5 +325,6 @@ log "${CURRENT} points at uniprot-${TARGET}."
 start_both || switch_back
 
 trap - INT TERM HUP
+drop_old_alias
 close_older_indices
 log "This host serves ${TARGET}. ${FROM} is kept; switch back to it with --back."

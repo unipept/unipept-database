@@ -80,6 +80,13 @@ refuse_root
 [ -n "$OUTPUT_DIR" ] || die "--output-dir requires a value."
 require_opensearch
 
+# Held until it ends, so no switch moves to a version, and no load fills one, while it removes them.
+checkdep flock "util-linux"
+take_opensearch_lock -x || case $? in
+    1) die "a load or a switch is running on this host. Prune once it has finished." ;;
+    *) die "without the lock, a load or a switch could run while this removes versions. Make ${OPENSEARCH_LOCK} writable for $(id -un), or set OPENSEARCH_LOCK." ;;
+esac
+
 SERVED=$(linked_version "$(current_link)" 2> /dev/null) \
     || die "there is no $(current_link) pointing at a version, so which one this host serves is not known. Nothing is removed."
 BEFORE=$(linked_version "$(previous_link)" 2> /dev/null) || BEFORE=''

@@ -93,7 +93,7 @@ require_opensearch
 ensure_versioned_index "$VERSION" "$READY_TIMEOUT"
 log "The proteins of ${VERSION} are in ${ALIAS}-${VERSION}, which the API queries."
 
-if [ "${LOCATION%/}" = "${CURRENT}/suffix-array" ]; then
+if api_follows_current; then
     log "INDEX_LOCATION names ${CURRENT}/suffix-array. This host is set up for switch.sh."
 else
     cat >&2 <<EOF

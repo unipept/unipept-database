@@ -360,6 +360,13 @@ refuse_replacing_served() {
         || die "${1} is the version this host serves, so its files are not replaced under the running API. ${2}Switch this host to another version with switch.sh first."
 }
 
+# Whether INDEX_LOCATION names the suffix array through current, so the API follows a switch.
+api_follows_current() {
+    local location
+    location=$(api_index_location)
+    [ "${location%/}" = "$(current_link)/suffix-array" ]
+}
+
 # Loads and switches exclude each other: a switch stops OpenSearch, which breaks a load running then.
 # A load takes OPENSEARCH_LOCK shared, so loads of different versions still run side by side, and a
 # switch takes it exclusively, from its checks to its end. On file descriptor 9, held until the
