@@ -61,13 +61,6 @@ parse_arguments() {
     }
 }
 
-wait_until_ready() {
-    local health
-    # A wait that runs out answers 408, with timed_out in its body.
-    health=$(opensearch_request "waiting for $1" "200 408" GET "_cluster/health/$1?wait_for_status=yellow&timeout=${READY_TIMEOUT}s")
-    [[ "$health" != *'"timed_out":true'* ]] || opensearch_fail "$1 was not ready within ${READY_TIMEOUT} seconds."
-}
-
 parse_arguments "$@"
 require_opensearch
 
@@ -76,7 +69,7 @@ status=$(index_status "$INDEX_NAME")
 
 if [[ "$status" == close ]]; then
     opensearch_request "opening ${INDEX_NAME}" "200" POST "${INDEX_NAME}/_open" > /dev/null
-    wait_until_ready "$INDEX_NAME"
+    wait_until_ready "$INDEX_NAME" "$READY_TIMEOUT"
     log "Opened ${INDEX_NAME}, which was kept closed."
 fi
 
@@ -101,16 +94,11 @@ elif [[ -n "$(index_status "$ALIAS")" ]]; then
     # that is already there is one an earlier run made and did not get to switch the alias after,
     # so it is taken as it is: only a copy of this index carries the mark under that name.
     if [[ -z "$(index_status "$LEGACY")" ]]; then
-        mark_complete "$ALIAS"
-        opensearch_request "blocking writes to ${ALIAS}" "200" PUT "${ALIAS}/_settings" \
-            -H 'Content-Type: application/json' -d '{"index.blocks.write":true}' > /dev/null
-        # No replica, whatever the old index asked for: a single node cannot place one.
-        opensearch_request "keeping ${ALIAS} as ${LEGACY}" "200" POST "${ALIAS}/_clone/${LEGACY}" \
-            -H 'Content-Type: application/json' -d '{"settings":{"index.number_of_replicas":0}}' > /dev/null
+        keep_as "$ALIAS" "$LEGACY" "$READY_TIMEOUT"
     else
         log "${LEGACY} is there from a switch that did not finish; carrying on from it."
+        wait_until_ready "$LEGACY" "$READY_TIMEOUT"
     fi
-    wait_until_ready "$LEGACY"
     is_complete "$LEGACY" \
         || opensearch_fail "${LEGACY} is there and is not a copy of ${ALIAS}, so the old index has nowhere to be kept. Delete ${LEGACY} if it is not needed."
     log "${ALIAS} was an index. It is kept as ${LEGACY}."

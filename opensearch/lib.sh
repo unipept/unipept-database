@@ -66,3 +66,48 @@ mark_complete() {
     opensearch_request "marking $1 as loaded to the end" "200" PUT "$1/_mapping" \
         -H 'Content-Type: application/json' -d "{\"_meta\":{${COMPLETE_MARK}}}" > /dev/null
 }
+
+# Waits for an index to be ready to serve: its primary started, which is all a single node offers.
+# A wait that runs out answers 408, with timed_out in its body.
+wait_until_ready() {
+    local index="$1" timeout="$2" health
+
+    health=$(opensearch_request "waiting for ${index}" "200 408" GET "_cluster/health/${index}?wait_for_status=yellow&timeout=${timeout}s")
+    [[ "$health" != *'"timed_out":true'* ]] || opensearch_fail "${index} was not ready within ${timeout} seconds."
+}
+
+# Keeps a whole index under another name, by a clone: hard links, so no copy. The clone needs the
+# source to take no writes, which the API, only reading, does not notice, and it carries the mark
+# over with the mapping. The source was served, so it was whole, and is marked as such first.
+keep_as() {
+    local source="$1" target="$2" timeout="$3"
+
+    mark_complete "$source"
+    opensearch_request "blocking writes to ${source}" "200" PUT "${source}/_settings" \
+        -H 'Content-Type: application/json' -d '{"index.blocks.write":true}' > /dev/null
+    # No replica, whatever the old index asked for: a single node cannot place one.
+    opensearch_request "keeping ${source} as ${target}" "200" POST "${source}/_clone/${target}" \
+        -H 'Content-Type: application/json' -d '{"settings":{"index.number_of_replicas":0}}' > /dev/null
+    wait_until_ready "$target" "$timeout"
+}
+
+# Makes sure the proteins of a version are in its own index, uniprot_entries-<version>, which is
+# what the API queries. A host loaded before versioned indices has them in uniprot_entries itself,
+# or in uniprot_entries-legacy once activate.sh has moved the alias off it: either is kept under the
+# version's name. Fails where no index holds them.
+ensure_versioned_index() {
+    local version="$1" timeout="$2" index="${ALIAS}-${1}" source=''
+
+    [ -z "$(index_status "$index")" ] || return 0
+
+    if [ -n "$(index_status "$ALIAS")" ]; then
+        source="$ALIAS"
+    elif [ "$(alias_target)" = "$LEGACY" ]; then
+        source="$LEGACY"
+    else
+        opensearch_fail "no index holds the proteins of ${version}: ${index} is not there, and ${ALIAS} is not an index or an alias for ${LEGACY}. Load them with load.sh --uniprot-version ${version}."
+    fi
+
+    keep_as "$source" "$index" "$timeout"
+    echo "Kept ${source} as ${index}, the index the API queries for ${version}." 1>&2
+}
