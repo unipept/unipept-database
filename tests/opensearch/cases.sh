@@ -191,6 +191,32 @@ check "the one before is kept, with its files" "$(status_of uniprot_entries-2026
 check "and everything between the two" "$(status_of uniprot_entries-2026-05)" "open"
 runuser -u unipept -- unlink "${DATA}/previous"
 
+section ".deploy/prune.sh keeps what INDEX_LOCATION names"
+# A host whose API still reads a version's directory itself, rather than through current.
+printf 'INDEX_LOCATION=%s/uniprot-2026-04/suffix-array\n' "$DATA" > /tmp/prune-api.env
+chmod 644 /tmp/prune-api.env
+prune_with_api() {
+    local logfile=$1
+    shift
+    runuser -u unipept -- env API_ENV_FILE=/tmp/prune-api.env "${REPO}/.deploy/prune.sh" --output-dir "$DATA" \
+        --opensearch-url "$OPENSEARCH_URL" "$@" > "$logfile" 2>&1
+    rc=$?
+}
+prune_with_api "${WORK}/prune-inuse.log" --keep 0
+check_true "it succeeds" [ "$rc" -eq 0 ]
+check_true "and says what INDEX_LOCATION names" grep -q 'INDEX_LOCATION names 2026-04' "${WORK}/prune-inuse.log"
+check "that version is kept, with its files" "$(status_of uniprot_entries-2026-04) $([ -d "${DATA}/uniprot-2026-04" ] && echo kept)" "open kept"
+check "and uniprot_entries itself, which an API reading it that way may still query" "$(status_of uniprot_entries)" "open"
+
+# Once INDEX_LOCATION goes through current, the API queries the versioned index, and uniprot_entries
+# itself is the oldest.
+printf 'INDEX_LOCATION=%s/current/suffix-array\n' "$DATA" > /tmp/prune-api.env
+prune_with_api "${WORK}/prune-plain.log" --keep 1 --dry-run
+check_true "uniprot_entries itself is then removed as the oldest" grep -q 'Removing:.* plain$' "${WORK}/prune-plain.log"
+check "not on a dry run" "$(status_of uniprot_entries)" "open"
+rm -f /tmp/prune-api.env
+
+
 section ".deploy/prune.sh keeps a version loaded ahead of a switch"
 load_version uniprot_entries-2026-09 P90001
 mkdir -p "${DATA}/uniprot-2026-09/suffix-array" && chown -R unipept: "${DATA}/uniprot-2026-09"

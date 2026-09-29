@@ -134,7 +134,8 @@ A build writes to `${OUTPUT_DIR}/.build/` and is renamed into place at the end, 
 this host serves is only ever replaced by a finished one. A build whose version already exists
 stops and keeps its result in `.build/`; `--replace` lets it take the place of the old one. The
 same holds for `clone.sh`, through `${OUTPUT_DIR}/.clone/`. Both therefore need room for two
-databases at the moment they finish.
+databases at the moment they finish. Neither replaces the version this host serves, whose files the
+running API has open: switch away from it with `switch.sh` first.
 
 Before it removes what an earlier build left in `.build/`, `build.sh` checks the host has room for
 the build, and stops, naming every problem, when it does not:
@@ -170,7 +171,9 @@ and keeps the index as it is. The loader marks an index once its last row is in,
 `load.sh --check` asks for that mark.
 
 Reloading the version this host serves is refused, because the loader drops its index first and the
-API would search a partial one until it finishes. `--replace-live` does it anyway.
+API would search a partial one until it finishes. `--replace-live` does it anyway. Which version that
+is, `current` says, or on a host set up before it, `INDEX_LOCATION`. A load continued with `--skip`
+drops nothing, and goes ahead.
 
 ## Switching the API to another version
 
@@ -284,10 +287,13 @@ Every version stays on a host until this removes it, its directory and its OpenS
 together, so going back to one is a switch rather than a build or a copy. A closed index costs no
 memory; what old versions cost is disk.
 
-It keeps the version `current` points at, the one `previous` points at, every version newer than
-the older of the two, since those are loaded ahead of a switch still to come, and the `--keep`
-newest ones older than that. `uniprot_entries-legacy`, where a host still has it, counts as the
-oldest. Without a `current` link it removes nothing.
+It keeps the version `current` points at, the one `previous` points at, the one `INDEX_LOCATION`
+names where it names one rather than going through `current`, every version newer than the oldest of
+those, since those are loaded ahead of a switch still to come, and the `--keep` newest ones older
+than that. What a host loaded before versioned indices kept, `uniprot_entries-legacy` and
+`uniprot_entries` itself, counts as the oldest; `uniprot_entries` only once `INDEX_LOCATION` goes
+through `current`, since an API from before then may still query it. Without a `current` link it
+removes nothing.
 
 `load.sh` warns when OpenSearch's disk is past its low watermark, 85% unless the cluster sets
 another. At 95% OpenSearch makes every index read-only, and a load running then fails part way, so

@@ -12,7 +12,9 @@
 #   - both, and every version newer than the older of the two, which is loaded ahead of a switch
 #     still to come;
 #   - the --keep newest versions older than that, to go back to.
-# The old index a host had before versioned indices, uniprot_entries-legacy, counts as the oldest.
+# What a host loaded before versioned indices kept, uniprot_entries-legacy and uniprot_entries itself,
+# counts as the oldest. The version INDEX_LOCATION names is kept too, where it names one rather than
+# the suffix array through current.
 #
 # Without a current link there is no telling what the API serves, so nothing is removed.
 
@@ -72,11 +74,14 @@ parse_arguments() {
     [[ "$KEEP" =~ ^[0-9]+$ ]] || die "--keep takes a number of versions, not '${KEEP}'."
 }
 
-# The version an index holds, YYYY-MM or legacy, or nothing for one that is not a database's.
+# The version an index holds, YYYY-MM, or legacy or plain for what a host loaded before versioned
+# indices kept, or nothing for one that is not a database's.
 version_of_index() {
     local version="${1#"${ALIAS}"-}"
 
-    if [ "$1" = "$LEGACY" ]; then
+    if [ "$1" = "$ALIAS" ]; then
+        echo plain
+    elif [ "$1" = "$LEGACY" ]; then
         echo legacy
     elif [[ "$version" =~ ^[0-9]{4}-[0-9]{2}$ ]]; then
         echo "$version"
@@ -92,17 +97,27 @@ require_opensearch
 SERVED=$(linked_version "$(current_link)" 2> /dev/null) \
     || die "there is no $(current_link) pointing at a version, so which one this host serves is not known. Nothing is removed."
 BEFORE=$(linked_version "$(previous_link)" 2> /dev/null) || BEFORE=''
+# What INDEX_LOCATION names, where it names a version rather than current: the files the API reads
+# until it is pointed through the link, which removing would take from under it.
+IN_USE=$(database_version_of "$(api_index_location)" 2> /dev/null) || IN_USE=''
 
-# The older of the two: what is kept is counted from there.
+# The oldest of these: what is kept is counted from there.
 ACTIVE="$SERVED"
-if [ -n "$BEFORE" ] && [[ "$BEFORE" < "$SERVED" ]]; then
-    ACTIVE="$BEFORE"
-fi
+for version in "$BEFORE" "$IN_USE"; do
+    if [ -n "$version" ] && [[ "$version" < "$ACTIVE" ]]; then
+        ACTIVE="$version"
+    fi
+done
 
-# Every version this host holds anything of, files or index, newest first. legacy sorts last,
-# because it predates every versioned one.
+# Every version this host holds anything of, files or index, newest first. legacy and plain sort
+# last, because they predate every versioned one, plain before legacy. plain, the index
+# uniprot_entries itself, is only a candidate once INDEX_LOCATION names the suffix array through
+# current: until then an API from before versioned indices may still query it.
 versions=$(
     {
+        if [ "$(api_index_location)" = "$(current_link)/suffix-array" ] && [ -n "$(index_status "$ALIAS")" ]; then
+            echo plain
+        fi
         # shellcheck disable=SC2231 # DATABASE_GLOB is a glob, and has to expand
         for directory in "${OUTPUT_DIR}"/${DATABASE_GLOB}; do
             [ -d "$directory" ] && database_version_of "$directory"
@@ -110,7 +125,7 @@ versions=$(
         curl -s -f "${OPENSEARCH_URL}/_cat/indices/${ALIAS}-*?h=index&expand_wildcards=all" | while read -r index; do
             version_of_index "$index"
         done || true
-    } | sed 's/^legacy$/0000-00 legacy/; s/^\([0-9-]*\)$/\1 \1/' | sort -u -r -k1,1 | awk '{ print $2 }'
+    } | sed 's/^legacy$/0000-01 legacy/; s/^plain$/0000-00 plain/; s/^\([0-9-]*\)$/\1 \1/' | sort -u -r -k1,1 | awk '{ print $2 }'
 )
 
 # Newer than the older of what is served is kept: the other of the two, or loaded ahead of a switch.
@@ -133,7 +148,7 @@ for version in $versions; do
     fi
 done
 
-log "This host serves ${SERVED}${BEFORE:+, and switched from ${BEFORE}}. Keeping:${keep% }"
+log "This host serves ${SERVED}${BEFORE:+, and switched from ${BEFORE}}${IN_USE:+; INDEX_LOCATION names ${IN_USE}}. Keeping:${keep% }"
 if [ -z "$remove" ]; then
     log "Nothing to remove."
     exit 0
@@ -144,6 +159,9 @@ log "Removing: ${remove% }"
 for version in $remove; do
     if [ "$version" = legacy ]; then
         index="$LEGACY"
+        directory=''
+    elif [ "$version" = plain ]; then
+        index="$ALIAS"
         directory=''
     else
         index="${ALIAS}-${version}"

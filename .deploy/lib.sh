@@ -336,6 +336,21 @@ api_index_location() {
     sed -n 's/^INDEX_LOCATION=//p' "$API_ENV_FILE" | tail -n 1
 }
 
+# The version this host serves, as YYYY-MM: what current points at, or, on a host that has no current
+# link yet, what INDEX_LOCATION names. Nothing where neither says.
+served_version() {
+    linked_version "$(current_link)" 2> /dev/null \
+        || database_version_of "$(api_index_location)" 2> /dev/null \
+        || true
+}
+
+# Replacing the files of the version this host serves, under an API that has them open, is not a
+# switch: it would serve other files from its next start, with nothing checked. Switch away first.
+refuse_replacing_served() {
+    [ "$(served_version)" != "$1" ] \
+        || die "${1} is the version this host serves, so its files are not replaced under the running API. ${2}Switch this host to another version with switch.sh first."
+}
+
 # Loads and switches exclude each other: a switch stops OpenSearch, which breaks a load running then.
 # A load takes this lock shared, so loads of different versions still run side by side, and a switch
 # takes it exclusively, from its checks to its end. On file descriptor 9, held until the script

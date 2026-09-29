@@ -194,6 +194,15 @@ check_true "the database that was there is untouched" test -f "${OUT}/uniprot-20
 check_true "its own result is kept for inspection" test -d "${OUT}/.build"
 check_true "it says how to replace it" grep -q -- '--replace' /work/last-output
 
+# Not while this host serves it: its files would change under the running API, with nothing checked.
+as_deployer ln -s uniprot-2026-03 "${OUT}/current"
+build --output-dir "$OUT" --scratch-dir /work/scratch --replace
+check "--replace of the version this host serves stops it" "$?" "2"
+check_true "and says to switch away first" grep -q '2026-03 is the version this host serves, so its files are not replaced' /work/last-output
+check_true "keeping the build" grep -qF "This build is in ${OUT}/.build" /work/last-output
+check_true "and the database that was there" test -f "${OUT}/uniprot-2026-03/marker"
+as_deployer unlink "${OUT}/current"
+
 build --output-dir "$OUT" --scratch-dir /work/scratch --replace
 check "--replace succeeds" "$?" "0"
 check_true "the old database is gone" test ! -f "${OUT}/uniprot-2026-03/marker"
@@ -335,6 +344,13 @@ check "a version that is already here stops" "$?" "2"
 check_true "it says how to replace it" grep -q -- '--replace' /work/last-output
 check_true "it stops before copying anything" test ! -e "${LOCAL}/.clone"
 
+as_deployer ln -s uniprot-2026-03 "${LOCAL}/current"
+clone --remote-output-dir "$REMOTE" --output-dir "$LOCAL" --replace
+check "--replace of the version this host serves stops" "$?" "2"
+check_true "it says to switch away first" grep -q '2026-03 is the version this host serves' /work/last-output
+check_true "before copying anything" test ! -e "${LOCAL}/.clone"
+as_deployer unlink "${LOCAL}/current"
+
 # An scp that loses the k-mer table on the way, which the remote has.
 cat > "${STUBS}/scp" <<SCP
 #!/usr/bin/env bash
@@ -426,7 +442,17 @@ check "--replace-live reloads it anyway" "$?" "0"
 check_true "into its index" grep -q -- '--index-name uniprot_entries-2026-03$' /work/loader-calls
 load_proteins --output-dir "$OUT" --uniprot-version 2025-11
 check "another version loads beside it" "$?" "0"
+load_proteins --output-dir "$OUT" --skip 500
+check "a load of it continued with --skip, which drops nothing, goes ahead" "$?" "0"
 as_deployer unlink "${OUT}/current"
+
+# A host that runs the API and has no current link yet: INDEX_LOCATION says what it serves.
+mkdir -p /opt/unipept-api/etc
+printf 'INDEX_LOCATION=%s/uniprot-2026-03/suffix-array\n' "$OUT" > /opt/unipept-api/etc/unipept-api.env
+load_proteins --output-dir "$OUT"
+check "without current, the version INDEX_LOCATION names is refused too" "$?" "2"
+check_true "and says why" grep -q '2026-03 is the version this host serves' /work/last-output
+rm -f /opt/unipept-api/etc/unipept-api.env
 
 rm -f /work/loader-calls
 load_proteins --output-dir "$OUT" --uniprot-version 2025-11 --skip 500

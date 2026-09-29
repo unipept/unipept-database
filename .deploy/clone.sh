@@ -177,6 +177,7 @@ BUILD_DIR="${OUTPUT_DIR}/uniprot-${UNIPROT_VERSION}"
 if [ -e "$BUILD_DIR" ] && [ "$REPLACE" != true ]; then
     die "${BUILD_DIR} already exists. Pass --replace to replace it."
 fi
+[ ! -e "$BUILD_DIR" ] || refuse_replacing_served "$UNIPROT_VERSION" ""
 
 # Copied here and renamed into place at the end, so a copy that fails leaves the database this
 # host already serves untouched.
