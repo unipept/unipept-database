@@ -102,10 +102,6 @@ problem() {
     problems=$((problems + 1))
 }
 
-opensearch_answers() {
-    curl -s -f --max-time 10 "${OPENSEARCH_URL}/_cluster/health" > /dev/null 2>&1
-}
-
 # Everything the switch depends on that can be known without changing anything, while the API and
 # OpenSearch still run, so a host that cannot switch keeps serving exactly as it did. Every problem is
 # reported.
@@ -136,8 +132,10 @@ check_host() {
 
     # A load writes to OpenSearch for hours, and stopping OpenSearch under it breaks it part way.
     # Held until the switch ends, so no load starts during it either.
-    [ ! -w "$OUTPUT_DIR" ] || take_opensearch_lock -x \
-        || problem "a load is running on this host. Let it finish, or stop it, first."
+    take_opensearch_lock -x || case $? in
+        1) problem "a load is running on this host. Let it finish, or stop it, first." ;;
+        *) problem "without the lock, a load could start while OpenSearch is stopped. Make ${OPENSEARCH_LOCK} writable for $(id -un), or set OPENSEARCH_LOCK." ;;
+    esac
 
     { sudo -n -l systemctl stop opensearch && sudo -n -l systemctl start opensearch; } > /dev/null 2>&1 \
         || problem "${DEPLOY_USER} may not stop and start OpenSearch through sudo. Run .deploy/opensearch/install.sh again, as root."
@@ -169,7 +167,8 @@ check_host() {
 check_api() {
     if [ "$TARGET_STATUS" = close ]; then
         opensearch_request "opening ${TARGET_INDEX}" "200" POST "${TARGET_INDEX}/_open" > /dev/null
-        wait_until_ready_quietly "$TARGET_INDEX" || { problem "${TARGET_INDEX} was opened and did not become ready."; return 0; }
+        index_ready "$TARGET_INDEX" "$OPENSEARCH_START_TIMEOUT" \
+            || { problem "${TARGET_INDEX} was opened and did not become ready within ${OPENSEARCH_START_TIMEOUT} seconds."; return 0; }
         log "Opened ${TARGET_INDEX}, which was closed."
     fi
 
@@ -207,10 +206,12 @@ close_older_indices() {
     curl -s -f "${OPENSEARCH_URL}/_cat/indices/${ALIAS},${ALIAS}-*?h=index,status&expand_wildcards=all&ignore_unavailable=true" 2> /dev/null \
         | while read -r index status; do
             [ "$status" = open ] || continue
-            version="${index#"${ALIAS}"-}"
-            { [ "$index" = "$LEGACY" ] || [ "$index" = "$ALIAS" ]; } && version=0000-00
-            [[ "$version" =~ ^[0-9]{4}-[0-9]{2}$ ]] || continue
-            [[ "$version" < "$oldest" ]] || continue
+            version=$(version_of_index "$index")
+            case $version in
+                '') continue ;;
+                legacy | plain) ;;
+                *) [[ "$version" < "$oldest" ]] || continue ;;
+            esac
             if curl -s -f -o /dev/null -X POST "${OPENSEARCH_URL}/${index}/_close"; then
                 log "Closed ${index}, which neither version needs."
             else
@@ -222,14 +223,10 @@ close_older_indices() {
 # Starts both on the version switched to. Fails at the first that does not come up.
 start_both() {
     start_opensearch || return 1
-    wait_until_ready_quietly "$TARGET_INDEX" || return 1
+    index_ready "$TARGET_INDEX" "$OPENSEARCH_START_TIMEOUT" \
+        || { echo "${TARGET_INDEX} was not ready within ${OPENSEARCH_START_TIMEOUT} seconds." 1>&2; return 1; }
     log "Starting the API."
     "$API_DEPLOY" start
-}
-
-# wait_until_ready, which stops the script on a timeout, as a test.
-wait_until_ready_quietly() {
-    ( wait_until_ready "$1" "$OPENSEARCH_START_TIMEOUT" ) || { echo "$1 was not ready within ${OPENSEARCH_START_TIMEOUT} seconds." 1>&2; return 1; }
 }
 
 # Puts the links back and starts both on the version this left. Ends the script either way.
@@ -247,7 +244,7 @@ switch_back() {
     fi
 
     if { systemctl is-active --quiet opensearch 2> /dev/null && wait_for_opensearch; } || start_opensearch; then
-        if wait_until_ready_quietly "$FROM_INDEX" && "$API_DEPLOY" start; then
+        if index_ready "$FROM_INDEX" "$OPENSEARCH_START_TIMEOUT" && "$API_DEPLOY" start; then
             die "the switch to ${TARGET} failed (above). This host is back on ${FROM}, and serves it."
         fi
     fi
@@ -284,11 +281,10 @@ fi
 log "Checking that this host can switch from ${FROM} to ${TARGET}."
 check_host
 [ "$problems" -eq 0 ] || die "${problems} problem(s), so nothing was changed."
-if [ "$CHECK_ONLY" = false ] || [ "$TARGET_STATUS" = open ]; then
-    check_api
-fi
+# A --check on a closed index has stopped above, so what is left can be checked.
+check_api
 if [ "$problems" -gt 0 ]; then
-    [ "$TARGET_STATUS" = close ] && [ "$CHECK_ONLY" = false ] \
+    [ "$TARGET_STATUS" = close ] \
         && die "${problems} problem(s), so nothing was changed but opening ${TARGET_INDEX}, which serves nothing new."
     die "${problems} problem(s), so nothing was changed."
 fi

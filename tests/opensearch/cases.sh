@@ -87,6 +87,9 @@ check "the index was not dropped and the rest was added" "$(documents_in uniprot
 # Where the uniprot_entries alias points, or nothing.
 alias_target() { curl -s "${OPENSEARCH_URL}/_cat/aliases/uniprot_entries?h=index" | tr -d '[:space:]'; }
 
+not_in() { ! grep -q "$1" "$2"; }
+not_ready() { ! ready "$@"; }
+
 # open, close, or nothing for an index that is not there.
 status_of() { curl -s "${OPENSEARCH_URL}/_cat/indices/$1?h=status&expand_wildcards=all" 2> /dev/null | grep -xE 'open|close'; }
 
@@ -343,12 +346,18 @@ check "nothing is stopped" "$(calls api-calls)" " check --index ${SW_DATA}/unipr
 rm -f "${SW_STATE:?}/check-fails"
 
 # A load holds the lock shared, as load.sh takes it, from before it drops its index to its end. One
-# process that holds it, so killing it releases it: runuser would not pass the signal on.
-runuser -u unipept -- touch "${SW_DATA}/.opensearch.lock"
-bash -c 'exec 9>> "$1"; flock -s 9; exec sleep 30' _ "${SW_DATA}/.opensearch.lock" &
+# process that holds it, so killing it releases it: runuser would not pass the signal on, and setpriv
+# replaces itself. As unipept, as a load runs: /run/lock is sticky, and even root may not open a file
+# another user owns there. The lock is one per host, wherever the databases are.
+LOCK=/run/lock/unipept-opensearch.lock
+mkdir -p /run/lock
+chmod 1777 /run/lock
+runuser -u unipept -- touch "$LOCK"
+# shellcheck disable=SC2016 # $1 belongs to the inner shell
+setpriv --reuid unipept --regid unipept --init-groups bash -c 'exec 9>> "$1"; flock -s 9; exec sleep 30' _ "$LOCK" &
 loader=$!
 for _ in $(seq 50); do
-    runuser -u unipept -- flock -n -x "${SW_DATA}/.opensearch.lock" true 2> /dev/null || break
+    runuser -u unipept -- flock -n -x "$LOCK" true 2> /dev/null || break
     sleep 0.1
 done
 switch "${WORK}/switch-loading.log" --uniprot-version 2027-02
@@ -356,6 +365,16 @@ check "a load running stops it" "$rc" "2"
 check_true "and says so" grep -q 'a load is running on this host' "${WORK}/switch-loading.log"
 kill "$loader"
 wait "$loader" 2> /dev/null
+
+# A lock it cannot open is said to be that, not taken for a load.
+mv "$LOCK" "${LOCK}.away"
+touch "$LOCK"
+chmod 644 "$LOCK"
+switch "${WORK}/switch-lockopen.log" --uniprot-version 2027-02
+check "a lock it cannot open stops it" "$rc" "2"
+check_true "and says so" grep -q "cannot open the lock ${LOCK} as unipept" "${WORK}/switch-lockopen.log"
+check_true "not that a load is running" not_in 'a load is running' "${WORK}/switch-lockopen.log"
+mv "${LOCK}.away" "$LOCK"
 
 # The links are moved with both stopped, so what would stop that is found before.
 chmod 555 "$SW_DATA"
@@ -483,6 +502,13 @@ ensure() {
     ( source "${REPO}/pipelines/lib/common.sh" && source "${REPO}/opensearch/lib.sh" && ensure_versioned_index "$1" 60 ) > "${WORK}/ensure.log" 2>&1
     rc=$?
 }
+ready() {
+    ( source "${REPO}/pipelines/lib/common.sh" && source "${REPO}/opensearch/lib.sh" && OPENSEARCH_URL="$1" index_ready "$2" 1 ) > /dev/null 2>&1
+}
+check_true "an index that answers is ready" ready "$OPENSEARCH_URL" uniprot_entries-2027-01
+check_true "one that is not there is not" not_ready "$OPENSEARCH_URL" uniprot_entries-2099-01
+check_true "nor is one where OpenSearch does not answer" not_ready http://127.0.0.1:1 uniprot_entries-2027-01
+check_true "nor one whose request OpenSearch answers with an error" not_ready "${OPENSEARCH_URL}/no-such-path" uniprot_entries-2027-01
 is_marked() { curl -s "${OPENSEARCH_URL}/$1/_mapping" | grep -qF '"unipept_load":"complete"'; }
 
 ensure 2027-01
@@ -512,6 +538,10 @@ check "the proteins behind the alias are kept" "$rc" "0"
 check "under the version's name" "$(documents_in uniprot_entries-2025-04)" "2"
 check_true "marked as loaded to the end" is_marked uniprot_entries-2025-04
 check_true "and it says so" grep -q 'Kept uniprot_entries-legacy as uniprot_entries-2025-04' "${WORK}/ensure.log"
+check "the clone takes writes, as a load continued with --skip makes" \
+    "$(curl -s -o /dev/null -w '%{http_code}' -X PUT "${OPENSEARCH_URL}/uniprot_entries-2025-04/_doc/P00099" -H 'Content-Type: application/json' -d '{"uniprot_accession_number":"P00099"}')" "201"
+check "and so does the index it was made from" \
+    "$(curl -s -o /dev/null -w '%{http_code}' -X PUT "${OPENSEARCH_URL}/uniprot_entries-legacy/_doc/P00099" -H 'Content-Type: application/json' -d '{"uniprot_accession_number":"P00099"}')" "201"
 
 # A host loaded before versioned indices, whose proteins are in uniprot_entries itself.
 curl -s -X POST "${OPENSEARCH_URL}/_aliases" -H 'Content-Type: application/json' \

@@ -42,6 +42,10 @@ API_ENV_FILE=${API_ENV_FILE:-/opt/unipept-api/etc/unipept-api.env}
 # shellcheck disable=SC2034 # read by the scripts that source this file
 API_DEPLOY=${API_DEPLOY:-/opt/unipept-api/lib/deploy.sh}
 
+# The lock that keeps loads and switches apart. One per host, as the OpenSearch it guards is, whatever
+# OUTPUT_DIR a run is given; /run/lock is there for every user to take one in.
+OPENSEARCH_LOCK=${OPENSEARCH_LOCK:-/run/lock/unipept-opensearch.lock}
+
 # What this host decides. Read after the defaults, so it wins over them, and before the arguments
 # are parsed, so a flag wins over both. One file per host: a checkout's own deploy.conf where it has
 # one, which is how a checkout is run on its own; the installed one beside these scripts, as
@@ -352,10 +356,15 @@ refuse_replacing_served() {
 }
 
 # Loads and switches exclude each other: a switch stops OpenSearch, which breaks a load running then.
-# A load takes this lock shared, so loads of different versions still run side by side, and a switch
-# takes it exclusively, from its checks to its end. On file descriptor 9, held until the script
-# exits. Fails, rather than waits, where the other holds it.
+# A load takes OPENSEARCH_LOCK shared, so loads of different versions still run side by side, and a
+# switch takes it exclusively, from its checks to its end. On file descriptor 9, held until the
+# script exits. Fails, rather than waits: 1 where the other holds it, 2 where the lock cannot be
+# opened at all, which says so.
 take_opensearch_lock() {
-    exec 9>> "${OUTPUT_DIR}/.opensearch.lock" && flock -n "$1" 9
+    { exec 9>> "$OPENSEARCH_LOCK"; } 2> /dev/null || {
+        echo "Error: cannot open the lock ${OPENSEARCH_LOCK} as $(id -un)." 1>&2
+        return 2
+    }
+    flock -n "$1" 9
 }
 

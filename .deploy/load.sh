@@ -107,7 +107,10 @@ fi
 
 # Held until the load ends, so switch.sh does not stop OpenSearch under it.
 checkdep flock "util-linux"
-take_opensearch_lock -s || die "switch.sh is switching this host, and stops OpenSearch to do so. Load once it has finished."
+take_opensearch_lock -s || case $? in
+    1) die "switch.sh is switching this host, and stops OpenSearch to do so. Load once it has finished." ;;
+    *) die "without the lock, a switch could stop OpenSearch under this load. Make ${OPENSEARCH_LOCK} writable for $(id -un), or set OPENSEARCH_LOCK." ;;
+esac
 
 warn_opensearch_disk "$OPENSEARCH_URL"
 
