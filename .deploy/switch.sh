@@ -95,6 +95,8 @@ parse_arguments() {
 }
 
 problems=0
+# open or close, once check_host has found the index to switch to.
+TARGET_STATUS=''
 problem() {
     echo "  $*" 1>&2
     problems=$((problems + 1))
@@ -104,11 +106,11 @@ opensearch_answers() {
     curl -s -f --max-time 10 "${OPENSEARCH_URL}/_cluster/health" > /dev/null 2>&1
 }
 
-# Everything the switch depends on, while the API and OpenSearch still run, so a host that cannot
-# switch keeps serving. Every problem is reported. What the API itself needs of the new version, its
-# files, the memory for them and the index of its proteins, the API's own check decides.
+# Everything the switch depends on that can be known without changing anything, while the API and
+# OpenSearch still run, so a host that cannot switch keeps serving exactly as it did. Every problem is
+# reported.
 check_host() {
-    local location status usage_text
+    local location usage_text
 
     [ -d "$TARGET_DIR" ] \
         || problem "there is no ${TARGET_DIR}. Copy it with clone.sh, or build it, first."
@@ -127,9 +129,14 @@ check_host() {
     [ "${location%/}" = "${CURRENT}/suffix-array" ] \
         || problem "INDEX_LOCATION in ${API_ENV_FILE} is '${location}', so the API would not follow the switch. Set it to ${CURRENT}/suffix-array."
 
+    # The links are moved once both are stopped, where a failure would leave the host down.
+    [ -w "$OUTPUT_DIR" ] || problem "${OUTPUT_DIR} is not writable by $(id -un), so ${CURRENT} cannot be moved."
+    [ ! -e "$PREVIOUS" ] || [ -L "$PREVIOUS" ] \
+        || problem "${PREVIOUS} is there and is not a link, so it cannot point at the version this host leaves."
+
     # A load writes to OpenSearch for hours, and stopping OpenSearch under it breaks it part way.
-    # Bracketed, so the pattern does not match this grep's own command line.
-    ! grep -qsa 'bulk_loa[d].py' /proc/[0-9]*/cmdline \
+    # Held until the switch ends, so no load starts during it either.
+    [ ! -w "$OUTPUT_DIR" ] || take_opensearch_lock -x \
         || problem "a load is running on this host. Let it finish, or stop it, first."
 
     { sudo -n -l systemctl stop opensearch && sudo -n -l systemctl start opensearch; } > /dev/null 2>&1 \
@@ -140,24 +147,33 @@ check_host() {
         return 0
     fi
 
-    status=$(index_status "$TARGET_INDEX")
-    if [ -z "$status" ]; then
+    TARGET_STATUS=$(index_status "$TARGET_INDEX")
+    if [ -z "$TARGET_STATUS" ]; then
         problem "${TARGET_INDEX} is not in OpenSearch. Load it with load.sh --uniprot-version ${TARGET}."
         return 0
     fi
     is_complete "$TARGET_INDEX" \
         || problem "${TARGET_INDEX} was not loaded to the end. Continue its load with --skip, or load it again."
 
-    if [ "$status" = close ]; then
-        # Opened now rather than after the stop, so the API's check below can search it. Opening an
-        # index serves nothing new: the API does not query it until it is switched to.
-        [ "$CHECK_ONLY" = false ] || { echo "  (${TARGET_INDEX} is closed; the switch opens it)" 1>&2; return 0; }
+    # The API's check searches the index, which it cannot do closed. Opening it is the one change
+    # before the stop, made only once nothing else stands in the way; --check changes nothing, so it
+    # says what it could not check.
+    if [ "$TARGET_STATUS" = close ] && [ "$CHECK_ONLY" = true ]; then
+        problem "${TARGET_INDEX} is closed, so the API's own check of ${TARGET} cannot run. Run this without --check: it opens the index before it stops anything."
+    fi
+}
+
+# What the API itself needs of the new version, its files, the memory for them and the index of its
+# proteins, which its own check decides. Opens a closed index first, which serves nothing new: the
+# API does not query it until it is switched to.
+check_api() {
+    if [ "$TARGET_STATUS" = close ]; then
         opensearch_request "opening ${TARGET_INDEX}" "200" POST "${TARGET_INDEX}/_open" > /dev/null
-        wait_until_ready "$TARGET_INDEX" "$OPENSEARCH_START_TIMEOUT"
+        wait_until_ready_quietly "$TARGET_INDEX" || { problem "${TARGET_INDEX} was opened and did not become ready."; return 0; }
         log "Opened ${TARGET_INDEX}, which was closed."
     fi
 
-    [ ! -x "$API_DEPLOY" ] || [ ! -d "$TARGET_DIR" ] || "$API_DEPLOY" check --index "${TARGET_DIR}/suffix-array" > /dev/null \
+    "$API_DEPLOY" check --index "${TARGET_DIR}/suffix-array" > /dev/null \
         || problem "the API's own check refuses ${TARGET_DIR}/suffix-array (above)."
 
     warn_opensearch_disk "$OPENSEARCH_URL"
@@ -180,17 +196,19 @@ start_opensearch() {
 
 # The indices of versions older than both the one switched to and the one left: neither the API nor
 # a --back needs them, and an open index holds memory. Versions newer than the one switched to are
-# loaded ahead of a switch and stay open. Closing is not needed for the switch, so a failure here is
-# only reported.
+# loaded ahead of a switch and stay open. uniprot_entries itself, which a host loaded before
+# versioned indices still has beside the clone migrate.sh made, counts as the oldest: an API that
+# switches queries the versioned one. Closing is not needed for the switch, so it happens once the
+# API serves, and a failure is only reported.
 close_older_indices() {
     local oldest="$TARGET" index status version
 
     [[ "$FROM" > "$oldest" ]] || oldest="$FROM"
-    curl -s -f "${OPENSEARCH_URL}/_cat/indices/${ALIAS}-*?h=index,status&expand_wildcards=all" 2> /dev/null \
+    curl -s -f "${OPENSEARCH_URL}/_cat/indices/${ALIAS},${ALIAS}-*?h=index,status&expand_wildcards=all&ignore_unavailable=true" 2> /dev/null \
         | while read -r index status; do
             [ "$status" = open ] || continue
             version="${index#"${ALIAS}"-}"
-            [ "$index" = "$LEGACY" ] && version=0000-00
+            { [ "$index" = "$LEGACY" ] || [ "$index" = "$ALIAS" ]; } && version=0000-00
             [[ "$version" =~ ^[0-9]{4}-[0-9]{2}$ ]] || continue
             [[ "$version" < "$oldest" ]] || continue
             if curl -s -f -o /dev/null -X POST "${OPENSEARCH_URL}/${index}/_close"; then
@@ -205,7 +223,6 @@ close_older_indices() {
 start_both() {
     start_opensearch || return 1
     wait_until_ready_quietly "$TARGET_INDEX" || return 1
-    close_older_indices
     log "Starting the API."
     "$API_DEPLOY" start
 }
@@ -220,8 +237,14 @@ switch_back() {
     trap '' INT TERM HUP
     log "Switching back to ${FROM}."
     "$API_DEPLOY" stop || true
-    point_link "$CURRENT" "$FROM_LINK"
-    if [ -n "$PREVIOUS_LINK_WAS" ]; then point_link "$PREVIOUS" "$PREVIOUS_LINK_WAS"; else rm -f "$PREVIOUS"; fi
+    # Only what moved, so a link that could not be moved is not tried again.
+    [ "$(readlink "$CURRENT")" = "$FROM_LINK" ] || point_link "$CURRENT" "$FROM_LINK" \
+        || die "could not point ${CURRENT} back at ${FROM_LINK}, and the API and OpenSearch may be stopped: this host needs attention."
+    if [ -z "$PREVIOUS_LINK_WAS" ]; then
+        rm -f "$PREVIOUS"
+    elif [ "$(readlink "$PREVIOUS")" != "$PREVIOUS_LINK_WAS" ]; then
+        point_link "$PREVIOUS" "$PREVIOUS_LINK_WAS" || true
+    fi
 
     if { systemctl is-active --quiet opensearch 2> /dev/null && wait_for_opensearch; } || start_opensearch; then
         if wait_until_ready_quietly "$FROM_INDEX" && "$API_DEPLOY" start; then
@@ -233,6 +256,7 @@ switch_back() {
 
 parse_arguments "$@"
 refuse_root
+checkdep flock "util-linux"
 
 CURRENT=$(current_link)
 PREVIOUS=$(previous_link)
@@ -260,6 +284,14 @@ fi
 log "Checking that this host can switch from ${FROM} to ${TARGET}."
 check_host
 [ "$problems" -eq 0 ] || die "${problems} problem(s), so nothing was changed."
+if [ "$CHECK_ONLY" = false ] || [ "$TARGET_STATUS" = open ]; then
+    check_api
+fi
+if [ "$problems" -gt 0 ]; then
+    [ "$TARGET_STATUS" = close ] && [ "$CHECK_ONLY" = false ] \
+        && die "${problems} problem(s), so nothing was changed but opening ${TARGET_INDEX}, which serves nothing new."
+    die "${problems} problem(s), so nothing was changed."
+fi
 if [ "$CHECK_ONLY" = true ]; then
     log "This host can switch from ${FROM} to ${TARGET}."
     exit 0
@@ -273,11 +305,11 @@ log "Stopping the API."
 log "Stopping OpenSearch."
 sudo -n systemctl stop opensearch || switch_back
 
-point_link "$PREVIOUS" "$FROM_LINK"
-point_link "$CURRENT" "uniprot-${TARGET}"
+{ point_link "$PREVIOUS" "$FROM_LINK" && point_link "$CURRENT" "uniprot-${TARGET}"; } || switch_back
 log "${CURRENT} points at uniprot-${TARGET}."
 
 start_both || switch_back
 
 trap - INT TERM HUP
+close_older_indices
 log "This host serves ${TARGET}. ${FROM} is kept; switch back to it with --back."

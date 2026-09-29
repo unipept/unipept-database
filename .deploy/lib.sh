@@ -335,3 +335,12 @@ api_index_location() {
     [ -r "$API_ENV_FILE" ] || return 0
     sed -n 's/^INDEX_LOCATION=//p' "$API_ENV_FILE" | tail -n 1
 }
+
+# Loads and switches exclude each other: a switch stops OpenSearch, which breaks a load running then.
+# A load takes this lock shared, so loads of different versions still run side by side, and a switch
+# takes it exclusively, from its checks to its end. On file descriptor 9, held until the script
+# exits. Fails, rather than waits, where the other holds it.
+take_opensearch_lock() {
+    exec 9>> "${OUTPUT_DIR}/.opensearch.lock" && flock -n "$1" 9
+}
+

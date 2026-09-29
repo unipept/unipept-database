@@ -90,11 +90,23 @@ keep_as() {
 # Makes sure the proteins of a version are in its own index, uniprot_entries-<version>, which is
 # what the API queries. A host loaded before versioned indices has them in uniprot_entries itself,
 # or in uniprot_entries-legacy with an alias of that name on it, as an earlier release left it:
-# either is kept under the version's name. Fails where no index holds them.
+# either is kept under the version's name. An index of that name already there has to be whole, and
+# is opened where it is closed, as an earlier release closed the one it switched away from. Fails
+# where no index holds them, or where the one there is not whole.
 ensure_versioned_index() {
-    local version="$1" timeout="$2" index="${ALIAS}-${1}" source=''
+    local version="$1" timeout="$2" index="${ALIAS}-${1}" source='' status
 
-    [ -z "$(index_status "$index")" ] || return 0
+    status=$(index_status "$index")
+    if [ -n "$status" ]; then
+        is_complete "$index" \
+            || opensearch_fail "${index} is there and was not loaded to the end. Load it again with load.sh --uniprot-version ${version}, or continue its load with --skip."
+        if [ "$status" = close ]; then
+            opensearch_request "opening ${index}" "200" POST "${index}/_open" > /dev/null
+            wait_until_ready "$index" "$timeout"
+            echo "Opened ${index}, which was closed." 1>&2
+        fi
+        return 0
+    fi
 
     if [ -n "$(index_status "$ALIAS")" ]; then
         source="$ALIAS"

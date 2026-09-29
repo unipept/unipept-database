@@ -99,11 +99,17 @@ verify_database "${DATABASE_DIR}/suffix-array" \
 [ -s "$ENTRIES" ] || die "${DATABASE_DIR} has no tables/uniprot_entries.tsv.lz4 to load."
 
 # The version the API serves is queried while it runs: dropping its index would empty the protein
-# search until the load finishes.
-served=$(linked_version "$(current_link)" 2> /dev/null) || served=''
-if [ "$served" = "$UNIPROT_VERSION" ] && [ "$REPLACE_LIVE" != true ]; then
+# search until the load finishes. Where a host has no current link yet, INDEX_LOCATION says which one
+# it serves. A load continued with --skip keeps its index, and drops nothing.
+served=$(linked_version "$(current_link)" 2> /dev/null) \
+    || served=$(database_version_of "$(api_index_location)" 2> /dev/null) || served=''
+if [ "$served" = "$UNIPROT_VERSION" ] && [ -z "$SKIP_ROWS" ] && [ "$REPLACE_LIVE" != true ]; then
     die "${UNIPROT_VERSION} is the version this host serves. Reloading it empties the API's protein search until the load finishes; pass --replace-live to do so anyway."
 fi
+
+# Held until the load ends, so switch.sh does not stop OpenSearch under it.
+checkdep flock "util-linux"
+take_opensearch_lock -s || die "switch.sh is switching this host, and stops OpenSearch to do so. Load once it has finished."
 
 warn_opensearch_disk "$OPENSEARCH_URL"
 
