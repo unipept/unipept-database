@@ -19,8 +19,10 @@
 #      over ssh as that user, and sshd needs a shell to run a remote command.
 #   3. Install the tools build.sh, clone.sh and load.sh use, the ones not installed already.
 #   4. Create OUTPUT_DIR owned by DEPLOY_USER, and hand it the databases a run as root left.
-#   5. Install clone.sh, load.sh, verify.sh, prune.sh and what they call into INSTALL_ROOT, from
-#      this checkout, and write etc/deploy.conf there unless it is already there.
+#   5. Install clone.sh, load.sh, verify.sh, prune.sh, switch.sh and what they call into
+#      INSTALL_ROOT, from this checkout, and write etc/deploy.conf there unless it is already there.
+#      Allow DEPLOY_USER to stop and start OpenSearch through sudo, and nothing else, which is what
+#      switch.sh needs to switch without root.
 #   6. Add the OpenSearch APT repository, unless it is already there.
 #   7. Install the pinned version, or upgrade an older one of the same major version to it, keeping
 #      the configuration this script writes, and hold it so an unrelated upgrade cannot move it.
@@ -31,7 +33,11 @@
 #  10. Enable and start the service, restarting it only when something above changed, and wait
 #      for it to answer.
 #  11. Set every index to hold no replica.
-#  12. Say what is left to do as DEPLOY_USER.
+#  12. On a host that runs the API, set up what switch.sh switches, once: point the `current` link in
+#      OUTPUT_DIR at the version the API's INDEX_LOCATION names, and keep the proteins of that
+#      version in the index named after it, where a host loaded before versioned indices has them
+#      elsewhere. Neither changes what the API serves.
+#  13. Say what is left to do, on this host.
 #
 # A second run with the same settings changes nothing and restarts nothing.
 
@@ -42,6 +48,8 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # shellcheck source=../lib.sh
 source "${HERE}/../lib.sh"
+# shellcheck source=../../opensearch/lib.sh
+source "${HERE}/../../opensearch/lib.sh"
 
 trap errorAndExit ERR
 trap 'exit 2' USR1
@@ -119,6 +127,7 @@ readonly APT_KEYRING=/usr/share/keyrings/opensearch-keyring.gpg
 readonly CONFIG_FILE=/etc/opensearch/opensearch.yml
 readonly HEAP_FILE=/etc/opensearch/jvm.options.d/heap.options
 readonly UNIT_DROPIN=/etc/systemd/system/opensearch.service.d/unipept.conf
+readonly SUDOERS_FILE=/etc/sudoers.d/unipept-opensearch
 
 # How long systemd gives OpenSearch to start, and how soon it starts it again after a failure. The
 # package gives it 75 seconds and never starts it again. That is enough on its own, but not while
@@ -278,7 +287,7 @@ install_scripts() {
     local repository="${HERE}/../.." commit
 
     install -d -m 0755 "$PREFIX" "${PREFIX}/bin" "${PREFIX}/opensearch/mappings" "${PREFIX}/pipelines/lib"
-    install -m 0755 "${repository}/.deploy/"{lib.sh,clone.sh,load.sh,verify.sh,prune.sh} "${PREFIX}/bin/"
+    install -m 0755 "${repository}/.deploy/"{lib.sh,clone.sh,load.sh,verify.sh,prune.sh,switch.sh} "${PREFIX}/bin/"
     install -m 0755 "${repository}/opensearch/"{load.sh,activate.sh} "${PREFIX}/opensearch/"
     install -m 0644 "${repository}/opensearch/"{lib.sh,bulk_load.py} "${PREFIX}/opensearch/"
     install -m 0644 "${repository}/opensearch/mappings/uniprot_entries.json" "${PREFIX}/opensearch/mappings/"
@@ -295,6 +304,57 @@ install_scripts() {
     commit=$(git -c safe.directory='*' -C "$repository" rev-parse HEAD 2>/dev/null || echo unknown)
     printf 'commit: %s\ninstalled: %s\n' "$commit" "$(date -u +'%F %T UTC')" > "${PREFIX}/INSTALLED"
     log "Installed the scripts of ${commit} in ${PREFIX}."
+}
+
+# switch.sh stops and starts OpenSearch as DEPLOY_USER, which a system service allows root alone.
+# Exactly those two commands, by full path, as sudo matches them, and checked by visudo before it is
+# put in place: a sudoers file sudo cannot parse stops sudo for everyone on the host.
+allow_opensearch_restart() {
+    local rule staged
+
+    rule="${DEPLOY_USER} ALL=(root) NOPASSWD: /usr/bin/systemctl stop opensearch, /usr/bin/systemctl start opensearch"
+    if [ -f "$SUDOERS_FILE" ] && [ "$(cat "$SUDOERS_FILE")" = "$(printf '%s\n%s' "$MARKER" "$rule")" ]; then
+        return 0
+    fi
+
+    staged=$(mktemp)
+    printf '%s\n%s\n' "$MARKER" "$rule" > "$staged"
+    visudo -c -q -f "$staged" > /dev/null || { rm -f "$staged"; die "visudo refuses the rule for ${DEPLOY_USER}, so it is not written."; }
+    install -m 0440 -o root -g root "$staged" "$SUDOERS_FILE"
+    rm -f "$staged"
+    log "Allowed ${DEPLOY_USER} to stop and start OpenSearch through sudo, for switch.sh."
+}
+
+# On a host that runs the API, the `current` link switch.sh moves, and the index of the version it
+# points at. Once: a host that has the link keeps what it points at, which is switch.sh's to change.
+# Neither changes what the API serves: the link names the files it reads already, and the index
+# holds the proteins it queries already, now also under the name the API queries them by.
+set_up_current() {
+    local link location version directory target
+
+    [ -f "$API_ENV_FILE" ] || return 0
+    link=$(current_link)
+
+    if [ ! -L "$link" ]; then
+        location=$(api_index_location)
+        version=$(database_version_of "$location") || {
+            log "INDEX_LOCATION in ${API_ENV_FILE} is '${location}', which names no version, so ${link} is not set up. Point it at the version the API serves, as ${DEPLOY_USER}: ln -s uniprot-YYYY-MM ${link}"
+            return 0
+        }
+        directory="${location%/}"
+        directory="${directory%/suffix-array}"
+        target="$directory"
+        [ "$directory" != "${OUTPUT_DIR}/uniprot-${version}" ] || target="uniprot-${version}"
+        ln -s "$target" "$link"
+        chown -h "${DEPLOY_USER}:" "$link"
+        log "Pointed ${link} at ${target}, the version the API serves."
+    fi
+
+    version=$(linked_version "$link") || { log "${link} points at no version's directory. switch.sh cannot switch from it."; return 0; }
+    # In a subshell, since a request that fails stops the script it is in, and the rest of the host
+    # is set up already: what is left is said below, and running this again finishes it.
+    ( OPENSEARCH_URL="$(ready_url)" ensure_versioned_index "$version" "$OPENSEARCH_READY_TIMEOUT" ) \
+        || log "The proteins of ${version} are not in ${ALIAS}-${version} (above). The API queries that index by name."
 }
 
 add_repository() {
@@ -518,6 +578,7 @@ checkdep systemctl
 checkdep getent
 checkdep useradd
 checkdep usermod
+checkdep visudo "sudo"
 
 # Before anything on the host changes, so a refused run leaves it as it was.
 check_installed_version
@@ -526,6 +587,7 @@ ensure_user
 install_tools
 prepare_output_dir
 install_scripts
+allow_opensearch_restart
 
 # Installed with the tools above.
 checkdep curl
@@ -537,6 +599,7 @@ write_config
 write_unit_dropin
 start_opensearch
 single_node_settings "$(ready_url)"
+set_up_current
 
 cat >&2 <<EOF
 
@@ -549,4 +612,11 @@ As ${DEPLOY_USER} (sudo -iu ${DEPLOY_USER}), none of it as root:
      (https://rustup.rs); the repository pins the toolchain. .deploy/build.sh in that clone reads
      the same deploy.conf.
 EOF
+location=$(api_index_location)
+if [ -f "$API_ENV_FILE" ] && [ "${location%/}" != "$(current_link)/suffix-array" ]; then
+    cat >&2 <<EOF
+  4. So the API follows switch.sh: set INDEX_LOCATION=$(current_link)/suffix-array in
+     ${API_ENV_FILE}. It names the same files, so nothing changes until the API next starts.
+EOF
+fi
 log "The host is ready."

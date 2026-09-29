@@ -35,6 +35,13 @@ DEPLOY_USER=unipept
 # host still builds from a checkout, which needs the whole repository.
 readonly INSTALL_ROOT=/opt/unipept-database
 
+# The API on this host, which unipept-api's install puts there: its settings, of which INDEX_LOCATION
+# is read here, and the script that stops and starts it. A host without them runs no API.
+# shellcheck disable=SC2034 # read by the scripts that source this file
+API_ENV_FILE=${API_ENV_FILE:-/opt/unipept-api/etc/unipept-api.env}
+# shellcheck disable=SC2034 # read by the scripts that source this file
+API_DEPLOY=${API_DEPLOY:-/opt/unipept-api/lib/deploy.sh}
+
 # What this host decides. Read after the defaults, so it wins over them, and before the arguments
 # are parsed, so a flag wins over both. One file per host: a checkout's own deploy.conf where it has
 # one, which is how a checkout is run on its own; the installed one beside these scripts, as
@@ -293,4 +300,38 @@ unipept-database: ${database_commit}
 unipept-index: ${index_commit}
 sources: ${DATABASE_SOURCES:-none}
 INFO
+}
+
+################################################################################
+#                          The version a host serves                           #
+################################################################################
+
+# The version a host serves is a link in OUTPUT_DIR to its directory, and the API's INDEX_LOCATION
+# names the suffix array through it, so switch.sh switches by moving the link. `previous` is the one
+# before, for switch.sh --back. Neither is named uniprot-*, so DATABASE_GLOB never takes them for a
+# version. Functions rather than settings, since OUTPUT_DIR is only final once the flags are read.
+current_link() { echo "${OUTPUT_DIR}/current"; }
+previous_link() { echo "${OUTPUT_DIR}/previous"; }
+
+# The version a link points at, as YYYY-MM. Fails for no link, or one to no version's directory.
+linked_version() {
+    local target
+
+    target=$(readlink "$1") || return 1
+    database_version_of "$target"
+}
+
+# Points a link at a target in one rename, so a reader finds the old target or the new one and
+# never neither. Relative targets stay relative, so OUTPUT_DIR can move with its links.
+point_link() {
+    local link="$1" target="$2"
+
+    ln -sfn "$target" "${link}.new"
+    mv -T "${link}.new" "$link"
+}
+
+# INDEX_LOCATION in the API's settings on this host, or nothing where there are none.
+api_index_location() {
+    [ -r "$API_ENV_FILE" ] || return 0
+    sed -n 's/^INDEX_LOCATION=//p' "$API_ENV_FILE" | tail -n 1
 }

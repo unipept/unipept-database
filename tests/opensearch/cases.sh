@@ -338,4 +338,236 @@ curl -s -X POST "${OPENSEARCH_URL}/_aliases" -H 'Content-Type: application/json'
 check "as root it stops" "$?" "2"
 
 
+section ".deploy/switch.sh"
+# A host that runs the API, as the user it runs as. Four versions: the one it serves, the one it
+# switches to, one whose proteins are not loaded, and one loaded ahead of a later switch. The API's
+# deploy.sh, sudo and systemctl are stand-ins that record their calls; OpenSearch is the real one,
+# and stays up, since the stand-in systemctl only records a stop.
+SW=/tmp/switch
+SW_DATA="${SW}/data"
+SW_STATE="${SW}/state"
+SW_BIN="${SW}/bin"
+rm -rf "${SW:?}"
+mkdir -p "$SW_STATE" "$SW_BIN"
+chmod 777 "$SW_STATE"
+for version in 2027-01 2027-02 2027-03 2027-04; do
+    index_dir="${SW_DATA}/uniprot-${version}/suffix-array"
+    mkdir -p "${index_dir}/datastore"
+    printf '%s\n' "${version/-/.}" > "${index_dir}/.version"
+    for file in sa.bin proteins.bin mapping.bin kmer_table.bin datastore/sampledata.json \
+        datastore/{taxons,lineages,interpro_entries,go_terms,ec_numbers,proteomes}.tsv; do
+        printf 'x\n' > "${index_dir}/${file}"
+    done
+done
+ln -s uniprot-2027-01 "${SW_DATA}/current"
+chown -R -h unipept: "$SW_DATA"
+load_version uniprot_entries-2027-01 P27001
+load_version uniprot_entries-2027-02 P27002
+load_version uniprot_entries-2027-04 P27004
+curl -s -X POST "${OPENSEARCH_URL}/uniprot_entries-2027-02/_close" > /dev/null
+printf 'INDEX_LOCATION=%s/current/suffix-array\n' "$SW_DATA" > "${SW}/api.env"
+chmod 644 "${SW}/api.env"
+
+cat > "${SW_BIN}/deploy.sh" <<STUB
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >> "${SW_STATE}/api-calls"
+case "\${1:-}" in
+    '')
+        if [ -e "${SW_STATE}/old-api" ]; then echo 'usage: deploy.sh deploy' 1>&2; else echo 'usage: deploy.sh stop / deploy.sh start' 1>&2; fi
+        exit 2 ;;
+    check) [ ! -e "${SW_STATE}/check-fails" ] || { echo 'check: the variant does not fit' 1>&2; exit 1; } ;;
+    start)
+        [ ! -e "${SW_STATE}/start-sleeps" ] || sleep 3
+        [ ! -e "${SW_STATE}/start-fails-once" ] || { rm -f "${SW_STATE}/start-fails-once"; exit 1; }
+        [ ! -e "${SW_STATE}/start-fails" ] || exit 1
+        readlink "${SW_DATA}/current" > "${SW_STATE}/started-on" ;;
+esac
+STUB
+cat > "${SW_BIN}/sudo" <<STUB
+#!/usr/bin/env bash
+[ "\$1" != -n ] || shift
+if [ "\$1" = -l ]; then [ ! -e "${SW_STATE}/no-sudo" ]; exit; fi
+exec "\$@"
+STUB
+cat > "${SW_BIN}/systemctl" <<STUB
+#!/usr/bin/env bash
+[ "\$1" = is-active ] || printf '%s\n' "\$*" >> "${SW_STATE}/systemctl-calls"
+case "\$1" in
+    stop) touch "${SW_STATE}/opensearch-stopped" ;;
+    start)
+        [ ! -e "${SW_STATE}/opensearch-start-fails-once" ] || { rm -f "${SW_STATE}/opensearch-start-fails-once"; exit 1; }
+        rm -f "${SW_STATE}/opensearch-stopped" ;;
+    is-active) [ ! -e "${SW_STATE}/opensearch-stopped" ] ;;
+esac
+STUB
+chmod 755 "$SW_BIN"/*
+
+forget_switch_calls() { rm -f "${SW_STATE:?}/api-calls" "${SW_STATE:?}/systemctl-calls" "${SW_STATE:?}/started-on"; }
+switch() {
+    local logfile=$1
+    shift
+    forget_switch_calls
+    runuser -u unipept -- env PATH="${SW_BIN}:${PATH}" API_ENV_FILE="${SW}/api.env" API_DEPLOY="${SW_BIN}/deploy.sh" \
+        "${REPO}/.deploy/switch.sh" --output-dir "$SW_DATA" --opensearch-url "$OPENSEARCH_URL" "$@" > "$logfile" 2>&1
+    rc=$?
+}
+calls() { tr '\n' ' ' < "${SW_STATE}/$1" 2> /dev/null; }
+serves() { readlink "${SW_DATA}/current"; }
+
+# Every problem at once, and nothing stopped for any of them.
+printf 'INDEX_LOCATION=%s/uniprot-2027-01/suffix-array\n' "$SW_DATA" > "${SW}/api.env"
+touch "${SW_STATE}/no-sudo" "${SW_STATE}/old-api"
+switch "${WORK}/switch-refused.log" --uniprot-version 2027-03
+check "a host that cannot switch stops it" "$rc" "2"
+check_true "its proteins not loaded" grep -q 'uniprot_entries-2027-03 is not in OpenSearch. Load it with load.sh --uniprot-version 2027-03' "${WORK}/switch-refused.log"
+check_true "an API that would not follow" grep -q "Set it to ${SW_DATA}/current/suffix-array" "${WORK}/switch-refused.log"
+check_true "no sudo for OpenSearch" grep -q 'may not stop and start OpenSearch through sudo' "${WORK}/switch-refused.log"
+check_true "an API without stop and start" grep -q 'has no stop and start' "${WORK}/switch-refused.log"
+check_true "counted" grep -q '4 problem(s), so nothing was changed' "${WORK}/switch-refused.log"
+check "nothing is stopped" "$(calls api-calls)$(calls systemctl-calls)" " "
+check "it serves what it served" "$(serves)" "uniprot-2027-01"
+printf 'INDEX_LOCATION=%s/current/suffix-array\n' "$SW_DATA" > "${SW}/api.env"
+rm -f "${SW_STATE:?}/no-sudo" "${SW_STATE:?}/old-api"
+
+switch "${WORK}/switch-nodir.log" --uniprot-version 2027-05
+check "a version it does not hold stops it" "$rc" "2"
+check_true "and says to copy or build it" grep -q "there is no ${SW_DATA}/uniprot-2027-05. Copy it with clone.sh, or build it" "${WORK}/switch-nodir.log"
+
+touch "${SW_STATE}/check-fails"
+switch "${WORK}/switch-apicheck.log" --uniprot-version 2027-02
+check "the API's own check refusing stops it" "$rc" "2"
+check_true "with the API's reason" grep -q 'check: the variant does not fit' "${WORK}/switch-apicheck.log"
+check "nothing is stopped" "$(calls api-calls)" " check --index ${SW_DATA}/uniprot-2027-02/suffix-array "
+rm -f "${SW_STATE:?}/check-fails"
+
+runuser -u unipept -- bash -c 'exec -a bulk_load.py sleep 30' &
+loader=$!
+sleep 0.5
+switch "${WORK}/switch-loading.log" --uniprot-version 2027-02
+check "a load running stops it" "$rc" "2"
+check_true "and says so" grep -q 'a load is running on this host' "${WORK}/switch-loading.log"
+kill "$loader"
+wait "$loader" 2> /dev/null
+
+# The refused switch above opened it, as a switch does before it stops anything: closed again.
+curl -s -X POST "${OPENSEARCH_URL}/uniprot_entries-2027-02/_close" > /dev/null
+switch "${WORK}/switch-check.log" --uniprot-version 2027-02 --check
+check "--check succeeds" "$rc" "0"
+check_true "and says the host can switch" grep -q 'can switch from 2027-01 to 2027-02' "${WORK}/switch-check.log"
+check "changing nothing" "$(serves) $(status_of uniprot_entries-2027-02)" "uniprot-2027-01 close"
+
+switch "${WORK}/switch.log" --uniprot-version 2027-02
+check "a switch succeeds" "$rc" "0"
+check "the API checks the new version, is stopped and started" "$(calls api-calls)" " check --index ${SW_DATA}/uniprot-2027-02/suffix-array stop start "
+check "OpenSearch is stopped after it and started before it" "$(calls systemctl-calls)" "stop opensearch start opensearch "
+check "the API starts on the new version" "$(cat "${SW_STATE}/started-on")" "uniprot-2027-02"
+check "current points at it" "$(serves)" "uniprot-2027-02"
+check "previous at the one it left" "$(readlink "${SW_DATA}/previous")" "uniprot-2027-01"
+check "the links belong to the user the API runs as" "$(stat -c %U "${SW_DATA}/current") $(stat -c %U "${SW_DATA}/previous")" "unipept unipept"
+check "its closed index was opened" "$(status_of uniprot_entries-2027-02)" "open"
+check "the one it left stays open, to go back to" "$(status_of uniprot_entries-2027-01)" "open"
+check "one loaded ahead stays open" "$(status_of uniprot_entries-2027-04)" "open"
+check "older ones are closed" "$(status_of uniprot_entries-2026-09)" "close"
+
+switch "${WORK}/switch-again.log" --uniprot-version 2027-02
+check "switching to what it serves succeeds" "$rc" "0"
+check_true "and says so" grep -q 'already serves 2027-02' "${WORK}/switch-again.log"
+check "stopping nothing" "$(calls api-calls)" ""
+
+switch "${WORK}/switch-back.log" --back
+check "--back succeeds" "$rc" "0"
+check "back on the one before" "$(serves) $(readlink "${SW_DATA}/previous")" "uniprot-2027-01 uniprot-2027-02"
+
+touch "${SW_STATE}/start-fails-once"
+switch "${WORK}/switch-apifails.log" --uniprot-version 2027-02
+check "an API that does not start on the new version fails it" "$rc" "2"
+check_true "and says the host is back on the old one" grep -q 'This host is back on 2027-01, and serves it' "${WORK}/switch-apifails.log"
+check "current points back" "$(serves)" "uniprot-2027-01"
+check "and previous too" "$(readlink "${SW_DATA}/previous")" "uniprot-2027-02"
+check "the API was started again on the old one" "$(cat "${SW_STATE}/started-on")" "uniprot-2027-01"
+
+touch "${SW_STATE}/opensearch-start-fails-once"
+switch "${WORK}/switch-osfails.log" --uniprot-version 2027-02
+check "OpenSearch not starting fails it" "$rc" "2"
+check_true "and says the host is back" grep -q 'This host is back on 2027-01, and serves it' "${WORK}/switch-osfails.log"
+check "OpenSearch was started again" "$(calls systemctl-calls)" "stop opensearch start opensearch start opensearch "
+check "current points back" "$(serves)" "uniprot-2027-01"
+
+touch "${SW_STATE}/start-fails"
+switch "${WORK}/switch-bothfail.log" --uniprot-version 2027-02
+check "a host that cannot go back either fails it" "$rc" "2"
+check_true "and says it needs attention" grep -q 'going back to 2027-01 did too (above): this host needs attention' "${WORK}/switch-bothfail.log"
+check "current points back all the same" "$(serves)" "uniprot-2027-01"
+rm -f "${SW_STATE:?}/start-fails"
+
+# An interrupt while the API starts on the new version: it goes back.
+touch "${SW_STATE}/start-sleeps"
+forget_switch_calls
+runuser -u unipept -- env PATH="${SW_BIN}:${PATH}" API_ENV_FILE="${SW}/api.env" API_DEPLOY="${SW_BIN}/deploy.sh" \
+    "${REPO}/.deploy/switch.sh" --output-dir "$SW_DATA" --opensearch-url "$OPENSEARCH_URL" --uniprot-version 2027-02 \
+    > "${WORK}/switch-interrupted.log" 2>&1 &
+switcher=$!
+for _ in $(seq 100); do
+    grep -q 'Starting the API' "${WORK}/switch-interrupted.log" && break
+    sleep 0.1
+done
+# To switch.sh itself, as a Ctrl-C or a dropped ssh session reaches it: runuser does not pass a
+# TERM on. The script is runuser's child, which env became.
+for process in /proc/[0-9]*; do
+    [ "$(awk '{ print $4 }' "${process}/stat" 2> /dev/null)" = "$switcher" ] && { kill -TERM "${process#/proc/}"; break; }
+done
+wait "$switcher"
+rc=$?
+rm -f "${SW_STATE:?}/start-sleeps"
+check "an interrupted switch fails" "$rc" "2"
+check_true "and says so" grep -q 'Interrupted' "${WORK}/switch-interrupted.log"
+check "current points back" "$(serves)" "uniprot-2027-01"
+check "and the API was started on it" "$(cat "${SW_STATE}/started-on")" "uniprot-2027-01"
+
+mv "${SW_DATA}/current" "${SW}/current.away"
+switch "${WORK}/switch-nocurrent.log" --uniprot-version 2027-02
+check "a host without current stops it" "$rc" "2"
+check_true "and says install.sh sets it up" grep -q 'Run .deploy/opensearch/install.sh again, as root' "${WORK}/switch-nocurrent.log"
+mv "${SW}/current.away" "${SW_DATA}/current"
+
+"${REPO}/.deploy/switch.sh" --output-dir "$SW_DATA" --uniprot-version 2027-02 > /dev/null 2>&1
+check "as root it stops" "$?" "2"
+
+
+section "the proteins of the version a host serves, kept in the index named after it"
+ensure() {
+    ( source "${REPO}/pipelines/lib/common.sh" && source "${REPO}/opensearch/lib.sh" && ensure_versioned_index "$1" 60 ) > "${WORK}/ensure.log" 2>&1
+    rc=$?
+}
+is_marked() { curl -s "${OPENSEARCH_URL}/$1/_mapping" | grep -qF '"unipept_load":"complete"'; }
+
+ensure 2027-01
+check "an index already there is left as it is" "$rc" "0"
+check "without a word" "$(cat "${WORK}/ensure.log")" ""
+
+# A host whose alias points at the old index activate.sh kept.
+load_version uniprot_entries-legacy P00001 P00002
+curl -s -X POST "${OPENSEARCH_URL}/_aliases" -H 'Content-Type: application/json' \
+    -d '{"actions":[{"remove":{"index":"uniprot_entries-2026-07","alias":"uniprot_entries"}},{"add":{"index":"uniprot_entries-legacy","alias":"uniprot_entries"}}]}' > /dev/null
+ensure 2025-04
+check "the proteins behind the alias are kept" "$rc" "0"
+check "under the version's name" "$(documents_in uniprot_entries-2025-04)" "2"
+check_true "marked as loaded to the end" is_marked uniprot_entries-2025-04
+check_true "and it says so" grep -q 'Kept uniprot_entries-legacy as uniprot_entries-2025-04' "${WORK}/ensure.log"
+
+# A host loaded before versioned indices, whose proteins are in uniprot_entries itself.
+curl -s -X POST "${OPENSEARCH_URL}/_aliases" -H 'Content-Type: application/json' \
+    -d '{"actions":[{"remove":{"index":"uniprot_entries-legacy","alias":"uniprot_entries"}}]}' > /dev/null
+load_version uniprot_entries P00003 P00004 P00005
+ensure 2025-03
+check "the proteins in uniprot_entries are kept" "$rc" "0"
+check "under the version's name" "$(documents_in uniprot_entries-2025-03)" "3"
+check_true "marked as loaded to the end" is_marked uniprot_entries-2025-03
+check "and the index they were in is still there" "$(documents_in uniprot_entries)" "3"
+
+curl -s -X DELETE "${OPENSEARCH_URL}/uniprot_entries" > /dev/null
+ensure 2025-02
+check "no index holding them fails it" "$rc" "1"
+check_true "and says to load them" grep -q 'no index holds the proteins of 2025-02' "${WORK}/ensure.log"
+
 summary
