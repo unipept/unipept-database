@@ -288,7 +288,10 @@ install_scripts() {
 
     install -d -m 0755 "$PREFIX" "${PREFIX}/bin" "${PREFIX}/opensearch/mappings" "${PREFIX}/pipelines/lib"
     install -m 0755 "${repository}/.deploy/"{lib.sh,clone.sh,load.sh,verify.sh,prune.sh,switch.sh} "${PREFIX}/bin/"
-    install -m 0755 "${repository}/opensearch/"{load.sh,activate.sh} "${PREFIX}/opensearch/"
+    install -m 0755 "${repository}/opensearch/load.sh" "${PREFIX}/opensearch/"
+    # What an earlier release installed: it moved an alias the API no longer queries, and closed the
+    # index the API did.
+    rm -f "${PREFIX}/opensearch/activate.sh"
     install -m 0644 "${repository}/opensearch/"{lib.sh,bulk_load.py} "${PREFIX}/opensearch/"
     install -m 0644 "${repository}/opensearch/mappings/uniprot_entries.json" "${PREFIX}/opensearch/mappings/"
     install -m 0644 "${repository}/pipelines/lib/common.sh" "${PREFIX}/pipelines/lib/"

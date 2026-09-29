@@ -2,18 +2,19 @@
 #
 # What the scripts that talk to OpenSearch share: the names, the mark of an index loaded to the end,
 # and the requests each of them makes. Sourced, never run, after pipelines/lib/common.sh, by
-# opensearch/load.sh, opensearch/activate.sh and .deploy/prune.sh, each of which sets
-# OPENSEARCH_URL. unipept-api's deploy calls load.sh and activate.sh rather than this, so their
-# flags are the interface and this is not.
+# opensearch/load.sh and the scripts in .deploy that talk to OpenSearch, each of which sets
+# OPENSEARCH_URL.
 
-# The name the API queries: an alias once activate.sh has switched it, an index on a host loaded
-# before versioned indices. activate.sh keeps that old index under LEGACY at its first switch.
+# What every version's index is named after, uniprot_entries-2026-03 for 2026-03, which is the one
+# the API queries. A host loaded before versioned indices has its proteins in an index of this name
+# itself, or in LEGACY, with an alias of this name on it, where an earlier release of these scripts
+# kept them.
 readonly ALIAS=uniprot_entries
 # shellcheck disable=SC2034 # read by the scripts that source this file
 readonly LEGACY="${ALIAS}-legacy"
 
 # What an index carries in its mapping's _meta once its last row is in. An index a load left part
-# way has documents too, so this is how activate.sh and a rollout tell a whole one from it.
+# way has documents too, so this is how switch.sh and the API's check tell a whole one from it.
 readonly COMPLETE_MARK='"unipept_load":"complete"'
 
 opensearch_fail() {
@@ -40,7 +41,7 @@ require_opensearch() {
         || opensearch_fail "OpenSearch is not reachable at ${OPENSEARCH_URL}. Start it and run this again."
 }
 
-# The index the alias points at, or nothing where it is not an alias.
+# The index an alias of that name points at, or nothing where there is none.
 alias_target() {
     curl -s "${OPENSEARCH_URL}/_cat/aliases/${ALIAS}?h=index" | tr -d '[:space:]' || true
 }
@@ -55,11 +56,6 @@ index_status() {
 # Whether an index carries the mark, open or closed: a closed index still answers for its mapping.
 is_complete() {
     curl -s -f "${OPENSEARCH_URL}/$1/_mapping" 2> /dev/null | grep -qF "$COMPLETE_MARK"
-}
-
-# The _aliases action that points the alias at an index.
-alias_add_action() {
-    printf '{"add":{"index":"%s","alias":"%s"}}' "$1" "$ALIAS"
 }
 
 mark_complete() {
@@ -93,8 +89,8 @@ keep_as() {
 
 # Makes sure the proteins of a version are in its own index, uniprot_entries-<version>, which is
 # what the API queries. A host loaded before versioned indices has them in uniprot_entries itself,
-# or in uniprot_entries-legacy once activate.sh has moved the alias off it: either is kept under the
-# version's name. Fails where no index holds them.
+# or in uniprot_entries-legacy with an alias of that name on it, as an earlier release left it:
+# either is kept under the version's name. Fails where no index holds them.
 ensure_versioned_index() {
     local version="$1" timeout="$2" index="${ALIAS}-${1}" source=''
 

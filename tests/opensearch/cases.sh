@@ -90,13 +90,6 @@ alias_target() { curl -s "${OPENSEARCH_URL}/_cat/aliases/uniprot_entries?h=index
 # open, close, or nothing for an index that is not there.
 status_of() { curl -s "${OPENSEARCH_URL}/_cat/indices/$1?h=status&expand_wildcards=all" 2> /dev/null | grep -xE 'open|close'; }
 
-activate() {
-    local logfile=$1
-    shift
-    "${REPO}/opensearch/activate.sh" --opensearch-url "$OPENSEARCH_URL" "$@" > "$logfile" 2>&1
-    rc=$?
-}
-
 # Loads the given accessions into a versioned index.
 load_version() {
     local index=$1 accession
@@ -119,103 +112,6 @@ check "and is still an index, not an alias" "$(alias_target)" ""
 check "it is marked as loaded to the end" "$?" "0"
 
 
-section "the first switch keeps the old index, and carries on from one that stopped part way"
-# What a first switch that stopped after cloning leaves: the old index marked and write-blocked,
-# and its copy under the legacy name, with the alias not yet switched.
-curl -s -X PUT "${OPENSEARCH_URL}/uniprot_entries/_mapping" -H 'Content-Type: application/json' \
-    -d '{"_meta":{"unipept_load":"complete"}}' > /dev/null
-curl -s -X PUT "${OPENSEARCH_URL}/uniprot_entries/_settings" -H 'Content-Type: application/json' \
-    -d '{"index.blocks.write":true}' > /dev/null
-curl -s -X POST "${OPENSEARCH_URL}/uniprot_entries/_clone/uniprot_entries-legacy" -H 'Content-Type: application/json' \
-    -d '{"settings":{"index.number_of_replicas":0}}' > /dev/null
-activate "${WORK}/activate.log" --index-name uniprot_entries-2026-01
-check_true "it succeeds" [ "$rc" -eq 0 ]
-check_true "carrying on from the copy already made" grep -q 'from a switch that did not finish' "${WORK}/activate.log"
-check "uniprot_entries is now an alias for the new index" "$(alias_target)" "uniprot_entries-2026-01"
-check "the API's name finds the new rows" "$(documents_in uniprot_entries)" "2"
-check "the old index is kept, closed" "$(status_of uniprot_entries-legacy)" "close"
-"${REPO}/opensearch/load.sh" --opensearch-url "$OPENSEARCH_URL" --index-name uniprot_entries-legacy --check-complete
-check "and marked as loaded to the end, so going back to it is an ordinary switch" "$?" "0"
-# The two requests the API makes, by the name it knows.
-check_true "a search through the alias answers" grep -q 'P10001' \
-    <<< "$(curl -s "${OPENSEARCH_URL}/uniprot_entries/_search?q=uniprot_accession_number:P10001")"
-check_true "a multi-get through the alias answers" grep -q '"found":true' \
-    <<< "$(curl -s -X POST "${OPENSEARCH_URL}/uniprot_entries/_mget" -H 'Content-Type: application/json' -d '{"ids":["P10002"]}')"
-
-
-section "a later switch closes the one it leaves, and deletes nothing"
-load_version uniprot_entries-2026-02 P20001
-activate /dev/null --index-name uniprot_entries-2026-02
-check "the alias moves" "$(alias_target)" "uniprot_entries-2026-02"
-check "the one it left is closed" "$(status_of uniprot_entries-2026-01)" "close"
-check "the one before that is kept, closed" "$(status_of uniprot_entries-legacy)" "close"
-
-load_version uniprot_entries-2026-03 P30001 P30002 P30003
-activate /dev/null --index-name uniprot_entries-2026-03
-check "the alias moves again" "$(alias_target)" "uniprot_entries-2026-03"
-check "the one it left is closed" "$(status_of uniprot_entries-2026-02)" "close"
-check "and so is the one before that" "$(status_of uniprot_entries-2026-01)" "close"
-
-# Nothing moves, so the index kept to go back to, older than the active one, must survive.
-activate /dev/null --index-name uniprot_entries-2026-03
-check_true "activating the active index again succeeds" [ "$rc" -eq 0 ]
-check "and deletes nothing, not even the one kept to go back to" "$(status_of uniprot_entries-2026-02)" "close"
-
-
-section "an index loaded ahead of a switch is kept"
-load_version uniprot_entries-2026-05 P50001
-load_version uniprot_entries-2026-04 P40001
-activate /dev/null --index-name uniprot_entries-2026-04
-check "the alias moves to the one named" "$(alias_target)" "uniprot_entries-2026-04"
-check "the newer one is left open for its own switch" "$(status_of uniprot_entries-2026-05)" "open"
-check "the one it left is closed" "$(status_of uniprot_entries-2026-03)" "close"
-check "the older one is kept, closed" "$(status_of uniprot_entries-2026-02)" "close"
-
-
-section "going back to the index kept closed"
-activate "${WORK}/back.log" --index-name uniprot_entries-2026-03
-check_true "it succeeds" [ "$rc" -eq 0 ]
-check "the alias points back" "$(alias_target)" "uniprot_entries-2026-03"
-check "and finds its rows" "$(documents_in uniprot_entries)" "3"
-check "the one it left is closed in turn" "$(status_of uniprot_entries-2026-04)" "close"
-check "the newer one is still kept" "$(status_of uniprot_entries-2026-05)" "open"
-
-
-section "what activation refuses"
-activate "${WORK}/missing.log" --index-name uniprot_entries-2030-01
-check_true "an index that is not there is refused" [ "$rc" -ne 0 ]
-check_true "and named" grep -q 'no index uniprot_entries-2030-01' "${WORK}/missing.log"
-
-curl -s -X PUT "${OPENSEARCH_URL}/uniprot_entries-2026-06" -H 'Content-Type: application/json' \
-    -d @"${REPO}/opensearch/mappings/uniprot_entries.json" > /dev/null
-activate "${WORK}/empty.log" --index-name uniprot_entries-2026-06
-check_true "an empty index is refused" [ "$rc" -ne 0 ]
-check_true "and said to be empty" grep -q 'holds no documents' "${WORK}/empty.log"
-curl -s -X DELETE "${OPENSEARCH_URL}/uniprot_entries-2026-06" > /dev/null
-
-activate /dev/null --index-name some_other_index
-check_true "an index that is not a uniprot_entries one is refused" [ "$rc" -ne 0 ]
-check "after all of these the alias is where it was" "$(alias_target)" "uniprot_entries-2026-03"
-
-
-section "what the loader refuses once uniprot_entries is an alias"
-write_fixture "$FIXTURE" "$(row 1 P00001 'First protein')"
-load "${WORK}/alias.log" --uniprot-entries "$FIXTURE"
-check_true "loading into the alias's name is refused" [ "$rc" -ne 0 ]
-check_true "and says to load a versioned index" grep -q 'is an alias' "${WORK}/alias.log"
-
-load "${WORK}/live.log" --uniprot-entries "$FIXTURE" --index-name uniprot_entries-2026-03
-check_true "reloading the index the alias points at is refused" [ "$rc" -ne 0 ]
-check_true "and says what it would do to the API" grep -q 'empties the API' "${WORK}/live.log"
-check "the API's rows are untouched" "$(documents_in uniprot_entries)" "3"
-
-load /dev/null --uniprot-entries "$FIXTURE" --index-name uniprot_entries-2026-03 --replace-live
-curl -s -X POST "${OPENSEARCH_URL}/uniprot_entries-2026-03/_refresh" > /dev/null
-check_true "--replace-live allows it" [ "$rc" -eq 0 ]
-check "the alias still points at it" "$(alias_target)" "uniprot_entries-2026-03"
-check "and the API then finds the new rows" "$(documents_in uniprot_entries)" "1"
-
-
 section "a load continued with --skip needs the index it continues"
 load "${WORK}/skip-missing.log" --uniprot-entries "$FIXTURE" --index-name uniprot_entries-2031-01 --skip 1
 check_true "a --skip into an index that is not there is refused" [ "$rc" -ne 0 ]
@@ -236,30 +132,30 @@ check "the index is not marked as loaded to the end" "$?" "1"
 "${REPO}/opensearch/load.sh" --opensearch-url "$OPENSEARCH_URL" --index-name uniprot_entries-2030-01 --check-complete
 check "nor is an index that is not there" "$?" "1"
 
-activate "${WORK}/partial.log" --index-name uniprot_entries-2026-07
-check_true "activating it is refused" [ "$rc" -ne 0 ]
-check_true "and says the load did not finish" grep -q 'not loaded to the end' "${WORK}/partial.log"
-check "the alias stays where it was" "$(alias_target)" "uniprot_entries-2026-03"
-
 write_fixture "${WORK}/rest.tsv.lz4" "$(row 1 P70001 'First protein')" "$(row 2 P70002 'Second protein')"
 load /dev/null --uniprot-entries "${WORK}/rest.tsv.lz4" --index-name uniprot_entries-2026-07 --skip 1
 "${REPO}/opensearch/load.sh" --opensearch-url "$OPENSEARCH_URL" --index-name uniprot_entries-2026-07 --check-complete
 check "continued to the end, it is marked" "$?" "0"
-activate /dev/null --index-name uniprot_entries-2026-07
-check "and can be activated" "$(alias_target)" "uniprot_entries-2026-07"
-check "with every row" "$(documents_in uniprot_entries)" "2"
+curl -s -X POST "${OPENSEARCH_URL}/uniprot_entries-2026-07/_refresh" > /dev/null
+check "with every row" "$(documents_in uniprot_entries-2026-07)" "2"
 
 
 section ".deploy/prune.sh"
 # As the user the .deploy scripts run as, with each version's directory beside its index, the way
-# a host holds them. The alias points at uniprot_entries-2026-07 by here, and every version before
-# it, legacy included, is still in OpenSearch.
+# a host holds them, and the current link where install.sh and switch.sh put it. 2026-01 and
+# 2026-02 have only their index left, and uniprot_entries-legacy is what a host loaded before
+# versioned indices kept.
 DATA=/tmp/prune-data
-rm -rf "$DATA"
+rm -rf "${DATA:?}"
+load_version uniprot_entries-legacy P00009
+for version in 2026-01 2026-02 2026-03 2026-04 2026-05; do
+    load_version "uniprot_entries-${version}" "P${version//-/}"
+done
 for version in 2026-03 2026-04 2026-05 2026-07; do
     mkdir -p "${DATA}/uniprot-${version}/suffix-array"
 done
-chown -R unipept: "$DATA"
+ln -s uniprot-2026-07 "${DATA}/current"
+chown -R -h unipept: "$DATA"
 
 prune() {
     local logfile=$1
@@ -271,47 +167,29 @@ prune() {
 prune "${WORK}/prune-dry.log" --keep 2 --dry-run
 check_true "a dry run succeeds" [ "$rc" -eq 0 ]
 check_true "and names what it would remove, newest first" grep -q 'Removing: 2026-03 2026-02 2026-01 legacy' "${WORK}/prune-dry.log"
-check "without removing an index" "$(status_of uniprot_entries-2026-01)" "close"
+check "without removing an index" "$(status_of uniprot_entries-2026-01)" "open"
 check_true "or a directory" test -d "${DATA}/uniprot-2026-03"
 
 prune "${WORK}/prune.log" --keep 2
 check_true "it succeeds" [ "$rc" -eq 0 ]
-check "the version the API queries is kept" "$(alias_target)" "uniprot_entries-2026-07"
-check "with its rows" "$(documents_in uniprot_entries)" "2"
-check "and its files" "$([ -d "${DATA}/uniprot-2026-07" ] && echo kept)" "kept"
+check_true "and says what this host serves" grep -q 'This host serves 2026-07' "${WORK}/prune.log"
+check "the version this host serves is kept" "$(documents_in uniprot_entries-2026-07) $([ -d "${DATA}/uniprot-2026-07" ] && echo kept)" "2 kept"
 check "the two before it are kept, index and files" \
     "$(status_of uniprot_entries-2026-05) $(status_of uniprot_entries-2026-04) $([ -d "${DATA}/uniprot-2026-04" ] && echo kept)" \
-    "open close kept"
+    "open open kept"
 check "older ones lose their index" "$(status_of uniprot_entries-2026-03)$(status_of uniprot_entries-2026-01)$(status_of uniprot_entries-legacy)" ""
 check "and their files" "$([ -e "${DATA}/uniprot-2026-03" ] && echo left || echo removed)" "removed"
+check "current is left as it is" "$(readlink "${DATA}/current")" "uniprot-2026-07"
 
-section ".deploy/prune.sh keeps the files the API reads, when its alias has moved on"
-# What load.sh --activate leaves until the API's rollout switches its files too: the alias on
-# 2026-07, and the API still reading 2026-04.
-printf 'INDEX_LOCATION=%s/uniprot-2026-04/suffix-array\n' "$DATA" > /tmp/api.env
-chmod 644 /tmp/api.env
-prune_as_api() {
-    local logfile=$1
-    shift
-    runuser -u unipept -- env API_ENV_FILE=/tmp/api.env "${REPO}/.deploy/prune.sh" --output-dir "$DATA" \
-        --opensearch-url "$OPENSEARCH_URL" "$@" > "$logfile" 2>&1
-    rc=$?
-}
-prune_as_api "${WORK}/prune-served.log" --keep 0
+section ".deploy/prune.sh keeps the version switch.sh --back goes to"
+as_unipept_link() { runuser -u unipept -- ln -sfn "$1" "${DATA}/$2"; }
+as_unipept_link uniprot-2026-04 previous
+prune "${WORK}/prune-previous.log" --keep 0
 check_true "it succeeds" [ "$rc" -eq 0 ]
-check_true "and says what the API reads" grep -q 'reads the files of 2026-04' "${WORK}/prune-served.log"
-check "the files the API reads are kept, with their index" "$([ -d "${DATA}/uniprot-2026-04" ] && echo kept) $(status_of uniprot_entries-2026-04)" "kept close"
-check "and everything between them and the alias" "$(status_of uniprot_entries-2026-05)" "open"
-
-printf 'INDEX_LOCATION=/srv/index\n' > /tmp/api.env
-prune_as_api "${WORK}/prune-noversion.log" --keep 0
-check "an INDEX_LOCATION that names no version stops it" "$rc" "2"
-check "and removes nothing" "$(status_of uniprot_entries-2026-04)" "close"
-chmod 600 /tmp/api.env
-prune_as_api "${WORK}/prune-unreadable.log" --keep 0
-check "an environment file it cannot read stops it" "$rc" "2"
-rm /tmp/api.env
-
+check_true "and says which it switched from" grep -q 'and switched from 2026-04' "${WORK}/prune-previous.log"
+check "the one before is kept, with its files" "$(status_of uniprot_entries-2026-04) $([ -d "${DATA}/uniprot-2026-04" ] && echo kept)" "open kept"
+check "and everything between the two" "$(status_of uniprot_entries-2026-05)" "open"
+runuser -u unipept -- unlink "${DATA}/previous"
 
 section ".deploy/prune.sh keeps a version loaded ahead of a switch"
 load_version uniprot_entries-2026-09 P90001
@@ -319,21 +197,19 @@ mkdir -p "${DATA}/uniprot-2026-09/suffix-array" && chown -R unipept: "${DATA}/un
 prune "${WORK}/prune-ahead.log" --keep 0
 check_true "it succeeds" [ "$rc" -eq 0 ]
 check "the newer version is kept, though --keep is 0" "$(status_of uniprot_entries-2026-09) $([ -d "${DATA}/uniprot-2026-09" ] && echo kept)" "open kept"
-check "the version the API queries is kept" "$(alias_target)" "uniprot_entries-2026-07"
+check "the version this host serves is kept" "$(status_of uniprot_entries-2026-07)" "open"
 check "everything older is removed" "$(status_of uniprot_entries-2026-05)$(status_of uniprot_entries-2026-04)" ""
-check "files included" "$(find "$DATA" -mindepth 1 -maxdepth 1 -printf '%f\n' | sort | tr '\n' ' ')" "uniprot-2026-07 uniprot-2026-09 "
+check "files included" "$(find "$DATA" -mindepth 1 -maxdepth 1 -printf '%f\n' | sort | tr '\n' ' ')" "current uniprot-2026-07 uniprot-2026-09 "
 
 section ".deploy/prune.sh refuses what it cannot decide"
 prune "${WORK}/prune-nokeep.log"
 check "without --keep it stops" "$rc" "2"
-curl -s -X POST "${OPENSEARCH_URL}/_aliases" -H 'Content-Type: application/json' \
-    -d '{"actions":[{"remove":{"index":"uniprot_entries-2026-07","alias":"uniprot_entries"}}]}' > /dev/null
-prune "${WORK}/prune-noalias.log" --keep 0
-check "without an alias it stops" "$rc" "2"
-check_true "and says which version the API queries is not known" grep -q 'not known' "${WORK}/prune-noalias.log"
+runuser -u unipept -- mv "${DATA}/current" "${DATA}/current.away"
+prune "${WORK}/prune-nocurrent.log" --keep 0
+check "without a current link it stops" "$rc" "2"
+check_true "and says which version this host serves is not known" grep -q 'not known' "${WORK}/prune-nocurrent.log"
 check "and removes nothing" "$(status_of uniprot_entries-2026-09)" "open"
-curl -s -X POST "${OPENSEARCH_URL}/_aliases" -H 'Content-Type: application/json' \
-    -d '{"actions":[{"add":{"index":"uniprot_entries-2026-07","alias":"uniprot_entries"}}]}' > /dev/null
+runuser -u unipept -- mv "${DATA}/current.away" "${DATA}/current"
 "${REPO}/.deploy/prune.sh" --output-dir "$DATA" --opensearch-url "$OPENSEARCH_URL" --keep 0 > /dev/null 2>&1
 check "as root it stops" "$?" "2"
 
@@ -545,10 +421,12 @@ ensure 2027-01
 check "an index already there is left as it is" "$rc" "0"
 check "without a word" "$(cat "${WORK}/ensure.log")" ""
 
-# A host whose alias points at the old index activate.sh kept.
+# A host whose alias points at the old index an earlier release kept. The index uniprot_entries the
+# first sections loaded goes first: an alias cannot share its name.
+curl -s -X DELETE "${OPENSEARCH_URL}/uniprot_entries" > /dev/null
 load_version uniprot_entries-legacy P00001 P00002
 curl -s -X POST "${OPENSEARCH_URL}/_aliases" -H 'Content-Type: application/json' \
-    -d '{"actions":[{"remove":{"index":"uniprot_entries-2026-07","alias":"uniprot_entries"}},{"add":{"index":"uniprot_entries-legacy","alias":"uniprot_entries"}}]}' > /dev/null
+    -d '{"actions":[{"add":{"index":"uniprot_entries-legacy","alias":"uniprot_entries"}}]}' > /dev/null
 ensure 2025-04
 check "the proteins behind the alias are kept" "$rc" "0"
 check "under the version's name" "$(documents_in uniprot_entries-2025-04)" "2"

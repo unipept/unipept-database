@@ -61,7 +61,6 @@ printf '%s\n' "${STUB_UNIPROT_VERSION:-2026.03}" > "${OUT}/.version"
 PIPELINE
 
     make_loader "${CHECKOUT}/opensearch/load.sh" /work/loader-calls
-    make_loader "${CHECKOUT}/opensearch/activate.sh" /work/activate-calls
     chmod +x "${CHECKOUT}/pipelines/suffix-array/build.sh"
 
     # Through the configuration file, which is how a host sets this, so the suite covers that path
@@ -403,15 +402,10 @@ check "the loader is called once" "$(grep -c -- '--uniprot-entries' /work/loader
 check_true "with the newest database, into an index of its version, at the instance named" \
     grep -qxF -- "--opensearch-url http://stub:9200 --uniprot-entries ${OUT}/uniprot-2026-03/tables/uniprot_entries.tsv.lz4 --index-name uniprot_entries-2026-03" \
     /work/loader-calls
-check_true "the alias the API queries is left alone" test ! -e /work/activate-calls
-check_true "it says the API does not query it yet" grep -q 'does not query it yet' /work/last-output
+check_true "it says how to switch to it" grep -qF 'until this host switches to it: switch.sh --uniprot-version 2026-03' /work/last-output
 
-rm -f /work/loader-calls
-load_proteins --output-dir "$OUT" --opensearch-url http://stub:9200 --activate
-check "--activate succeeds" "$?" "0"
-check_true "it points the alias at what it loaded" \
-    grep -qxF -- "--opensearch-url http://stub:9200 --index-name uniprot_entries-2026-03" /work/activate-calls
-check_true "after the load" test -s /work/loader-calls
+load_proteins --output-dir "$OUT" --activate
+check "--activate, which moved an alias the API no longer queries, is gone" "$?" "2"
 
 rm -f /work/loader-calls
 load_proteins --output-dir "$OUT" --uniprot-version 2025-11 --check
@@ -420,10 +414,19 @@ check_true "asking about the version's own index" \
     grep -qxF -- "--opensearch-url http://localhost:9200 --index-name uniprot_entries-2025-11 --check-complete" /work/loader-calls
 check "and loads nothing" "$(grep -c -- '--uniprot-entries' /work/loader-calls)" "0"
 
+# The version this host serves, whose index the API queries while it runs.
+as_deployer ln -s uniprot-2026-03 "${OUT}/current"
 rm -f /work/loader-calls
+load_proteins --output-dir "$OUT"
+check "reloading the version this host serves stops it" "$?" "2"
+check_true "and says why" grep -q '2026-03 is the version this host serves' /work/last-output
+check_true "before the loader drops anything" test ! -e /work/loader-calls
 load_proteins --output-dir "$OUT" --replace-live
-check "--replace-live succeeds" "$?" "0"
-check_true "it is handed to the loader" grep -q -- '--index-name uniprot_entries-2026-03 --replace-live' /work/loader-calls
+check "--replace-live reloads it anyway" "$?" "0"
+check_true "into its index" grep -q -- '--index-name uniprot_entries-2026-03$' /work/loader-calls
+load_proteins --output-dir "$OUT" --uniprot-version 2025-11
+check "another version loads beside it" "$?" "0"
+as_deployer unlink "${OUT}/current"
 
 rm -f /work/loader-calls
 load_proteins --output-dir "$OUT" --uniprot-version 2025-11 --skip 500
@@ -504,10 +507,8 @@ check_true "none of these reaches the loader" test ! -e /work/loader-calls
 section "load.sh whose loader fails"
 
 printf '#!/usr/bin/env bash\nexit 1\n' > "${CHECKOUT}/opensearch/load.sh"
-rm -f /work/activate-calls
-load_proteins --output-dir "$OUT" --activate
+load_proteins --output-dir "$OUT"
 check "it stops" "$?" "2"
-check_true "nothing is activated" test ! -e /work/activate-calls
 check_true "it does not say it finished" not grep -q 'Finished loading' /work/last-output
 check_true "the database is left in place, to load again" test -s "${OUT}/uniprot-2026-03/tables/uniprot_entries.tsv.lz4"
 as_deployer git -C "$CHECKOUT" checkout -q -- opensearch/load.sh
@@ -860,14 +861,18 @@ check_true "it says what is left to do as that user" grep -q "As ${DEPLOY} (sudo
 section "install.sh installs the scripts a host runs"
 
 PREFIX_A=/work/opt-a
+# What an earlier release installed, and this one removes.
+mkdir -p "${PREFIX_A}/opensearch"
+touch "${PREFIX_A}/opensearch/activate.sh"
 packaged_host
 install_opensearch --user "$DEPLOY" --output-dir "$OUT" --prefix "$PREFIX_A"
 check "it succeeds" "$?" "0"
+check_true "the activate.sh an earlier release installed is gone" test ! -e "${PREFIX_A}/opensearch/activate.sh"
 check_true "the scripts a host runs are there" \
     test -x "${PREFIX_A}/bin/clone.sh" -a -x "${PREFIX_A}/bin/load.sh" -a -x "${PREFIX_A}/bin/verify.sh" -a -x "${PREFIX_A}/bin/prune.sh" \
         -a -x "${PREFIX_A}/bin/switch.sh"
 check_true "and what they call" \
-    test -x "${PREFIX_A}/opensearch/activate.sh" -a -f "${PREFIX_A}/opensearch/lib.sh" \
+    test -x "${PREFIX_A}/opensearch/load.sh" -a -f "${PREFIX_A}/opensearch/lib.sh" \
         -a -f "${PREFIX_A}/opensearch/mappings/uniprot_entries.json" -a -f "${PREFIX_A}/pipelines/lib/common.sh"
 check_true "but not build.sh, which needs the whole repository" test ! -e "${PREFIX_A}/bin/build.sh"
 check "the scripts belong to root, which alone changes them" "$(stat -c %U "${PREFIX_A}/bin/load.sh")" "root"

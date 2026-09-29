@@ -3,21 +3,18 @@
 # Removes old databases from this host: for each version, its directory under OUTPUT_DIR and its
 # uniprot_entries-<version> index in OpenSearch, together. Run it with --help for the options.
 #
-# Nothing else removes them. Activating a version closes the index of the one before, which frees
-# its memory, and keeps every version's data, so going back to one is a switch and not a rebuild.
-# What that costs is disk, which is what this gives back.
+# Nothing else removes them. switch.sh closes the indices of versions older than the two it
+# switched between, which frees their memory, and keeps every version's data, so going back to one
+# is a switch and not a rebuild. What that costs is disk, which is what this gives back.
 #
-# What the API serves is two things, which can be on different versions for a while: the proteins,
-# through the uniprot_entries alias, and the files, through INDEX_LOCATION in the API's environment
-# file on a host that runs the API. load.sh --activate moves only the first. Kept, whatever --keep
-# says:
-#   - the version of each, and every version newer than the older of the two, which is loaded ahead
-#     of a switch still to come;
+# What the API serves is the version the `current` link points at, and switch.sh --back goes to the
+# one `previous` points at. Kept, whatever --keep says:
+#   - both, and every version newer than the older of the two, which is loaded ahead of a switch
+#     still to come;
 #   - the --keep newest versions older than that, to go back to.
 # The old index a host had before versioned indices, uniprot_entries-legacy, counts as the oldest.
 #
-# Without an alias, or with an environment file that cannot be read or names no version, there is
-# no telling what the API serves, so nothing is removed.
+# Without a current link there is no telling what the API serves, so nothing is removed.
 
 set -eo pipefail
 set -o errtrace
@@ -40,10 +37,6 @@ KEEP=
 # Whether to only say what would be removed.
 DRY_RUN=false
 
-# Where the API on this host keeps INDEX_LOCATION, which unipept-api's install puts there. A host
-# without it runs no API, and only the alias says what is served.
-API_ENV_FILE=${API_ENV_FILE:-/opt/unipept-api/etc/unipept-api.env}
-
 read_conf
 
 usage() {
@@ -52,14 +45,14 @@ Removes old databases from this host, each version's files and its OpenSearch in
 
   .deploy/prune.sh --keep N [OPTIONS]
 
-  --keep N                 how many versions older than the one the API queries to keep, to go
+  --keep N                 how many versions older than the one this host serves to keep, to go
                            back to. Required
   --dry-run                say what would be removed, and remove nothing
   --output-dir DIR         where the databases are
   --opensearch-url URL     the instance their indices are in
   --help                   print this message
 
-The version the API queries, and every newer one, are always kept.
+The version this host serves, the one before it, and every newer one, are always kept.
 USAGE
 }
 
@@ -75,7 +68,7 @@ parse_arguments() {
         esac
     done
 
-    [ -n "$KEEP" ] || die "--keep is required: how many versions older than the one the API queries to keep."
+    [ -n "$KEEP" ] || die "--keep is required: how many versions older than the one this host serves to keep."
     [[ "$KEEP" =~ ^[0-9]+$ ]] || die "--keep takes a number of versions, not '${KEEP}'."
 }
 
@@ -96,23 +89,14 @@ refuse_root
 [ -n "$OUTPUT_DIR" ] || die "--output-dir requires a value."
 require_opensearch
 
-active_index=$(alias_target)
-QUERIED=$(version_of_index "$active_index")
-[ -n "$QUERIED" ] \
-    || die "${ALIAS} is not an alias for a version's index, so which version the API queries is not known. Nothing is removed."
+SERVED=$(linked_version "$(current_link)" 2> /dev/null) \
+    || die "there is no $(current_link) pointing at a version, so which one this host serves is not known. Nothing is removed."
+BEFORE=$(linked_version "$(previous_link)" 2> /dev/null) || BEFORE=''
 
-SERVED=''
-if [ -e "$API_ENV_FILE" ]; then
-    [ -r "$API_ENV_FILE" ] || die "cannot read ${API_ENV_FILE}, so which files the API reads is not known. Nothing is removed."
-    location=$(sed -n 's/^INDEX_LOCATION=//p' "$API_ENV_FILE" | tail -n 1)
-    SERVED=$(database_version_of "$location") \
-        || die "INDEX_LOCATION in ${API_ENV_FILE} is '${location}', which names no version, so which files the API reads is not known. Nothing is removed."
-fi
-
-# The older of the two: what is kept is counted from there. legacy is older than any version.
-ACTIVE="$QUERIED"
-if [ -n "$SERVED" ] && [[ "${SERVED/legacy/0000-00}" < "${QUERIED/legacy/0000-00}" ]]; then
-    ACTIVE="$SERVED"
+# The older of the two: what is kept is counted from there.
+ACTIVE="$SERVED"
+if [ -n "$BEFORE" ] && [[ "$BEFORE" < "$SERVED" ]]; then
+    ACTIVE="$BEFORE"
 fi
 
 # Every version this host holds anything of, files or index, newest first. legacy sorts last,
@@ -149,7 +133,7 @@ for version in $versions; do
     fi
 done
 
-log "The API queries ${active_index}${SERVED:+ and reads the files of ${SERVED}}. Keeping:${keep% }"
+log "This host serves ${SERVED}${BEFORE:+, and switched from ${BEFORE}}. Keeping:${keep% }"
 if [ -z "$remove" ]; then
     log "Nothing to remove."
     exit 0
