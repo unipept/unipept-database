@@ -204,16 +204,23 @@ The API reads what it serves when it starts: `INDEX_LOCATION` names the suffix a
 the files and the proteins always change together.
 
 - **It checks everything first**, while both still run, and reports every problem: the version's
-  files, its index loaded to the end, `INDEX_LOCATION` naming `current`, no load running, the sudo
-  rule below, and the API's own `deploy.sh check --index` on the new files, which covers the memory
-  its variant needs for them. A host with any problem is left exactly as it is.
+  files, its index loaded to the end, `INDEX_LOCATION` naming `current`, `OUTPUT_DIR` writable for
+  the links, no load running, the sudo rule below, and the API's own `deploy.sh check --index` on
+  the new files, which covers the memory its variant needs for them. A host with any problem is
+  left as it is. The one change before the stop is opening the new version's index where it is
+  closed, which the API's check needs, and it is only made once everything else has passed.
+  `--check` makes no change at all, so on a closed index it says the API's check could not run.
+- **Loads and switches exclude each other**, through a lock in `OUTPUT_DIR`: `load.sh` holds it
+  shared while it loads, and a switch exclusively from its checks to its end. Whichever comes
+  second stops, and says why.
 - **Then** it stops the API and OpenSearch, points `current` at the new version and `previous` at
   the old one, starts OpenSearch and waits for the new index, and starts the API, which waits
   until it answers `/health` and `/health/database`.
-- **A start that fails, or an interrupt**, points the links back and starts both on the version it
-  left, so the host serves what it served. It says which of the two it ended on.
-- **It closes the indices of versions older than both**, which frees their memory. It deletes
-  nothing; `prune.sh` does.
+- **A start that fails, a link that cannot be moved, or an interrupt**, points the links back and
+  starts both on the version it left, so the host serves what it served. It says which of the two
+  it ended on.
+- **Once the API serves, it closes the indices of versions older than both**, which frees their
+  memory. It deletes nothing; `prune.sh` does.
 
 It knows nothing of a load balancer: take the host out of the pool first where it is in one.
 

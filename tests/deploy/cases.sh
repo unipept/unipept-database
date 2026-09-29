@@ -463,6 +463,25 @@ load_proteins --output-dir "$OUT" --opensearch-url http://stub:9200
 check_true "an OpenSearch that cannot be asked gives no warning" not grep -q 'watermark' /work/last-output
 
 
+section "load.sh waits for no switch"
+
+# switch.sh holds the lock exclusively while it stops OpenSearch; a load then would break part way.
+as_deployer touch "${OUT}/.opensearch.lock"
+bash -c 'exec 9>> "$1"; flock -x 9; exec sleep 30' _ "${OUT}/.opensearch.lock" &
+switcher=$!
+for _ in $(seq 50); do
+    as_deployer flock -n -s "${OUT}/.opensearch.lock" true 2> /dev/null || break
+    sleep 0.1
+done
+rm -f /work/loader-calls
+load_proteins --output-dir "$OUT"
+check "a load during a switch stops it" "$?" "2"
+check_true "and says why" grep -q 'switch.sh is switching this host' /work/last-output
+check_true "before the loader is called" test ! -e /work/loader-calls
+kill "$switcher"
+wait "$switcher" 2> /dev/null
+
+
 section "load.sh refuses a database it cannot load"
 
 rm -f /work/loader-calls

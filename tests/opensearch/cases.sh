@@ -440,21 +440,55 @@ check_true "with the API's reason" grep -q 'check: the variant does not fit' "${
 check "nothing is stopped" "$(calls api-calls)" " check --index ${SW_DATA}/uniprot-2027-02/suffix-array "
 rm -f "${SW_STATE:?}/check-fails"
 
-runuser -u unipept -- bash -c 'exec -a bulk_load.py sleep 30' &
+# A load holds the lock shared, as load.sh takes it, from before it drops its index to its end. One
+# process that holds it, so killing it releases it: runuser would not pass the signal on.
+runuser -u unipept -- touch "${SW_DATA}/.opensearch.lock"
+bash -c 'exec 9>> "$1"; flock -s 9; exec sleep 30' _ "${SW_DATA}/.opensearch.lock" &
 loader=$!
-sleep 0.5
+for _ in $(seq 50); do
+    runuser -u unipept -- flock -n -x "${SW_DATA}/.opensearch.lock" true 2> /dev/null || break
+    sleep 0.1
+done
 switch "${WORK}/switch-loading.log" --uniprot-version 2027-02
 check "a load running stops it" "$rc" "2"
 check_true "and says so" grep -q 'a load is running on this host' "${WORK}/switch-loading.log"
 kill "$loader"
 wait "$loader" 2> /dev/null
 
-# The refused switch above opened it, as a switch does before it stops anything: closed again.
+# The links are moved with both stopped, so what would stop that is found before.
+chmod 555 "$SW_DATA"
+switch "${WORK}/switch-readonly.log" --uniprot-version 2027-02
+check "an output directory it cannot write stops it" "$rc" "2"
+check_true "and says so" grep -q "${SW_DATA} is not writable by unipept" "${WORK}/switch-readonly.log"
+chmod 755 "$SW_DATA"
+mkdir "${SW_DATA}/previous"
+switch "${WORK}/switch-previousdir.log" --uniprot-version 2027-02
+check "a previous that is not a link stops it" "$rc" "2"
+check_true "and says so" grep -q 'previous is there and is not a link' "${WORK}/switch-previousdir.log"
+rmdir "${SW_DATA}/previous"
+
+# A closed index is only opened once nothing else stands in the way. The refusal of the API's check
+# above opened it, as it would: closed again.
 curl -s -X POST "${OPENSEARCH_URL}/uniprot_entries-2027-02/_close" > /dev/null
+touch "${SW_STATE}/no-sudo"
+switch "${WORK}/switch-closed-refused.log" --uniprot-version 2027-02
+check "a refused switch" "$rc" "2"
+check "leaves the closed index closed" "$(status_of uniprot_entries-2027-02)" "close"
+rm -f "${SW_STATE:?}/no-sudo"
+
+switch "${WORK}/switch-check-closed.log" --uniprot-version 2027-02 --check
+check "--check on a closed index stops it" "$rc" "2"
+check_true "and says the API's check could not run" grep -q "the API's own check of 2027-02 cannot run" "${WORK}/switch-check-closed.log"
+check "changing nothing" "$(serves) $(status_of uniprot_entries-2027-02)" "uniprot-2027-01 close"
+check "the API's check is not asked" "$(calls api-calls)" " "
+
+curl -s -X POST "${OPENSEARCH_URL}/uniprot_entries-2027-02/_open" > /dev/null
 switch "${WORK}/switch-check.log" --uniprot-version 2027-02 --check
 check "--check succeeds" "$rc" "0"
 check_true "and says the host can switch" grep -q 'can switch from 2027-01 to 2027-02' "${WORK}/switch-check.log"
-check "changing nothing" "$(serves) $(status_of uniprot_entries-2027-02)" "uniprot-2027-01 close"
+check "asking the API's check" "$(calls api-calls)" " check --index ${SW_DATA}/uniprot-2027-02/suffix-array "
+check "changing nothing" "$(serves)" "uniprot-2027-01"
+curl -s -X POST "${OPENSEARCH_URL}/uniprot_entries-2027-02/_close" > /dev/null
 
 switch "${WORK}/switch.log" --uniprot-version 2027-02
 check "a switch succeeds" "$rc" "0"
@@ -492,6 +526,14 @@ check "OpenSearch not starting fails it" "$rc" "2"
 check_true "and says the host is back" grep -q 'This host is back on 2027-01, and serves it' "${WORK}/switch-osfails.log"
 check "OpenSearch was started again" "$(calls systemctl-calls)" "stop opensearch start opensearch start opensearch "
 check "current points back" "$(serves)" "uniprot-2027-01"
+
+# A link that cannot be moved once both are stopped: switched back, and both started again.
+mkdir "${SW_DATA}/current.new"
+switch "${WORK}/switch-nolink.log" --uniprot-version 2027-02
+check "a link it cannot move fails it" "$rc" "2"
+check_true "and says the host is back" grep -q 'This host is back on 2027-01, and serves it' "${WORK}/switch-nolink.log"
+check "the API was started again" "$(cat "${SW_STATE}/started-on")" "uniprot-2027-01"
+rmdir "${SW_DATA}/current.new"
 
 touch "${SW_STATE}/start-fails"
 switch "${WORK}/switch-bothfail.log" --uniprot-version 2027-02
@@ -544,6 +586,18 @@ is_marked() { curl -s "${OPENSEARCH_URL}/$1/_mapping" | grep -qF '"unipept_load"
 ensure 2027-01
 check "an index already there is left as it is" "$rc" "0"
 check "without a word" "$(cat "${WORK}/ensure.log")" ""
+
+curl -s -X POST "${OPENSEARCH_URL}/uniprot_entries-2027-01/_close" > /dev/null
+ensure 2027-01
+check "one that is closed" "$rc" "0"
+check "is opened" "$(status_of uniprot_entries-2027-01)" "open"
+
+curl -s -X PUT "${OPENSEARCH_URL}/uniprot_entries-2027-05" -H 'Content-Type: application/json' \
+    -d @"${REPO}/opensearch/mappings/uniprot_entries.json" > /dev/null
+ensure 2027-05
+check "one that was not loaded to the end fails it" "$rc" "1"
+check_true "and says to load it again" grep -q 'uniprot_entries-2027-05 is there and was not loaded to the end' "${WORK}/ensure.log"
+curl -s -X DELETE "${OPENSEARCH_URL}/uniprot_entries-2027-05" > /dev/null
 
 # A host whose alias points at the old index activate.sh kept.
 load_version uniprot_entries-legacy P00001 P00002

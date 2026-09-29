@@ -104,6 +104,10 @@ verify_database "${DATABASE_DIR}/suffix-array" \
     || die "${DATABASE_DIR} is missing files the API needs, or is not the version it is named after."
 [ -s "$ENTRIES" ] || die "${DATABASE_DIR} has no tables/uniprot_entries.tsv.lz4 to load."
 
+# Held until the load ends, so switch.sh does not stop OpenSearch under it.
+checkdep flock "util-linux"
+take_opensearch_lock -s || die "switch.sh is switching this host, and stops OpenSearch to do so. Load once it has finished."
+
 warn_opensearch_disk "$OPENSEARCH_URL"
 
 log "Started loading UniProtKB ${UNIPROT_VERSION} into ${INDEX_NAME} at ${OPENSEARCH_URL}."
