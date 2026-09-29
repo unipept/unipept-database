@@ -466,11 +466,17 @@ check_true "an OpenSearch that cannot be asked gives no warning" not grep -q 'wa
 section "load.sh waits for no switch"
 
 # switch.sh holds the lock exclusively while it stops OpenSearch; a load then would break part way.
-as_deployer touch "${OUT}/.opensearch.lock"
-bash -c 'exec 9>> "$1"; flock -x 9; exec sleep 30' _ "${OUT}/.opensearch.lock" &
+LOCK=/run/lock/unipept-opensearch.lock
+mkdir -p /run/lock
+chmod 1777 /run/lock
+as_deployer touch "$LOCK"
+# As the deploy user, as switch.sh runs: /run/lock is sticky, and even root may not open a file another
+# user owns there. setpriv replaces itself, so killing it releases the lock.
+# shellcheck disable=SC2016 # $1 belongs to the inner shell
+setpriv --reuid "$DEPLOY" --regid "$DEPLOY" --init-groups bash -c 'exec 9>> "$1"; flock -x 9; exec sleep 30' _ "$LOCK" &
 switcher=$!
 for _ in $(seq 50); do
-    as_deployer flock -n -s "${OUT}/.opensearch.lock" true 2> /dev/null || break
+    as_deployer flock -n -s "$LOCK" true 2> /dev/null || break
     sleep 0.1
 done
 rm -f /work/loader-calls
@@ -480,6 +486,16 @@ check_true "and says why" grep -q 'switch.sh is switching this host' /work/last-
 check_true "before the loader is called" test ! -e /work/loader-calls
 kill "$switcher"
 wait "$switcher" 2> /dev/null
+
+# A lock it cannot open is said to be that, not taken for a switch.
+mv "$LOCK" "${LOCK}.away"
+touch "$LOCK"
+chmod 644 "$LOCK"
+load_proteins --output-dir "$OUT"
+check "a lock it cannot open stops it" "$?" "2"
+check_true "and says so" grep -q "cannot open the lock ${LOCK} as ${DEPLOY}" /work/last-output
+check_true "not that a switch is running" not grep -q 'switch.sh is switching' /work/last-output
+mv "${LOCK}.away" "$LOCK"
 
 
 section "load.sh refuses a database it cannot load"

@@ -210,7 +210,8 @@ the files and the proteins always change together.
   left as it is. The one change before the stop is opening the new version's index where it is
   closed, which the API's check needs, and it is only made once everything else has passed.
   `--check` makes no change at all, so on a closed index it says the API's check could not run.
-- **Loads and switches exclude each other**, through a lock in `OUTPUT_DIR`: `load.sh` holds it
+- **Loads and switches exclude each other**, through one lock per host,
+  `/run/lock/unipept-opensearch.lock` unless `OPENSEARCH_LOCK` says otherwise: `load.sh` holds it
   shared while it loads, and a switch exclusively from its checks to its end. Whichever comes
   second stops, and says why.
 - **Then** it stops the API and OpenSearch, points `current` at the new version and `previous` at

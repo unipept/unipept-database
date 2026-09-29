@@ -35,9 +35,29 @@ opensearch_request() {
     printf '%s' "$body"
 }
 
+# Whether OpenSearch answers at all, as a test.
+opensearch_answers() {
+    curl -s -f --max-time 10 "${OPENSEARCH_URL}/_cluster/health" > /dev/null 2>&1
+}
+
 require_opensearch() {
-    curl -s -f --max-time 10 "${OPENSEARCH_URL}/_cluster/health" > /dev/null \
+    opensearch_answers \
         || opensearch_fail "OpenSearch is not reachable at ${OPENSEARCH_URL}. Start it and run this again."
+}
+
+# The version an index holds: YYYY-MM for uniprot_entries-YYYY-MM, legacy or plain for what a host
+# loaded before versioned indices kept, uniprot_entries-legacy and uniprot_entries itself. Nothing for
+# an index that is not a database's.
+version_of_index() {
+    local version="${1#"${ALIAS}"-}"
+
+    if [ "$1" = "$ALIAS" ]; then
+        echo plain
+    elif [ "$1" = "$LEGACY" ]; then
+        echo legacy
+    elif [[ "$version" =~ ^[0-9]{4}-[0-9]{2}$ ]]; then
+        echo "$version"
+    fi
 }
 
 # The index the alias points at, or nothing where it is not an alias.
@@ -67,13 +87,19 @@ mark_complete() {
         -H 'Content-Type: application/json' -d "{\"_meta\":{${COMPLETE_MARK}}}" > /dev/null
 }
 
-# Waits for an index to be ready to serve: its primary started, which is all a single node offers.
-# A wait that runs out answers 408, with timed_out in its body.
-wait_until_ready() {
-    local index="$1" timeout="$2" health
+# Whether an index becomes ready to serve within the timeout: its primary started, which is all a
+# single node offers. A test, which fails as well where OpenSearch does not answer the request.
+index_ready() {
+    local index="$1" timeout="$2" answer
 
-    health=$(opensearch_request "waiting for ${index}" "200 408" GET "_cluster/health/${index}?wait_for_status=yellow&timeout=${timeout}s")
-    [[ "$health" != *'"timed_out":true'* ]] || opensearch_fail "${index} was not ready within ${timeout} seconds."
+    answer=$(curl -s -w '\n%{http_code}' --max-time "$((timeout + 30))" \
+        "${OPENSEARCH_URL}/_cluster/health/${index}?wait_for_status=yellow&timeout=${timeout}s") || return 1
+    [ "${answer##*$'\n'}" = 200 ] && [[ "$answer" != *'"timed_out":true'* ]]
+}
+
+# index_ready, stopping the script where the index does not become ready.
+wait_until_ready() {
+    index_ready "$1" "$2" || opensearch_fail "$1 was not ready within $2 seconds."
 }
 
 # Keeps a whole index under another name, by a clone: hard links, so no copy. The clone needs the
@@ -85,9 +111,12 @@ keep_as() {
     mark_complete "$source"
     opensearch_request "blocking writes to ${source}" "200" PUT "${source}/_settings" \
         -H 'Content-Type: application/json' -d '{"index.blocks.write":true}' > /dev/null
-    # No replica, whatever the old index asked for: a single node cannot place one.
+    # No replica, whatever the old index asked for: a single node cannot place one. Nor the block the
+    # clone needed, which it would otherwise copy: a load continued with --skip writes to it.
     opensearch_request "keeping ${source} as ${target}" "200" POST "${source}/_clone/${target}" \
-        -H 'Content-Type: application/json' -d '{"settings":{"index.number_of_replicas":0}}' > /dev/null
+        -H 'Content-Type: application/json' -d '{"settings":{"index.number_of_replicas":0,"index.blocks.write":null}}' > /dev/null
+    opensearch_request "allowing writes to ${source} again" "200" PUT "${source}/_settings" \
+        -H 'Content-Type: application/json' -d '{"index.blocks.write":null}' > /dev/null
     wait_until_ready "$target" "$timeout"
 }
 

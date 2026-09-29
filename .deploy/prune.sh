@@ -79,17 +79,6 @@ parse_arguments() {
     [[ "$KEEP" =~ ^[0-9]+$ ]] || die "--keep takes a number of versions, not '${KEEP}'."
 }
 
-# The version an index holds, YYYY-MM or legacy, or nothing for one that is not a database's.
-version_of_index() {
-    local version="${1#"${ALIAS}"-}"
-
-    if [ "$1" = "$LEGACY" ]; then
-        echo legacy
-    elif [[ "$version" =~ ^[0-9]{4}-[0-9]{2}$ ]]; then
-        echo "$version"
-    fi
-}
-
 parse_arguments "$@"
 refuse_root
 
