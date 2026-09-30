@@ -95,13 +95,20 @@ verify_database "${DATABASE_DIR}/suffix-array" \
 # read, so no switch moves it between the reading and the load.
 checkdep flock "util-linux"
 take_opensearch_lock -s || die "$(lock_refused $?)"
+# And a lock of this version's own, since two loads of one version would drop each other's index.
+take_load_lock "$UNIPROT_VERSION" \
+    || die "another load of ${UNIPROT_VERSION} is running on this host. Let it finish, or stop it, first."
 
 # The version the API serves is queried while it runs, and a load into its index, from the start or
 # continued with --skip, changes what it answers with nothing stopped. Where that index is whole there
 # is nothing to gain; where it is missing or was not loaded to the end, the API answers from it badly
 # already, and loading it is how the host gets it back.
-if is_served "$UNIPROT_VERSION" strict && is_complete "$INDEX_NAME"; then
-    die "${UNIPROT_VERSION} is the version this host serves, and ${INDEX_NAME} is loaded to the end. Loading into it would change what the running API answers. Switch this host to another version with switch.sh first, then load it again."
+# An error from OpenSearch is not an index that is not whole, and loading on it would drop a whole one.
+if is_served "$UNIPROT_VERSION" strict; then
+    case $(index_state "$INDEX_NAME") in
+        complete) die "${UNIPROT_VERSION} is the version this host serves, and ${INDEX_NAME} is loaded to the end. Loading into it would change what the running API answers. Switch this host to another version with switch.sh first, then load it again." ;;
+        unknown) die "${UNIPROT_VERSION} is the version this host serves, and OpenSearch did not say whether ${INDEX_NAME} is whole, so loading into it is not risked. Try again once it answers." ;;
+    esac
 fi
 
 warn_opensearch_disk "$OPENSEARCH_URL"

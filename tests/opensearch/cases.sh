@@ -244,6 +244,7 @@ echo 2.7.0 > /tmp/api-bin/version
 roll_back_to 2.6.0
 prune_with_api "${WORK}/prune-oldprevious.log" --keep 1 --dry-run
 check "and so does an older one deploy.sh would roll back to" "$(grep -c 'plain' "${WORK}/prune-oldprevious.log")" "0"
+check_true "and it says why" grep -q 'from before versioned indices, are kept: the API installed, or the one deploy.sh would roll back to' "${WORK}/prune-oldprevious.log"
 rm -f "${API_BIN}.previous"
 
 # Unless the index of the version it serves is not whole to serve from: then it may be the only copy.
@@ -514,16 +515,17 @@ check "--back succeeds" "$rc" "0"
 check "back on the one before, where previous pointed" "$(serves) $(readlink "${SW_DATA}/previous")" "${SW_DATA}/uniprot-2027-01 uniprot-2027-02"
 runuser -u unipept -- ln -sfn uniprot-2027-01 "${SW_DATA}/current"
 
-# With an older API to roll back to, what it serves from stays as it is.
-curl -s -X POST "${OPENSEARCH_URL}/uniprot_entries/_open" > /dev/null
+# With an older API to roll back to, which after a switch would serve the new files with the proteins
+# of the version before it: refused, with how to give that rollback up.
 roll_back_to 2.6.0
 switch "${WORK}/switch-oldprevious.log" --uniprot-version 2027-02
-check "a switch with an older API to roll back to succeeds" "$rc" "0"
-check_true "and says what it keeps for it" grep -q 'are kept, since the API deploy.sh would roll back to queries them' "${WORK}/switch-oldprevious.log"
-check "uniprot_entries itself stays open" "$(status_of uniprot_entries)" "open"
+check "a switch with an older API to roll back to stops it" "$rc" "2"
+check_true "and says how to give that rollback up" grep -q "Remove it, as unipept, to give up rolling back past 2.7.0: rm ${API_BIN}.previous" "${WORK}/switch-oldprevious.log"
+check "nothing is switched" "$(serves)" "uniprot-2027-01"
+roll_back_to 2.7.0
+switch "${WORK}/switch-newprevious.log" --uniprot-version 2027-02 --check
+check "one that queries versioned indices is fine" "$rc" "0"
 rm -f "${API_BIN}.previous"
-switch "${WORK}/switch-oldprevious-back.log" --back
-check "and back" "$(serves)" "uniprot-2027-01"
 
 touch "${SW_STATE}/start-fails-once"
 switch "${WORK}/switch-apifails.log" --uniprot-version 2027-02

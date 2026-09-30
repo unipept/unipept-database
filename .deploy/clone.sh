@@ -30,6 +30,10 @@ UNIPROT_VERSION=
 # Whether a database of that version already here may be replaced.
 REPLACE=false
 
+# Seconds to wait, once the copy is made, for a switch or a prune that holds the lock to finish: a
+# switch waits for OpenSearch to start, which takes minutes.
+readonly LOCK_WAIT=3600
+
 # Whether to only check that a copy could be made: the settings, the key, the remote host, and its
 # copy of the version. What distribute.sh asks every server before it touches any.
 CHECK=false
@@ -161,6 +165,10 @@ refuse_root
 
 checkdep ssh
 checkdep scp
+checkdep flock "util-linux"
+# Before the copy rather than after it, which is hours in.
+opensearch_lock_usable \
+    || die "cannot open the lock ${OPENSEARCH_LOCK} as $(id -un), which the copy is swapped in under. Make it writable, or set OPENSEARCH_LOCK."
 
 [ -n "$UNIPROT_VERSION" ] || UNIPROT_VERSION=$(remote_latest_version)
 
@@ -190,13 +198,14 @@ COPIED_DIR="${STAGING_DIR}/uniprot-${UNIPROT_VERSION}"
 check_database "$COPIED_DIR" "$REMOTE_DIR"
 
 # Again, since the copy took hours in which this host may have switched to the version. Under the
-# lock a switch holds, so none can start between this and the swap. The copy is removed rather than
-# left: it is hundreds of gigabytes, and the next clone.sh starts one of its own.
-checkdep flock "util-linux"
-take_opensearch_lock -s || die "$(lock_refused $?)"
+# lock a switch holds, so none can start between this and the swap, waited for rather than given up
+# on, since giving up would throw the copy away. The copy is removed where it cannot be used: it is
+# hundreds of gigabytes, and the next clone.sh starts one of its own.
+take_opensearch_lock -s "$LOCK_WAIT" \
+    || die "$(lock_refused $?) Waited ${LOCK_WAIT} seconds for it; the next clone.sh copies again."
 if [ -e "$BUILD_DIR" ] && is_served "$UNIPROT_VERSION"; then
     rm -rf "${STAGING_DIR:?}"
-    refuse_replacing_served "$UNIPROT_VERSION" "The copy is removed. "
+    die "${UNIPROT_VERSION} is the version this host serves, so its files are not replaced under the running API. The copy is removed. Switch this host to another version with switch.sh first."
 fi
 swap_into_place "$COPIED_DIR" "$BUILD_DIR"
 rm -rf "${STAGING_DIR:?}"

@@ -15,9 +15,10 @@
 #   - every version newer than the oldest of those, which is loaded ahead of a switch still to come;
 #   - the --keep newest versions older than that, to go back to.
 # What a host loaded before versioned indices kept, uniprot_entries-legacy and uniprot_entries itself,
-# counts as the oldest, and is only removed once nothing may still need it: the API installed queries
-# the index of the version it serves, INDEX_LOCATION goes through current, and that index is open and
-# loaded to the end. Until then it may be the only copy of what an API serves.
+# counts as the oldest, and is only removed once nothing may still need it: the API installed, and
+# the one unipept-api's deploy.sh would roll back to, query the index of the version they serve,
+# INDEX_LOCATION goes through current, and that index is open and loaded to the end. Until then it
+# may be the only copy of what an API serves, and it says which of these is not so.
 #
 # Without a current link, with API settings it cannot read, or with OpenSearch not saying what the
 # alias points at, there is no telling what the API serves, so nothing is removed. It holds the lock a
@@ -59,7 +60,8 @@ Removes old databases from this host, each version's files and its OpenSearch in
 
 Every version this host serves, the one before it, and every newer one, are always kept.
 uniprot_entries and uniprot_entries-legacy, from before versioned indices, only go once the API
-installed queries the index of its version and INDEX_LOCATION goes through current.
+installed and the one deploy.sh would roll back to are 2.7.0 or newer, INDEX_LOCATION goes through
+current, and the index of the version it serves is loaded to the end.
 USAGE
 }
 
@@ -117,6 +119,15 @@ OLD_INDICES_GO=false
 if old_indices_unneeded && api_follows_current \
     && [ "$(index_status "${ALIAS}-${SERVED}")" = open ] && is_complete "${ALIAS}-${SERVED}"; then
     OLD_INDICES_GO=true
+elif [ -n "$(index_status "$ALIAS")$(index_status "$LEGACY")" ]; then
+    if ! old_indices_unneeded; then
+        why="the API installed, or the one deploy.sh would roll back to ($(api_rollback_binary)), is older than ${API_VERSIONED_INDEX_SINCE}"
+    elif ! api_follows_current; then
+        why="INDEX_LOCATION does not go through $(current_link)"
+    else
+        why="${ALIAS}-${SERVED} is not open and loaded to the end"
+    fi
+    log "${ALIAS} and ${LEGACY}, from before versioned indices, are kept: ${why}."
 fi
 
 # Every version this host holds anything of, files or index, newest first. legacy and plain sort

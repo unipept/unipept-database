@@ -396,22 +396,23 @@ queries_versioned_index() {
     [ "$(printf '%s\n%s\n' "$API_VERSIONED_INDEX_SINCE" "$1" | sort -V | head -n 1)" = "$API_VERSIONED_INDEX_SINCE" ]
 }
 
-# Whether the installed API is one that queries the index of the version it serves.
-api_queries_versioned_index() {
+# Whether an API binary queries the index of the version it serves: 0 it does, 1 it is older than
+# API_VERSIONED_INDEX_SINCE, 2 it cannot be run to say. The one test switch.sh and prune.sh make.
+api_state() {
     local version
-    version=$(api_binary_version "$API_BINARY") && queries_versioned_index "$version"
+    version=$(api_binary_version "$1") || return 2
+    queries_versioned_index "$version" || return 1
 }
 
+# The binary unipept-api's deploy.sh keeps beside the one installed, for deploy.sh rollback.
+api_rollback_binary() { echo "${API_BINARY}.previous"; }
+
 # Whether nothing installed still needs what a host loaded before versioned indices kept: the API
-# installed queries the index of its version, and so does the one unipept-api's deploy.sh keeps
-# beside it for a rollback, where there is one. A rollback to an older one would serve nothing
-# without uniprot_entries or its alias.
+# installed queries the index of its version, and so does the one deploy.sh would roll back to, where
+# there is one. A rollback to an older one would serve nothing without uniprot_entries or its alias.
 old_indices_unneeded() {
-    local previous version
-    api_queries_versioned_index || return 1
-    previous="${API_BINARY}.previous"
-    [ -e "$previous" ] || return 0
-    version=$(api_binary_version "$previous") && queries_versioned_index "$version"
+    api_state "$API_BINARY" || return 1
+    [ ! -e "$(api_rollback_binary)" ] || api_state "$(api_rollback_binary)"
 }
 
 # What a script that could not take OPENSEARCH_LOCK says, by why: 1 another holds it, anything else
@@ -451,6 +452,29 @@ take_opensearch_lock() {
         echo "Error: cannot open the lock ${OPENSEARCH_LOCK} as $(id -un)." 1>&2
         return 2
     }
-    flock -n "$1" 9
+    if [ -n "${2:-}" ]; then
+        # Waiting, up to the seconds given, where giving up would throw away work already done.
+        flock -w "$2" "$1" 9
+    else
+        flock -n "$1" 9
+    fi
+}
+
+# Whether this user can take OPENSEARCH_LOCK at all, for a check made before the work that needs it.
+opensearch_lock_usable() {
+    ( exec 9>> "$OPENSEARCH_LOCK" ) 2> /dev/null
+}
+
+# Loads of different versions run side by side, but two of the same version would drop the index
+# the other fills, and the first to finish would mark what the other left as whole. One lock per
+# version, beside OPENSEARCH_LOCK, on file descriptor 8. Fails where another load of it holds it.
+take_load_lock() {
+    local lock
+    lock="$(dirname "$OPENSEARCH_LOCK")/unipept-load-${1}.lock"
+    { exec 8>> "$lock"; } 2> /dev/null || {
+        echo "Error: cannot open the lock ${lock} as $(id -un)." 1>&2
+        return 2
+    }
+    flock -n -x 8
 }
 

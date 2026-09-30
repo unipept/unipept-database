@@ -179,7 +179,7 @@ Switch away from it with `switch.sh` first, as any change to what the API serves
 Where that index is missing or was not loaded to the end, the API answers from it badly already, and
 loading it is how the host gets it back, so that goes ahead. Which versions are served, `current`
 says, `INDEX_LOCATION` where it names a version's directory itself, and an alias `uniprot_entries` an
-earlier release left.
+earlier release left. Two loads of the same version never run at once: the second stops.
 
 ## Switching the API to another version
 
@@ -216,9 +216,10 @@ the files and the proteins always change together.
   it ended on.
 - **Once the API serves, it removes the alias `uniprot_entries`** an earlier release of these
   scripts left, which only an API from before versioned indices queried, and **closes the indices
-  of versions older than both**, which frees their memory. The alias, and `uniprot_entries` and
-  `uniprot_entries-legacy`, stay as they are while the API `deploy.sh rollback` would go back to is
-  older than 2.7.0, since that one serves through them. It deletes nothing; `prune.sh` does, and
+  of versions older than both**, which frees their memory. It refuses to switch while the API
+  `deploy.sh rollback` would go back to is older than 2.7.0: that one queries the alias, which
+  holds the proteins of the version served before any switch, and after one would serve the new
+  files with them. Removing `bin/unipept-api.previous`, as `unipept`, gives up that rollback. It deletes nothing; `prune.sh` does, and
   takes the same lock, so it never removes a version a load or a switch is working on.
 
 It knows nothing of a load balancer: take the host out of the pool first where it is in one.

@@ -349,6 +349,16 @@ check "a version that is already here stops" "$?" "2"
 check_true "it says how to replace it" grep -q -- '--replace' /work/last-output
 check_true "it stops before copying anything" test ! -e "${LOCAL}/.clone"
 
+# The lock it swaps the copy in under, which it cannot open: found before the copy, hours earlier.
+mv /run/lock/unipept-opensearch.lock /run/lock/unipept-opensearch.lock.away 2> /dev/null
+touch /run/lock/unipept-opensearch.lock
+chmod 644 /run/lock/unipept-opensearch.lock
+clone --remote-output-dir "$REMOTE" --output-dir "$LOCAL" --replace
+check "a lock it cannot open stops it" "$?" "2"
+check_true "before copying anything" test ! -e "${LOCAL}/.clone"
+rm -f /run/lock/unipept-opensearch.lock
+mv /run/lock/unipept-opensearch.lock.away /run/lock/unipept-opensearch.lock 2> /dev/null
+
 as_deployer ln -s uniprot-2026-03 "${LOCAL}/current"
 clone --remote-output-dir "$REMOTE" --output-dir "$LOCAL" --replace
 check "--replace of the version this host serves stops" "$?" "2"
@@ -459,7 +469,10 @@ as_deployer ln -s uniprot-2026-03 "${OUT}/current"
 cat > "${STUBS}/curl" <<CURL
 #!/usr/bin/env bash
 case "\$*" in
-    *_mapping*) [ -e /work/index-whole ] || exit 22; echo '{"_meta":{"unipept_load":"complete"}}' ;;
+    *_mapping*)
+        if [ -e /work/index-whole ]; then printf '{"_meta":{"unipept_load":"complete"}}\n200'
+        elif [ -e /work/index-error ]; then printf 'too busy\n429'
+        else printf '{}\n200'; fi ;;
     *_cat/aliases*) ;;
     *) exit 7 ;;
 esac
@@ -480,6 +493,32 @@ load_proteins --output-dir "$OUT" --skip 500
 check "and so is a load continued with --skip, which would change what the API answers" "$?" "2"
 load_proteins --output-dir "$OUT" --uniprot-version 2025-11
 check "another version loads beside it" "$?" "0"
+# An error from OpenSearch is not an index that is not whole.
+rm /work/index-whole
+touch /work/index-error
+load_proteins --output-dir "$OUT"
+check "OpenSearch answering with an error stops it" "$?" "2"
+check_true "and says so, rather than taking the index for not whole" grep -q 'OpenSearch did not say whether uniprot_entries-2026-03 is whole' /work/last-output
+rm /work/index-error
+touch /work/index-whole
+
+# A second load of one version, which would drop the index the first fills.
+as_deployer touch /run/lock/unipept-load-2025-11.lock
+# shellcheck disable=SC2016 # $1 belongs to the inner shell
+setpriv --reuid "$DEPLOY" --regid "$DEPLOY" --init-groups bash -c 'exec 8>> "$1"; flock -x 8; exec sleep 30' _ /run/lock/unipept-load-2025-11.lock &
+first_load=$!
+for _ in $(seq 50); do
+    as_deployer flock -n -x /run/lock/unipept-load-2025-11.lock true 2> /dev/null || break
+    sleep 0.1
+done
+load_proteins --output-dir "$OUT" --uniprot-version 2025-11
+check "a second load of a version stops it" "$?" "2"
+check_true "and says so" grep -q 'another load of 2025-11 is running' /work/last-output
+kill "$first_load"
+wait "$first_load" 2> /dev/null
+load_proteins --output-dir "$OUT" --uniprot-version 2025-11
+check "once it is done, it loads" "$?" "0"
+
 # An index that is missing, or was not loaded to the end, gives the API nothing to lose.
 rm /work/index-whole
 rm -f /work/loader-calls
