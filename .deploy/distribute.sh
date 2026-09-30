@@ -6,7 +6,7 @@
 #
 # Nothing it does changes what the API serves. The copy lands beside the database a server uses, and
 # the load goes into an index of that version beside the one the API queries, so every server stays
-# in rotation throughout. Switching the API to the new version is the API's rollout.
+# in rotation throughout. switch.sh on each server switches the API to the new version.
 #
 # It never builds. The version has to be whole on the source host already: build it there with
 # build.sh, and run this once it has finished.
