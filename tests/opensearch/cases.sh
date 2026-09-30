@@ -152,6 +152,11 @@ echo 2.7.0 > /tmp/api-bin/version
 printf '#!/bin/sh\necho "unipept-api $(cat /tmp/api-bin/version)"\n' > "$API_BIN"
 chmod -R a+rX /tmp/api-bin
 chmod 755 "$API_BIN"
+# The one deploy.sh keeps to roll back to, where a case puts it, with its own version.
+roll_back_to() {
+    printf '#!/bin/sh\necho "unipept-api %s"\n' "$1" > "${API_BIN}.previous"
+    chmod 755 "${API_BIN}.previous"
+}
 
 
 section ".deploy/prune.sh"
@@ -236,6 +241,10 @@ echo 2.6.0 > /tmp/api-bin/version
 prune_with_api "${WORK}/prune-oldapi.log" --keep 1 --dry-run
 check "an older API keeps uniprot_entries itself" "$(grep -c 'plain' "${WORK}/prune-oldapi.log")" "0"
 echo 2.7.0 > /tmp/api-bin/version
+roll_back_to 2.6.0
+prune_with_api "${WORK}/prune-oldprevious.log" --keep 1 --dry-run
+check "and so does an older one deploy.sh would roll back to" "$(grep -c 'plain' "${WORK}/prune-oldprevious.log")" "0"
+rm -f "${API_BIN}.previous"
 
 # Unless the index of the version it serves is not whole to serve from: then it may be the only copy.
 curl -s -X POST "${OPENSEARCH_URL}/uniprot_entries-2026-07/_close" > /dev/null
@@ -385,8 +394,16 @@ rm -f "${SW_STATE:?}/no-sudo" "${SW_STATE:?}/old-api"
 echo 2.6.0 > /tmp/api-bin/version
 switch "${WORK}/switch-oldapi.log" --uniprot-version 2027-02
 check "an API that queries no version's own index stops it" "$rc" "2"
-check_true "and says which is needed" grep -q 'older than 2.7.0 and queries no version' "${WORK}/switch-oldapi.log"
+check_true "and says which is needed" grep -q 'the API installed is 2.6.0, older than 2.7.0' "${WORK}/switch-oldapi.log"
+echo 2.7.0-rc.1 > /tmp/api-bin/version
+switch "${WORK}/switch-rc.log" --uniprot-version 2027-02 --check
+check_true "a release candidate of 2.7.0 is taken for 2.7.0" not_in 'older than' "${WORK}/switch-rc.log"
 echo 2.7.0 > /tmp/api-bin/version
+mv "$API_BIN" "${API_BIN}.away"
+switch "${WORK}/switch-nobinary.log" --uniprot-version 2027-02
+check "an API it cannot run stops it" "$rc" "2"
+check_true "and says so, not that it is old" grep -q "cannot run ${API_BIN} --version" "${WORK}/switch-nobinary.log"
+mv "${API_BIN}.away" "$API_BIN"
 
 curl -s -X POST "${OPENSEARCH_URL}/uniprot_entries-2027-01/_close" > /dev/null
 switch "${WORK}/switch-fromclosed.log" --uniprot-version 2027-02
@@ -496,6 +513,17 @@ switch "${WORK}/switch-back.log" --back
 check "--back succeeds" "$rc" "0"
 check "back on the one before, where previous pointed" "$(serves) $(readlink "${SW_DATA}/previous")" "${SW_DATA}/uniprot-2027-01 uniprot-2027-02"
 runuser -u unipept -- ln -sfn uniprot-2027-01 "${SW_DATA}/current"
+
+# With an older API to roll back to, what it serves from stays as it is.
+curl -s -X POST "${OPENSEARCH_URL}/uniprot_entries/_open" > /dev/null
+roll_back_to 2.6.0
+switch "${WORK}/switch-oldprevious.log" --uniprot-version 2027-02
+check "a switch with an older API to roll back to succeeds" "$rc" "0"
+check_true "and says what it keeps for it" grep -q 'are kept, since the API deploy.sh would roll back to queries them' "${WORK}/switch-oldprevious.log"
+check "uniprot_entries itself stays open" "$(status_of uniprot_entries)" "open"
+rm -f "${API_BIN}.previous"
+switch "${WORK}/switch-oldprevious-back.log" --back
+check "and back" "$(serves)" "uniprot-2027-01"
 
 touch "${SW_STATE}/start-fails-once"
 switch "${WORK}/switch-apifails.log" --uniprot-version 2027-02
@@ -612,6 +640,14 @@ check "the proteins behind the alias are kept" "$rc" "0"
 check "under the version's name" "$(documents_in uniprot_entries-2025-04)" "2"
 check_true "marked as loaded to the end" is_marked uniprot_entries-2025-04
 check_true "and it says so" grep -q 'Kept uniprot_entries-legacy as uniprot_entries-2025-04' "${WORK}/ensure.log"
+# An alias left on two indices, legacy the second: its proteins are found all the same.
+curl -s -X POST "${OPENSEARCH_URL}/_aliases" -H 'Content-Type: application/json' \
+    -d '{"actions":[{"add":{"index":"uniprot_entries-2027-01","alias":"uniprot_entries"}}]}' > /dev/null
+ensure 2025-05
+check "legacy among two the alias points at is found" "$rc" "0"
+check "and kept" "$(documents_in uniprot_entries-2025-05)" "2"
+curl -s -X POST "${OPENSEARCH_URL}/_aliases" -H 'Content-Type: application/json' \
+    -d '{"actions":[{"remove":{"index":"uniprot_entries-2027-01","alias":"uniprot_entries"}}]}' > /dev/null
 check "the clone takes writes, as a load continued with --skip makes" \
     "$(curl -s -o /dev/null -w '%{http_code}' -X PUT "${OPENSEARCH_URL}/uniprot_entries-2025-04/_doc/P00099" -H 'Content-Type: application/json' -d '{"uniprot_accession_number":"P00099"}')" "201"
 check "and so does the index it was made from" \

@@ -132,6 +132,11 @@ chown -R "${DEPLOY}:" "$WORK"
 setup_sshd
 
 
+# The lock loads, clones, switches and prunes take, one per host, where a host has it.
+mkdir -p /run/lock
+chmod 1777 /run/lock
+
+
 section "build.sh, clone.sh, load.sh and verify.sh as root"
 
 "${CHECKOUT}/.deploy/build.sh" --output-dir /work/as-root --scratch-dir /work/scratch > /work/last-output 2>&1
@@ -362,7 +367,8 @@ printf 'do not lose me\n' | as_deployer tee "${LOCAL}/uniprot-2026-03/marker" > 
 clone --remote-output-dir "$REMOTE" --output-dir "$LOCAL" --replace
 check "a switch to it during the copy stops it before the copy replaces it" "$?" "2"
 check_true "and says so" grep -q '2026-03 is the version this host serves' /work/last-output
-check_true "and that the copy is not kept" grep -q 'is not kept: the next clone.sh starts it again' /work/last-output
+check_true "and that the copy is removed" grep -q 'The copy is removed' /work/last-output
+check_true "which it is" test ! -e "${LOCAL}/.clone"
 check_true "the files the API reads are untouched" test -f "${LOCAL}/uniprot-2026-03/marker"
 as_deployer unlink "${LOCAL}/current"
 as_deployer rm -f "${LOCAL}/uniprot-2026-03/marker"
@@ -447,22 +453,42 @@ check_true "asking about the version's own index" \
     grep -qxF -- "--opensearch-url http://localhost:9200 --index-name uniprot_entries-2025-11 --check-complete" /work/loader-calls
 check "and loads nothing" "$(grep -c -- '--uniprot-entries' /work/loader-calls)" "0"
 
-# The version this host serves, whose index the API queries while it runs.
+# The version this host serves, whose index the API queries while it runs. A stand-in for OpenSearch
+# says whether that index is loaded to the end, as a real one would answer the mapping request.
 as_deployer ln -s uniprot-2026-03 "${OUT}/current"
+cat > "${STUBS}/curl" <<CURL
+#!/usr/bin/env bash
+case "\$*" in
+    *_mapping*) [ -e /work/index-whole ] || exit 22; echo '{"_meta":{"unipept_load":"complete"}}' ;;
+    *_cat/aliases*) ;;
+    *) exit 7 ;;
+esac
+CURL
+chmod +x "${STUBS}/curl"
+touch /work/index-whole
 rm -f /work/loader-calls
 load_proteins --output-dir "$OUT"
 check "reloading the version this host serves stops it" "$?" "2"
-check_true "and says why" grep -q '2026-03 is the version this host serves' /work/last-output
+check_true "and says why" grep -q '2026-03 is the version this host serves, and uniprot_entries-2026-03 is loaded to the end' /work/last-output
 check_true "before the loader drops anything" test ! -e /work/loader-calls
 check_true "and says to switch away first" grep -q 'Switch this host to another version with switch.sh first' /work/last-output
 load_proteins --output-dir "$OUT" --replace-live
 check "--replace-live, which reloaded it under the running API, is gone" "$?" "2"
 load_proteins --output-dir "$OUT" --skip 0
-check "--skip 0, which drops the index as a load from the start does, is refused too" "$?" "2"
+check "--skip 0 is refused too" "$?" "2"
+load_proteins --output-dir "$OUT" --skip 500
+check "and so is a load continued with --skip, which would change what the API answers" "$?" "2"
 load_proteins --output-dir "$OUT" --uniprot-version 2025-11
 check "another version loads beside it" "$?" "0"
+# An index that is missing, or was not loaded to the end, gives the API nothing to lose.
+rm /work/index-whole
+rm -f /work/loader-calls
+load_proteins --output-dir "$OUT"
+check "a served version whose index is not whole loads" "$?" "0"
+check_true "into its index" grep -q -- '--index-name uniprot_entries-2026-03' /work/loader-calls
 load_proteins --output-dir "$OUT" --skip 500
-check "a load of it continued with --skip, which drops nothing, goes ahead" "$?" "0"
+check "and so does its load, continued" "$?" "0"
+touch /work/index-whole
 as_deployer unlink "${OUT}/current"
 
 # A host that runs the API and has no current link yet: INDEX_LOCATION says what it serves.
@@ -480,6 +506,7 @@ check "and where current and INDEX_LOCATION name the same one" "$?" "2"
 check_true "saying so" grep -q '2026-03 is the version this host serves' /work/last-output
 as_deployer unlink "${OUT}/current"
 rm -f /opt/unipept-api/etc/unipept-api.env
+rm "${STUBS}/curl" /work/index-whole
 
 rm -f /work/loader-calls
 load_proteins --output-dir "$OUT" --uniprot-version 2025-11 --skip 500

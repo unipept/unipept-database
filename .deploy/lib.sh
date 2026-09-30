@@ -380,13 +380,38 @@ is_served() {
     printf '%s\n' "$versions" | grep -x "$1" > /dev/null
 }
 
-# Whether the installed API is one that queries the index of the version it serves, by its own
-# --version, at least API_VERSIONED_INDEX_SINCE.
-api_queries_versioned_index() {
+# The X.Y.Z of an API binary, from its own --version, a pre-release or build suffix left off: 2.7.0 for
+# 2.7.0-rc.1, which already is that release's code. Fails where it cannot be run or says nothing so.
+api_binary_version() {
     local reported
-    reported=$("$API_BINARY" --version 2> /dev/null | awk '{ print $NF }') || return 1
+    [ -x "$1" ] || return 1
+    reported=$("$1" --version 2> /dev/null | awk '{ print $NF }') || return 1
+    reported="${reported%%[-+]*}"
     [[ "$reported" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || return 1
-    [ "$(printf '%s\n%s\n' "$API_VERSIONED_INDEX_SINCE" "$reported" | sort -V | head -n 1)" = "$API_VERSIONED_INDEX_SINCE" ]
+    printf '%s\n' "$reported"
+}
+
+# Whether a version is API_VERSIONED_INDEX_SINCE or newer.
+queries_versioned_index() {
+    [ "$(printf '%s\n%s\n' "$API_VERSIONED_INDEX_SINCE" "$1" | sort -V | head -n 1)" = "$API_VERSIONED_INDEX_SINCE" ]
+}
+
+# Whether the installed API is one that queries the index of the version it serves.
+api_queries_versioned_index() {
+    local version
+    version=$(api_binary_version "$API_BINARY") && queries_versioned_index "$version"
+}
+
+# Whether nothing installed still needs what a host loaded before versioned indices kept: the API
+# installed queries the index of its version, and so does the one unipept-api's deploy.sh keeps
+# beside it for a rollback, where there is one. A rollback to an older one would serve nothing
+# without uniprot_entries or its alias.
+old_indices_unneeded() {
+    local previous version
+    api_queries_versioned_index || return 1
+    previous="${API_BINARY}.previous"
+    [ -e "$previous" ] || return 0
+    version=$(api_binary_version "$previous") && queries_versioned_index "$version"
 }
 
 # What a script that could not take OPENSEARCH_LOCK says, by why: 1 another holds it, anything else

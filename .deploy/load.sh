@@ -96,11 +96,12 @@ verify_database "${DATABASE_DIR}/suffix-array" \
 checkdep flock "util-linux"
 take_opensearch_lock -s || die "$(lock_refused $?)"
 
-# The version the API serves is queried while it runs: dropping its index would empty the protein
-# search until the load finishes. Only a load that passes over rows keeps its index; one from row 0
-# drops it, however --skip was spelled.
-if is_served "$UNIPROT_VERSION" strict && [ "$((10#${SKIP_ROWS:-0}))" -eq 0 ]; then
-    die "${UNIPROT_VERSION} is the version this host serves. Reloading it would empty the API's protein search until the load finishes. Switch this host to another version with switch.sh first, then load it again."
+# The version the API serves is queried while it runs, and a load into its index, from the start or
+# continued with --skip, changes what it answers with nothing stopped. Where that index is whole there
+# is nothing to gain; where it is missing or was not loaded to the end, the API answers from it badly
+# already, and loading it is how the host gets it back.
+if is_served "$UNIPROT_VERSION" strict && is_complete "$INDEX_NAME"; then
+    die "${UNIPROT_VERSION} is the version this host serves, and ${INDEX_NAME} is loaded to the end. Loading into it would change what the running API answers. Switch this host to another version with switch.sh first, then load it again."
 fi
 
 warn_opensearch_disk "$OPENSEARCH_URL"

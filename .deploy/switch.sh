@@ -121,8 +121,12 @@ check_host() {
     fi
     # An older API queries uniprot_entries or its alias whatever version its files are: the switch
     # would move the files and not the proteins.
-    api_queries_versioned_index \
-        || problem "the API installed, ${API_BINARY}, is older than ${API_VERSIONED_INDEX_SINCE} and queries no version's own index. Roll out unipept-api ${API_VERSIONED_INDEX_SINCE} or newer first."
+    local version
+    if ! version=$(api_binary_version "$API_BINARY"); then
+        problem "cannot run ${API_BINARY} --version to learn which API is installed. Set API_BINARY where it is elsewhere."
+    elif ! queries_versioned_index "$version"; then
+        problem "the API installed is ${version}, older than ${API_VERSIONED_INDEX_SINCE}, and queries no version's own index. Roll out unipept-api ${API_VERSIONED_INDEX_SINCE} or newer first."
+    fi
 
     api_follows_current \
         || problem "INDEX_LOCATION in ${API_ENV_FILE} is '$(api_index_location)', so the API would not follow the switch. Set it to ${CURRENT}/suffix-array."
@@ -203,7 +207,7 @@ start_opensearch() {
 # what it points at. A failure is only reported.
 drop_old_alias() {
     local target
-    target=$(alias_target)
+    target=$(alias_targets 2> /dev/null | paste -sd ' ' -)
     [ -n "$target" ] || return 0
 
     if curl -s -f -o /dev/null -X POST "${OPENSEARCH_URL}/_aliases" -H 'Content-Type: application/json' \
@@ -231,7 +235,7 @@ close_older_indices() {
             version=$(version_of_index "$index")
             case $version in
                 '') continue ;;
-                legacy | plain) ;;
+                legacy | plain) [ "$OLD_INDICES_GO" = true ] || continue ;;
                 *) [[ "$version" < "$oldest" ]] || continue ;;
             esac
             if curl -s -f -o /dev/null -X POST "${OPENSEARCH_URL}/${index}/_close"; then
@@ -335,6 +339,14 @@ log "${CURRENT} points at ${TARGET_LINK}."
 start_both || switch_back
 
 trap - INT TERM HUP
-drop_old_alias
+# The alias, and what a host loaded before versioned indices kept, only once nothing installed needs
+# them: deploy.sh rollback to an API older than API_VERSIONED_INDEX_SINCE would serve through them.
+OLD_INDICES_GO=false
+if old_indices_unneeded; then
+    OLD_INDICES_GO=true
+    drop_old_alias
+else
+    log "The alias ${ALIAS} and the indices from before versioned ones are kept, since the API deploy.sh would roll back to queries them."
+fi
 close_older_indices
 log "This host serves ${TARGET}. ${FROM} is kept; switch back to it with --back."

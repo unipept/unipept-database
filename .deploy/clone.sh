@@ -189,8 +189,15 @@ copy_database "$STAGING_DIR" "$REMOTE_DIR"
 COPIED_DIR="${STAGING_DIR}/uniprot-${UNIPROT_VERSION}"
 check_database "$COPIED_DIR" "$REMOTE_DIR"
 
-# Again, since the copy took hours in which this host may have switched to the version.
-[ ! -e "$BUILD_DIR" ] || refuse_replacing_served "$UNIPROT_VERSION" "The copy in ${STAGING_DIR} is not kept: the next clone.sh starts it again. "
+# Again, since the copy took hours in which this host may have switched to the version. Under the
+# lock a switch holds, so none can start between this and the swap. The copy is removed rather than
+# left: it is hundreds of gigabytes, and the next clone.sh starts one of its own.
+checkdep flock "util-linux"
+take_opensearch_lock -s || die "$(lock_refused $?)"
+if [ -e "$BUILD_DIR" ] && is_served "$UNIPROT_VERSION"; then
+    rm -rf "${STAGING_DIR:?}"
+    refuse_replacing_served "$UNIPROT_VERSION" "The copy is removed. "
+fi
 swap_into_place "$COPIED_DIR" "$BUILD_DIR"
 rm -rf "${STAGING_DIR:?}"
 

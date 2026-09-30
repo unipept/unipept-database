@@ -110,11 +110,11 @@ for version in $SERVING $BEFORE; do
 done
 
 # What a host loaded before versioned indices kept, uniprot_entries itself and uniprot_entries-legacy,
-# is only a candidate once nothing may still query it: the API installed is one that queries the index
-# of the version it serves, INDEX_LOCATION names the suffix array through current, and that index
+# is only a candidate once nothing may still query it: the API installed, and the one deploy.sh keeps
+# to roll back to, query the index of the version they serve, INDEX_LOCATION names the suffix array through current, and that index
 # holds its proteins whole. Until then it may be the only copy of what the API serves.
 OLD_INDICES_GO=false
-if api_queries_versioned_index && api_follows_current \
+if old_indices_unneeded && api_follows_current \
     && [ "$(index_status "${ALIAS}-${SERVED}")" = open ] && is_complete "${ALIAS}-${SERVED}"; then
     OLD_INDICES_GO=true
 fi

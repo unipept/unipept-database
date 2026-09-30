@@ -173,11 +173,13 @@ and keeps the index as it is. The loader marks an index once its last row is in,
 `opensearch/load.sh`, which this calls, is the loader alone: it drops and fills the index it is
 named, with none of these checks and no lock. Load through `bin/load.sh`.
 
-Reloading a version this host serves is refused, because the loader drops its index first and the
-API would search a partial one until it finishes: switch away from it with `switch.sh` first, as any
-change to what the API serves goes through a stop. Which versions those are, `current` says,
-`INDEX_LOCATION` where it names a version's directory itself, and an alias `uniprot_entries` an
-earlier release left. A load continued with `--skip` drops nothing, and goes ahead.
+Loading into a version this host serves is refused while its index is loaded to the end, from the
+start or continued with `--skip`: it would change what the running API answers with nothing stopped.
+Switch away from it with `switch.sh` first, as any change to what the API serves goes through a stop.
+Where that index is missing or was not loaded to the end, the API answers from it badly already, and
+loading it is how the host gets it back, so that goes ahead. Which versions are served, `current`
+says, `INDEX_LOCATION` where it names a version's directory itself, and an alias `uniprot_entries` an
+earlier release left.
 
 ## Switching the API to another version
 
@@ -214,7 +216,9 @@ the files and the proteins always change together.
   it ended on.
 - **Once the API serves, it removes the alias `uniprot_entries`** an earlier release of these
   scripts left, which only an API from before versioned indices queried, and **closes the indices
-  of versions older than both**, which frees their memory. It deletes nothing; `prune.sh` does, and
+  of versions older than both**, which frees their memory. The alias, and `uniprot_entries` and
+  `uniprot_entries-legacy`, stay as they are while the API `deploy.sh rollback` would go back to is
+  older than 2.7.0, since that one serves through them. It deletes nothing; `prune.sh` does, and
   takes the same lock, so it never removes a version a load or a switch is working on.
 
 It knows nothing of a load balancer: take the host out of the pool first where it is in one.
@@ -300,9 +304,10 @@ names where it names one rather than going through `current`, every version newe
 those, since those are loaded ahead of a switch still to come, and the `--keep` newest ones older
 than that. What a host loaded before versioned indices kept, `uniprot_entries-legacy` and
 `uniprot_entries` itself, counts as the oldest, and only once nothing may still need it: the API
-installed is unipept-api 2.7.0 or newer, which queries the index of the version it serves,
-`INDEX_LOCATION` goes through `current`, and that index is open and loaded to the end. Until then it may be the only copy of the proteins an API serves. Whatever
-an alias of the old name still points at is kept too. Without a `current` link, or with API settings
+installed is unipept-api 2.7.0 or newer, and so is the one `deploy.sh rollback` would go back to,
+both of which query the index of the version they serve, `INDEX_LOCATION` goes through `current`,
+and that index is open and loaded to the end. Until then it may be the only copy of the proteins an
+API serves. Whatever an alias of the old name still points at is kept too. Without a `current` link, or with API settings
 it cannot read, it removes nothing. It takes the same lock as a load and a switch, and `migrate.sh`
 takes it too.
 

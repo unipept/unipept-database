@@ -164,7 +164,7 @@ ensure_versioned_index() {
 
     if [ -n "$(index_status "$ALIAS")" ]; then
         source="$ALIAS"
-    elif [ "$(alias_target)" = "$LEGACY" ]; then
+    elif alias_targets 2> /dev/null | grep -x "$LEGACY" > /dev/null; then
         source="$LEGACY"
     else
         opensearch_fail "no index holds the proteins of ${version}: ${index} is not there, and ${ALIAS} is not an index or an alias for ${LEGACY}. Load them with load.sh --uniprot-version ${version}."
