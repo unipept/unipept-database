@@ -194,8 +194,9 @@ The API reads what it serves when it starts: `INDEX_LOCATION` names the suffix a
 `uniprot_entries-2026-03`. A switch moves that link while the API and OpenSearch are stopped, so
 the files and the proteins always change together.
 
-- **It checks everything first**, while both still run, and reports every problem: the version's
-  files, its index loaded to the end, `INDEX_LOCATION` naming `current`, `OUTPUT_DIR` writable for
+- **It checks everything first**, while both still run, and reports every problem: the API
+  installed is unipept-api 2.7.0 or newer, the version's files, its index loaded to the end, the
+  index of the version it leaves open and whole to go back to, `INDEX_LOCATION` naming `current`, `OUTPUT_DIR` writable for
   the links, no load running, the sudo rule below, and the API's own `deploy.sh check --index` on
   the new files, which covers the memory its variant needs for them. A host with any problem is
   left as it is. The one change before the stop is opening the new version's index where it is
@@ -298,9 +299,9 @@ It keeps the version `current` points at, the one `previous` points at, the one 
 names where it names one rather than going through `current`, every version newer than the oldest of
 those, since those are loaded ahead of a switch still to come, and the `--keep` newest ones older
 than that. What a host loaded before versioned indices kept, `uniprot_entries-legacy` and
-`uniprot_entries` itself, counts as the oldest, and only once nothing may still need it:
-`INDEX_LOCATION` goes through `current`, and the index of the version `current` points at is open
-and loaded to the end. Until then it may be the only copy of the proteins an API serves. Whatever
+`uniprot_entries` itself, counts as the oldest, and only once nothing may still need it: the API
+installed is unipept-api 2.7.0 or newer, which queries the index of the version it serves,
+`INDEX_LOCATION` goes through `current`, and that index is open and loaded to the end. Until then it may be the only copy of the proteins an API serves. Whatever
 an alias of the old name still points at is kept too. Without a `current` link, or with API settings
 it cannot read, it removes nothing. It takes the same lock as a load and a switch, and `migrate.sh`
 takes it too.

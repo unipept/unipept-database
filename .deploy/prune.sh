@@ -7,16 +7,21 @@
 # switched between, which frees their memory, and keeps every version's data, so going back to one
 # is a switch and not a rebuild. What that costs is disk, which is what this gives back.
 #
-# What the API serves is the version the `current` link points at, and switch.sh --back goes to the
-# one `previous` points at. Kept, whatever --keep says:
-#   - both, and every version newer than the older of the two, which is loaded ahead of a switch
-#     still to come;
+# Kept, whatever --keep says:
+#   - every version this host serves, by served_versions in lib.sh: what `current` points at, what
+#     INDEX_LOCATION names where it names a version's directory itself, and what an alias of the old
+#     name points at;
+#   - the one `previous` points at, which switch.sh --back goes to;
+#   - every version newer than the oldest of those, which is loaded ahead of a switch still to come;
 #   - the --keep newest versions older than that, to go back to.
 # What a host loaded before versioned indices kept, uniprot_entries-legacy and uniprot_entries itself,
-# counts as the oldest. The version INDEX_LOCATION names is kept too, where it names one rather than
-# the suffix array through current.
+# counts as the oldest, and is only removed once nothing may still need it: the API installed queries
+# the index of the version it serves, INDEX_LOCATION goes through current, and that index is open and
+# loaded to the end. Until then it may be the only copy of what an API serves.
 #
-# Without a current link there is no telling what the API serves, so nothing is removed.
+# Without a current link, with API settings it cannot read, or with OpenSearch not saying what the
+# alias points at, there is no telling what the API serves, so nothing is removed. It holds the lock a
+# load, a switch and migrate.sh take, so none of them works on what it removes.
 
 set -eo pipefail
 set -o errtrace
@@ -52,7 +57,9 @@ Removes old databases from this host, each version's files and its OpenSearch in
   --opensearch-url URL     the instance their indices are in
   --help                   print this message
 
-The version this host serves, the one before it, and every newer one, are always kept.
+Every version this host serves, the one before it, and every newer one, are always kept.
+uniprot_entries and uniprot_entries-legacy, from before versioned indices, only go once the API
+installed queries the index of its version and INDEX_LOCATION goes through current.
 USAGE
 }
 
@@ -80,10 +87,7 @@ require_opensearch
 
 # Held until it ends, so no switch moves to a version, and no load fills one, while it removes them.
 checkdep flock "util-linux"
-take_opensearch_lock -x || case $? in
-    1) die "a load or a switch is running on this host. Prune once it has finished." ;;
-    *) die "without the lock, a load or a switch could run while this removes versions. Make ${OPENSEARCH_LOCK} writable for $(id -un), or set OPENSEARCH_LOCK." ;;
-esac
+take_opensearch_lock -x || die "$(lock_refused $?)"
 
 SERVED=$(linked_version "$(current_link)" 2> /dev/null) \
     || die "there is no $(current_link) pointing at a version, so which one this host serves is not known. Nothing is removed."
@@ -94,7 +98,9 @@ BEFORE=$(linked_version "$(previous_link)" 2> /dev/null) || BEFORE=''
 # Kept whatever --keep says: every version this host serves, by served_versions, and the one before,
 # which switch.sh --back goes to. The oldest of the versioned ones is where what is kept is counted
 # from; legacy has no place in that order, and is kept by name.
-SERVING=$(served_versions | awk 'NF && !seen[$0]++' | tr '\n' ' ')
+served=$(served_versions) \
+    || die "OpenSearch does not say what the alias ${ALIAS} points at, so what an older API serves is not known. Nothing is removed."
+SERVING=$(printf '%s\n' "$served" | awk 'NF && !seen[$0]++' | tr '\n' ' ')
 PINNED=" ${SERVING}${BEFORE} "
 ACTIVE="$SERVED"
 for version in $SERVING $BEFORE; do
@@ -104,11 +110,12 @@ for version in $SERVING $BEFORE; do
 done
 
 # What a host loaded before versioned indices kept, uniprot_entries itself and uniprot_entries-legacy,
-# is only a candidate once nothing may still query it: INDEX_LOCATION names the suffix array through
-# current, and the index of the version it serves holds its proteins whole. Until then it may be the
-# only copy of them.
+# is only a candidate once nothing may still query it: the API installed is one that queries the index
+# of the version it serves, INDEX_LOCATION names the suffix array through current, and that index
+# holds its proteins whole. Until then it may be the only copy of what the API serves.
 OLD_INDICES_GO=false
-if api_follows_current && [ "$(index_status "${ALIAS}-${SERVED}")" = open ] && is_complete "${ALIAS}-${SERVED}"; then
+if api_queries_versioned_index && api_follows_current \
+    && [ "$(index_status "${ALIAS}-${SERVED}")" = open ] && is_complete "${ALIAS}-${SERVED}"; then
     OLD_INDICES_GO=true
 fi
 

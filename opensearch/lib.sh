@@ -63,7 +63,15 @@ version_of_index() {
 
 # The index an alias of that name points at, or nothing where there is none.
 alias_target() {
-    curl -s --max-time 10 "${OPENSEARCH_URL}/_cat/aliases/${ALIAS}?h=index" 2> /dev/null | tr -d '[:space:]' || true
+    alias_targets 2> /dev/null | head -n 1 || true
+}
+
+# Every index an alias of that name points at, one per line, or nothing where there is none. Fails
+# where OpenSearch does not answer the question, which is not the same as there being no alias.
+alias_targets() {
+    local answer
+    answer=$(curl -s -f --max-time 10 "${OPENSEARCH_URL}/_cat/aliases/${ALIAS}?h=index") || return 1
+    printf '%s\n' "$answer" | awk 'NF { print $1 }'
 }
 
 # open or close for an index of exactly this name, and nothing for anything else. By name, because

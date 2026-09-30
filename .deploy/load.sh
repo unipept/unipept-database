@@ -91,19 +91,17 @@ verify_database "${DATABASE_DIR}/suffix-array" \
     || die "${DATABASE_DIR} is missing files the API needs, or is not the version it is named after."
 [ -s "$ENTRIES" ] || die "${DATABASE_DIR} has no tables/uniprot_entries.tsv.lz4 to load."
 
+# Held until the load ends, so switch.sh does not stop OpenSearch under it. Before what is served is
+# read, so no switch moves it between the reading and the load.
+checkdep flock "util-linux"
+take_opensearch_lock -s || die "$(lock_refused $?)"
+
 # The version the API serves is queried while it runs: dropping its index would empty the protein
-# search until the load finishes. Where a host has no current link yet, INDEX_LOCATION says which one
-# it serves. A load continued with --skip keeps its index, and drops nothing.
-if is_served "$UNIPROT_VERSION" && [ -z "$SKIP_ROWS" ]; then
+# search until the load finishes. Only a load that passes over rows keeps its index; one from row 0
+# drops it, however --skip was spelled.
+if is_served "$UNIPROT_VERSION" strict && [ "$((10#${SKIP_ROWS:-0}))" -eq 0 ]; then
     die "${UNIPROT_VERSION} is the version this host serves. Reloading it would empty the API's protein search until the load finishes. Switch this host to another version with switch.sh first, then load it again."
 fi
-
-# Held until the load ends, so switch.sh does not stop OpenSearch under it.
-checkdep flock "util-linux"
-take_opensearch_lock -s || case $? in
-    1) die "switch.sh is switching this host, and stops OpenSearch to do so. Load once it has finished." ;;
-    *) die "without the lock, a switch could stop OpenSearch under this load. Make ${OPENSEARCH_LOCK} writable for $(id -un), or set OPENSEARCH_LOCK." ;;
-esac
 
 warn_opensearch_disk "$OPENSEARCH_URL"
 

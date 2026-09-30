@@ -44,6 +44,12 @@ readonly INSTALL_ROOT=/opt/unipept-database
 API_ENV_FILE=${API_ENV_FILE:-/opt/unipept-api/etc/unipept-api.env}
 # shellcheck disable=SC2034 # read by the scripts that source this file
 API_DEPLOY=${API_DEPLOY:-/opt/unipept-api/lib/deploy.sh}
+API_BINARY=${API_BINARY:-/opt/unipept-api/bin/unipept-api}
+
+# The first unipept-api release that queries uniprot_entries-<version>, the index of the version its
+# files are from (unipept-api#286). An older one queries uniprot_entries itself, or the alias of that
+# name, and needs what a host loaded before versioned indices kept.
+readonly API_VERSIONED_INDEX_SINCE=2.7.0
 
 # The lock that keeps loads and switches apart. One per host, as the OpenSearch it guards is, whatever
 # OUTPUT_DIR a run is given; /run/lock is there for every user to take one in.
@@ -345,19 +351,51 @@ api_index_location() {
 
 # The versions this host serves, one per line, in this order: what current points at, what
 # INDEX_LOCATION names where it names a version's directory itself, as on a host not yet pointed
-# through current, and what an alias of the old name an earlier release left points at, which an API
-# from before versioned indices queries, legacy included. The one definition of served, which
-# load.sh, build.sh, clone.sh and prune.sh all go by. Often the same one more than once.
+# through current, and what every alias of the old name an earlier release left points at, which an
+# API from before versioned indices queries, legacy included. The one definition of served, which
+# load.sh, build.sh, clone.sh and prune.sh all go by. Often the same one more than once. Fails, after
+# printing the rest, where OpenSearch does not say what the alias points at.
 served_versions() {
+    local targets index
+
     linked_version "$(current_link)" 2> /dev/null || true
     database_version_of "$(api_index_location)" 2> /dev/null || true
-    version_of_index "$(alias_target)"
+    targets=$(alias_targets 2> /dev/null) || return 1
+    for index in $targets; do
+        version_of_index "$index"
+    done
 }
 
 # Whether this host serves a version, by any of them. Not grep -q: it would stop reading at the first
-# match, and the write of a later line would then fail the pipeline under pipefail.
+# match, and the write of a later line would then fail the pipeline under pipefail. With strict, what
+# the alias points at has to be known where OpenSearch answers: a load cannot take it for nothing.
+# Without, as for a build on a host whose OpenSearch is stopped for it, the links suffice.
 is_served() {
-    served_versions | grep -x "$1" > /dev/null
+    local versions
+    if ! versions=$(served_versions); then
+        # An OpenSearch that does not answer at all drops nothing either: the load fails on its own.
+        [ "${2:-}" != strict ] || ! opensearch_answers \
+            || die "OpenSearch does not say what the alias ${ALIAS} points at, so what this host serves is not known."
+    fi
+    printf '%s\n' "$versions" | grep -x "$1" > /dev/null
+}
+
+# Whether the installed API is one that queries the index of the version it serves, by its own
+# --version, at least API_VERSIONED_INDEX_SINCE.
+api_queries_versioned_index() {
+    local reported
+    reported=$("$API_BINARY" --version 2> /dev/null | awk '{ print $NF }') || return 1
+    [[ "$reported" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || return 1
+    [ "$(printf '%s\n%s\n' "$API_VERSIONED_INDEX_SINCE" "$reported" | sort -V | head -n 1)" = "$API_VERSIONED_INDEX_SINCE" ]
+}
+
+# What a script that could not take OPENSEARCH_LOCK says, by why: 1 another holds it, anything else
+# it could not be opened.
+lock_refused() {
+    case $1 in
+        1) echo "a load, a switch, a prune or migrate.sh is running on this host; wait for it to finish." ;;
+        *) echo "without the lock, a load, a switch or a prune could run at the same time. Make ${OPENSEARCH_LOCK} writable for $(id -un), or set OPENSEARCH_LOCK." ;;
+    esac
 }
 
 # Replacing the files of a version this host serves, under an API that has them open, is not a

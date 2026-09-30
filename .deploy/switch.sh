@@ -119,6 +119,10 @@ check_host() {
         [[ "$usage_text" == *"deploy.sh start"* ]] \
             || problem "${API_DEPLOY} has no stop and start: update unipept-api on this host first."
     fi
+    # An older API queries uniprot_entries or its alias whatever version its files are: the switch
+    # would move the files and not the proteins.
+    api_queries_versioned_index \
+        || problem "the API installed, ${API_BINARY}, is older than ${API_VERSIONED_INDEX_SINCE} and queries no version's own index. Roll out unipept-api ${API_VERSIONED_INDEX_SINCE} or newer first."
 
     api_follows_current \
         || problem "INDEX_LOCATION in ${API_ENV_FILE} is '$(api_index_location)', so the API would not follow the switch. Set it to ${CURRENT}/suffix-array."
@@ -130,10 +134,7 @@ check_host() {
 
     # A load writes to OpenSearch for hours, and stopping OpenSearch under it breaks it part way.
     # Held until the switch ends, so no load starts during it either.
-    take_opensearch_lock -x || case $? in
-        1) problem "a load is running on this host. Let it finish, or stop it, first." ;;
-        *) problem "without the lock, a load could start while OpenSearch is stopped. Make ${OPENSEARCH_LOCK} writable for $(id -un), or set OPENSEARCH_LOCK." ;;
-    esac
+    take_opensearch_lock -x || problem "$(lock_refused $?)"
 
     { sudo -n -l systemctl stop opensearch && sudo -n -l systemctl start opensearch; } > /dev/null 2>&1 \
         || problem "${DEPLOY_USER} may not stop and start OpenSearch through sudo. Run .deploy/opensearch/install.sh again, as root."
@@ -141,6 +142,11 @@ check_host() {
     if ! opensearch_answers; then
         problem "OpenSearch does not answer at ${OPENSEARCH_URL}, so whether ${TARGET_INDEX} is there is unknown."
         return 0
+    fi
+
+    # The version it leaves, which going back after a failed start needs as it is now.
+    if [ "$(index_status "$FROM_INDEX")" != open ] || ! is_complete "$FROM_INDEX"; then
+        problem "${FROM_INDEX}, of the version this host serves, is not open and loaded to the end, so a switch that fails could not go back to it. Run migrate.sh, or load it again, first."
     fi
 
     TARGET_STATUS=$(index_status "$TARGET_INDEX")
@@ -283,10 +289,16 @@ PREVIOUS_LINK_WAS=$(readlink "$PREVIOUS" 2> /dev/null || true)
 
 if [ "$BACK" = true ]; then
     TARGET=$(linked_version "$PREVIOUS") || die "there is no version to go back to: ${PREVIOUS} is not there."
+    # Where previous points, which migrate.sh may have made a path outside OUTPUT_DIR.
+    TARGET_LINK=$(readlink "$PREVIOUS")
 else
     TARGET="$UNIPROT_VERSION"
+    TARGET_LINK="uniprot-${TARGET}"
 fi
-TARGET_DIR="${OUTPUT_DIR}/uniprot-${TARGET}"
+case $TARGET_LINK in
+    /*) TARGET_DIR="$TARGET_LINK" ;;
+    *) TARGET_DIR="${OUTPUT_DIR%/}/${TARGET_LINK}" ;;
+esac
 TARGET_INDEX="${ALIAS}-${TARGET}"
 
 if [ "$TARGET" = "$FROM" ]; then
@@ -317,8 +329,8 @@ log "Stopping the API."
 log "Stopping OpenSearch."
 sudo -n systemctl stop opensearch || switch_back
 
-{ point_link "$PREVIOUS" "$FROM_LINK" && point_link "$CURRENT" "uniprot-${TARGET}"; } || switch_back
-log "${CURRENT} points at uniprot-${TARGET}."
+{ point_link "$PREVIOUS" "$FROM_LINK" && point_link "$CURRENT" "$TARGET_LINK"; } || switch_back
+log "${CURRENT} points at ${TARGET_LINK}."
 
 start_both || switch_back
 

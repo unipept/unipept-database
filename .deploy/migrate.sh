@@ -68,10 +68,7 @@ refuse_root
 # It clones and opens indices, so no switch stops OpenSearch under it and no prune removes what it
 # clones from.
 checkdep flock "util-linux"
-take_opensearch_lock -x || case $? in
-    1) die "a load, a switch or a prune is running on this host. Run this once it has finished." ;;
-    *) die "without the lock, a switch or a prune could run while this clones. Make ${OPENSEARCH_LOCK} writable for $(id -un), or set OPENSEARCH_LOCK." ;;
-esac
+take_opensearch_lock -x || die "$(lock_refused $?)"
 
 [ -f "$API_ENV_FILE" ] || die "there is no ${API_ENV_FILE}, so this host runs no API and has nothing to switch."
 [ -r "$API_ENV_FILE" ] || die "cannot read ${API_ENV_FILE}. Run this as the user the API runs as."
@@ -80,6 +77,11 @@ CURRENT=$(current_link)
 LOCATION=$(api_index_location)
 
 if [ -L "$CURRENT" ]; then
+    # The proteins cloned below are the ones INDEX_LOCATION serves, so they have to be that version's.
+    LINKED=$(linked_version "$CURRENT") || die "${CURRENT} points at $(readlink "$CURRENT"), which is no version's directory."
+    NAMED=$(database_version_of "$LOCATION" 2> /dev/null) || NAMED=''
+    [ -z "$NAMED" ] || [ "$NAMED" = "$LINKED" ] \
+        || die "${CURRENT} points at ${LINKED}, and INDEX_LOCATION names ${NAMED}: the proteins the API serves are ${NAMED}'s, and would be kept as ${LINKED}'s. Point ${CURRENT} at uniprot-${NAMED}, or INDEX_LOCATION through it, first."
     log "${CURRENT} points at $(readlink "$CURRENT") already, and is left as it is."
 else
     VERSION=$(database_version_of "$LOCATION") \
@@ -87,7 +89,7 @@ else
     DIRECTORY="${LOCATION%/}"
     DIRECTORY="${DIRECTORY%/suffix-array}"
     TARGET="$DIRECTORY"
-    [ "$DIRECTORY" != "${OUTPUT_DIR}/uniprot-${VERSION}" ] || TARGET="uniprot-${VERSION}"
+    [ "$DIRECTORY" != "${OUTPUT_DIR%/}/uniprot-${VERSION}" ] || TARGET="uniprot-${VERSION}"
     [ -d "$DIRECTORY" ] || die "INDEX_LOCATION names ${DIRECTORY}, which is not there."
     point_link "$CURRENT" "$TARGET"
     log "Pointed ${CURRENT} at ${TARGET}, the version the API serves."

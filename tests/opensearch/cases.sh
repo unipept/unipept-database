@@ -144,6 +144,16 @@ curl -s -X POST "${OPENSEARCH_URL}/uniprot_entries-2026-07/_refresh" > /dev/null
 check "with every row" "$(documents_in uniprot_entries-2026-07)" "2"
 
 
+# The API installed on a host, as prune.sh and switch.sh ask it: by its --version, which a case sets.
+API_BIN=/tmp/api-bin/unipept-api
+mkdir -p /tmp/api-bin
+echo 2.7.0 > /tmp/api-bin/version
+# shellcheck disable=SC2016 # expands when the stand-in runs
+printf '#!/bin/sh\necho "unipept-api $(cat /tmp/api-bin/version)"\n' > "$API_BIN"
+chmod -R a+rX /tmp/api-bin
+chmod 755 "$API_BIN"
+
+
 section ".deploy/prune.sh"
 # As the user the .deploy scripts run as, with each version's directory beside its index, the way
 # a host holds them, and the current link where install.sh and switch.sh put it. 2026-01 and
@@ -204,7 +214,7 @@ chmod 644 /tmp/prune-api.env
 prune_with_api() {
     local logfile=$1
     shift
-    runuser -u unipept -- env API_ENV_FILE=/tmp/prune-api.env "${REPO}/.deploy/prune.sh" --output-dir "$DATA" \
+    runuser -u unipept -- env API_ENV_FILE=/tmp/prune-api.env API_BINARY="$API_BIN" "${REPO}/.deploy/prune.sh" --output-dir "$DATA" \
         --opensearch-url "$OPENSEARCH_URL" "$@" > "$logfile" 2>&1
     rc=$?
 }
@@ -220,6 +230,12 @@ printf 'INDEX_LOCATION=%s/current/suffix-array\n' "$DATA" > /tmp/prune-api.env
 prune_with_api "${WORK}/prune-plain.log" --keep 1 --dry-run
 check_true "uniprot_entries itself is then removed as the oldest" grep -q 'Removing:.* plain$' "${WORK}/prune-plain.log"
 check "not on a dry run" "$(status_of uniprot_entries)" "open"
+
+# But not while the API installed is one that queries it, whatever INDEX_LOCATION says.
+echo 2.6.0 > /tmp/api-bin/version
+prune_with_api "${WORK}/prune-oldapi.log" --keep 1 --dry-run
+check "an older API keeps uniprot_entries itself" "$(grep -c 'plain' "${WORK}/prune-oldapi.log")" "0"
+echo 2.7.0 > /tmp/api-bin/version
 
 # Unless the index of the version it serves is not whole to serve from: then it may be the only copy.
 curl -s -X POST "${OPENSEARCH_URL}/uniprot_entries-2026-07/_close" > /dev/null
@@ -262,7 +278,7 @@ for _ in $(seq 50); do
 done
 prune "${WORK}/prune-locked.log" --keep 0
 check "a load or a switch running stops it" "$rc" "2"
-check_true "and says so" grep -q 'a load or a switch is running on this host' "${WORK}/prune-locked.log"
+check_true "and says so" grep -q 'is running on this host; wait for it to finish' "${WORK}/prune-locked.log"
 kill "$holder"
 wait "$holder" 2> /dev/null
 runuser -u unipept -- mv "${DATA}/current" "${DATA}/current.away"
@@ -344,7 +360,7 @@ switch() {
     local logfile=$1
     shift
     forget_switch_calls
-    runuser -u unipept -- env PATH="${SW_BIN}:${PATH}" API_ENV_FILE="${SW}/api.env" API_DEPLOY="${SW_BIN}/deploy.sh" \
+    runuser -u unipept -- env PATH="${SW_BIN}:${PATH}" API_ENV_FILE="${SW}/api.env" API_DEPLOY="${SW_BIN}/deploy.sh" API_BINARY="$API_BIN" \
         "${REPO}/.deploy/switch.sh" --output-dir "$SW_DATA" --opensearch-url "$OPENSEARCH_URL" "$@" > "$logfile" 2>&1
     rc=$?
 }
@@ -365,6 +381,18 @@ check "nothing is stopped" "$(calls api-calls)$(calls systemctl-calls)" " "
 check "it serves what it served" "$(serves)" "uniprot-2027-01"
 printf 'INDEX_LOCATION=%s/current/suffix-array\n' "$SW_DATA" > "${SW}/api.env"
 rm -f "${SW_STATE:?}/no-sudo" "${SW_STATE:?}/old-api"
+
+echo 2.6.0 > /tmp/api-bin/version
+switch "${WORK}/switch-oldapi.log" --uniprot-version 2027-02
+check "an API that queries no version's own index stops it" "$rc" "2"
+check_true "and says which is needed" grep -q 'older than 2.7.0 and queries no version' "${WORK}/switch-oldapi.log"
+echo 2.7.0 > /tmp/api-bin/version
+
+curl -s -X POST "${OPENSEARCH_URL}/uniprot_entries-2027-01/_close" > /dev/null
+switch "${WORK}/switch-fromclosed.log" --uniprot-version 2027-02
+check "a version it could not go back to stops it" "$rc" "2"
+check_true "and says so" grep -q 'uniprot_entries-2027-01, of the version this host serves, is not open' "${WORK}/switch-fromclosed.log"
+curl -s -X POST "${OPENSEARCH_URL}/uniprot_entries-2027-01/_open" > /dev/null
 
 switch "${WORK}/switch-nodir.log" --uniprot-version 2027-05
 check "a version it does not hold stops it" "$rc" "2"
@@ -394,7 +422,7 @@ for _ in $(seq 50); do
 done
 switch "${WORK}/switch-loading.log" --uniprot-version 2027-02
 check "a load running stops it" "$rc" "2"
-check_true "and says so" grep -q 'a load is running on this host' "${WORK}/switch-loading.log"
+check_true "and says so" grep -q 'is running on this host; wait for it to finish' "${WORK}/switch-loading.log"
 kill "$loader"
 wait "$loader" 2> /dev/null
 
@@ -405,7 +433,7 @@ chmod 644 "$LOCK"
 switch "${WORK}/switch-lockopen.log" --uniprot-version 2027-02
 check "a lock it cannot open stops it" "$rc" "2"
 check_true "and says so" grep -q "cannot open the lock ${LOCK} as unipept" "${WORK}/switch-lockopen.log"
-check_true "not that a load is running" not_in 'a load is running' "${WORK}/switch-lockopen.log"
+check_true "not that another is running" not_in 'is running on this host; wait for it to finish' "${WORK}/switch-lockopen.log"
 mv "${LOCK}.away" "$LOCK"
 
 # The links are moved with both stopped, so what would stop that is found before.
@@ -462,9 +490,12 @@ check "switching to what it serves succeeds" "$rc" "0"
 check_true "and says so" grep -q 'already serves 2027-02' "${WORK}/switch-again.log"
 check "stopping nothing" "$(calls api-calls)" ""
 
+# previous pointing at a path, as migrate.sh leaves where the version is outside OUTPUT_DIR.
+runuser -u unipept -- ln -sfn "${SW_DATA}/uniprot-2027-01" "${SW_DATA}/previous"
 switch "${WORK}/switch-back.log" --back
 check "--back succeeds" "$rc" "0"
-check "back on the one before" "$(serves) $(readlink "${SW_DATA}/previous")" "uniprot-2027-01 uniprot-2027-02"
+check "back on the one before, where previous pointed" "$(serves) $(readlink "${SW_DATA}/previous")" "${SW_DATA}/uniprot-2027-01 uniprot-2027-02"
+runuser -u unipept -- ln -sfn uniprot-2027-01 "${SW_DATA}/current"
 
 touch "${SW_STATE}/start-fails-once"
 switch "${WORK}/switch-apifails.log" --uniprot-version 2027-02
@@ -499,7 +530,7 @@ rm -f "${SW_STATE:?}/start-fails"
 # An interrupt while the API starts on the new version: it goes back.
 touch "${SW_STATE}/start-sleeps"
 forget_switch_calls
-runuser -u unipept -- env PATH="${SW_BIN}:${PATH}" API_ENV_FILE="${SW}/api.env" API_DEPLOY="${SW_BIN}/deploy.sh" \
+runuser -u unipept -- env PATH="${SW_BIN}:${PATH}" API_ENV_FILE="${SW}/api.env" API_DEPLOY="${SW_BIN}/deploy.sh" API_BINARY="$API_BIN" \
     "${REPO}/.deploy/switch.sh" --output-dir "$SW_DATA" --opensearch-url "$OPENSEARCH_URL" --uniprot-version 2027-02 \
     > "${WORK}/switch-interrupted.log" 2>&1 &
 switcher=$!
@@ -618,7 +649,7 @@ migrate() {
     rc=$?
 }
 
-migrate "${WORK}/migrate.log"
+migrate "${WORK}/migrate.log" --output-dir "${MIG}/data/"
 check "it succeeds" "$rc" "0"
 check "current points at the version the API serves" "$(readlink "${MIG}/data/current")" "uniprot-2024-12"
 check "and belongs to the user the API runs as" "$(stat -c %U "${MIG}/data/current")" "unipept"
@@ -637,6 +668,14 @@ check "with nothing left to do" "$(grep -c 'Still to do' "${WORK}/migrate-again.
 runuser -u unipept -- ln -sfn uniprot-2027-01 "${MIG}/data/current"
 migrate "${WORK}/migrate-moved.log"
 check "a link switch.sh moved is left" "$(readlink "${MIG}/data/current")" "uniprot-2027-01"
+
+# A link to one version, and INDEX_LOCATION naming another: whose proteins are which is not known.
+runuser -u unipept -- ln -sfn uniprot-2024-11 "${MIG}/data/current"
+printf 'INDEX_LOCATION=%s/data/uniprot-2024-12/suffix-array\n' "$MIG" > "${MIG}/api.env"
+migrate "${WORK}/migrate-mismatch.log"
+check "current and INDEX_LOCATION naming different versions stop it" "$rc" "2"
+check_true "and it says so" grep -q 'current points at 2024-11, and INDEX_LOCATION names 2024-12' "${WORK}/migrate-mismatch.log"
+check "cloning nothing" "$(status_of uniprot_entries-2024-11)" ""
 
 runuser -u unipept -- unlink "${MIG}/data/current"
 printf 'INDEX_LOCATION=/srv/index\n' > "${MIG}/api.env"
@@ -664,7 +703,7 @@ for _ in $(seq 50); do
 done
 migrate "${WORK}/migrate-locked.log"
 check "a load, a switch or a prune running stops it" "$rc" "2"
-check_true "and says so" grep -q 'a load, a switch or a prune is running' "${WORK}/migrate-locked.log"
+check_true "and says so" grep -q 'is running on this host; wait for it to finish' "${WORK}/migrate-locked.log"
 kill "$holder"
 wait "$holder" 2> /dev/null
 
@@ -699,6 +738,16 @@ served() {
 }
 check_true "the version it points at is served" served 2027-02
 check_true "another is not" not_served 2027-01
+
+# shellcheck disable=SC2031 # the suite's own, which served() only changes in its subshell
+curl -s -X POST "${OPENSEARCH_URL}/_aliases" -H 'Content-Type: application/json' \
+    -d '{"actions":[{"add":{"index":"uniprot_entries-2027-04","alias":"uniprot_entries"}}]}' > /dev/null
+check_true "on two indices, the one" served 2027-02
+check_true "and the other" served 2027-04
+
+# shellcheck disable=SC2030 # in the subshell only, on purpose
+check "an alias OpenSearch does not answer for fails the question" \
+    "$( ( source "${REPO}/.deploy/lib.sh" && OPENSEARCH_URL=http://127.0.0.1:1 OUTPUT_DIR=/nonexistent API_ENV_FILE=/nonexistent served_versions ) > /dev/null 2>&1; echo $?)" "1"
 
 
 summary

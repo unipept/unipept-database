@@ -457,6 +457,8 @@ check_true "before the loader drops anything" test ! -e /work/loader-calls
 check_true "and says to switch away first" grep -q 'Switch this host to another version with switch.sh first' /work/last-output
 load_proteins --output-dir "$OUT" --replace-live
 check "--replace-live, which reloaded it under the running API, is gone" "$?" "2"
+load_proteins --output-dir "$OUT" --skip 0
+check "--skip 0, which drops the index as a load from the start does, is refused too" "$?" "2"
 load_proteins --output-dir "$OUT" --uniprot-version 2025-11
 check "another version loads beside it" "$?" "0"
 load_proteins --output-dir "$OUT" --skip 500
@@ -536,7 +538,7 @@ done
 rm -f /work/loader-calls
 load_proteins --output-dir "$OUT"
 check "a load during a switch stops it" "$?" "2"
-check_true "and says why" grep -q 'switch.sh is switching this host' /work/last-output
+check_true "and says why" grep -q 'is running on this host; wait for it to finish' /work/last-output
 check_true "before the loader is called" test ! -e /work/loader-calls
 kill "$switcher"
 wait "$switcher" 2> /dev/null
@@ -548,7 +550,7 @@ chmod 644 "$LOCK"
 load_proteins --output-dir "$OUT"
 check "a lock it cannot open stops it" "$?" "2"
 check_true "and says so" grep -q "cannot open the lock ${LOCK} as ${DEPLOY}" /work/last-output
-check_true "not that a switch is running" not grep -q 'switch.sh is switching' /work/last-output
+check_true "not that another is running" not grep -q 'is running on this host; wait for it to finish' /work/last-output
 mv "${LOCK}.away" "$LOCK"
 
 
