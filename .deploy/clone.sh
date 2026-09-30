@@ -30,10 +30,6 @@ UNIPROT_VERSION=
 # Whether a database of that version already here may be replaced.
 REPLACE=false
 
-# Seconds to wait, once the copy is made, for a switch or a prune that holds the lock to finish: a
-# switch waits for OpenSearch to start, which takes minutes.
-readonly LOCK_WAIT=3600
-
 # Whether to only check that a copy could be made: the settings, the key, the remote host, and its
 # copy of the version. What distribute.sh asks every server before it touches any.
 CHECK=false
@@ -201,8 +197,16 @@ check_database "$COPIED_DIR" "$REMOTE_DIR"
 # lock a switch holds, so none can start between this and the swap, waited for rather than given up
 # on, since giving up would throw the copy away. The copy is removed where it cannot be used: it is
 # hundreds of gigabytes, and the next clone.sh starts one of its own.
-take_opensearch_lock -s "$LOCK_WAIT" \
-    || die "$(lock_refused $?) Waited ${LOCK_WAIT} seconds for it; the next clone.sh copies again."
+if ! take_opensearch_lock -s "$LOCK_WAIT"; then
+    refused=$(lock_refused $?)
+    rm -rf "${STAGING_DIR:?}"
+    die "${refused} Waited ${LOCK_WAIT} seconds for it. The copy is removed; the next clone.sh copies again."
+fi
+# And no load of this version reads the table this replaces.
+if ! take_load_lock "$UNIPROT_VERSION"; then
+    rm -rf "${STAGING_DIR:?}"
+    die "a load of ${UNIPROT_VERSION} is running on this host, and reads the files this would replace. The copy is removed; clone once it has finished."
+fi
 if [ -e "$BUILD_DIR" ] && is_served "$UNIPROT_VERSION"; then
     rm -rf "${STAGING_DIR:?}"
     die "${UNIPROT_VERSION} is the version this host serves, so its files are not replaced under the running API. The copy is removed. Switch this host to another version with switch.sh first."

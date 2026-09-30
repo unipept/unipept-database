@@ -199,6 +199,23 @@ check_true "the database that was there is untouched" test -f "${OUT}/uniprot-20
 check_true "its own result is kept for inspection" test -d "${OUT}/.build"
 check_true "it says how to replace it" grep -q -- '--replace' /work/last-output
 
+# Not while a load of it reads the table this would replace.
+as_deployer touch /run/lock/unipept-load-2026-03.lock
+# shellcheck disable=SC2016 # $1 belongs to the inner shell
+setpriv --reuid "$DEPLOY" --regid "$DEPLOY" --init-groups bash -c 'exec 8>> "$1"; flock -x 8; exec sleep 30' _ /run/lock/unipept-load-2026-03.lock &
+loading=$!
+for _ in $(seq 50); do
+    as_deployer flock -n -x /run/lock/unipept-load-2026-03.lock true 2> /dev/null || break
+    sleep 0.1
+done
+build --output-dir "$OUT" --scratch-dir /work/scratch --replace
+check "--replace while a load of the version runs stops it" "$?" "2"
+check_true "and says so" grep -q 'a load of 2026-03 is running on this host' /work/last-output
+check_true "keeping the build" grep -qF "This build is in ${OUT}/.build" /work/last-output
+check_true "and the database that was there" test -f "${OUT}/uniprot-2026-03/marker"
+kill "$loading"
+wait "$loading" 2> /dev/null
+
 # Not while this host serves it: its files would change under the running API, with nothing checked.
 as_deployer ln -s uniprot-2026-03 "${OUT}/current"
 build --output-dir "$OUT" --scratch-dir /work/scratch --replace
@@ -513,11 +530,20 @@ for _ in $(seq 50); do
 done
 load_proteins --output-dir "$OUT" --uniprot-version 2025-11
 check "a second load of a version stops it" "$?" "2"
-check_true "and says so" grep -q 'another load of 2025-11 is running' /work/last-output
+check_true "and says so" grep -q 'another load of 2025-11, or a build or a clone replacing it, is running' /work/last-output
 kill "$first_load"
 wait "$first_load" 2> /dev/null
 load_proteins --output-dir "$OUT" --uniprot-version 2025-11
 check "once it is done, it loads" "$?" "0"
+# A lock of its own it cannot open is said to be that, not taken for another load.
+mv /run/lock/unipept-load-2025-11.lock /run/lock/unipept-load-2025-11.lock.away
+touch /run/lock/unipept-load-2025-11.lock
+chmod 644 /run/lock/unipept-load-2025-11.lock
+load_proteins --output-dir "$OUT" --uniprot-version 2025-11
+check "a lock of its version it cannot open stops it" "$?" "2"
+check_true "and says so" grep -q 'without its lock, two loads of 2025-11' /work/last-output
+rm -f /run/lock/unipept-load-2025-11.lock
+mv /run/lock/unipept-load-2025-11.lock.away /run/lock/unipept-load-2025-11.lock
 
 # An index that is missing, or was not loaded to the end, gives the API nothing to lose.
 rm /work/index-whole

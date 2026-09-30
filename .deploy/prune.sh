@@ -121,7 +121,14 @@ if old_indices_unneeded && api_follows_current \
     OLD_INDICES_GO=true
 elif [ -n "$(index_status "$ALIAS")$(index_status "$LEGACY")" ]; then
     if ! old_indices_unneeded; then
-        why="the API installed, or the one deploy.sh would roll back to ($(api_rollback_binary)), is older than ${API_VERSIONED_INDEX_SINCE}"
+        why=''
+        for binary in "$API_BINARY" "$(api_rollback_binary)"; do
+            [ "$binary" = "$API_BINARY" ] || [ -e "$binary" ] || continue
+            api_state "$binary" || case $? in
+                1) why+="${why:+; }${binary} is older than ${API_VERSIONED_INDEX_SINCE}" ;;
+                *) why+="${why:+; }${binary} cannot be run to say which API it is (set API_BINARY where it is elsewhere)" ;;
+            esac
+        done
     elif ! api_follows_current; then
         why="INDEX_LOCATION does not go through $(current_link)"
     else

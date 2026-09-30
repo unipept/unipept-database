@@ -214,7 +214,10 @@ start_opensearch() {
 # what it points at. A failure is only reported.
 drop_old_alias() {
     local target
-    target=$(alias_targets 2> /dev/null | paste -sd ' ' -) || true
+    if ! target=$(alias_targets 2> /dev/null | paste -sd ' ' -); then
+        echo "WARN OpenSearch did not say what the alias ${ALIAS} points at, so it is left; prune.sh keeps what it points at while it is there." 1>&2
+        return 0
+    fi
     [ -n "$target" ] || return 0
 
     if curl -s -f -o /dev/null -X POST "${OPENSEARCH_URL}/_aliases" -H 'Content-Type: application/json' \

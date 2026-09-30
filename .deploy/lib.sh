@@ -55,6 +55,11 @@ readonly API_VERSIONED_INDEX_SINCE=2.7.0
 # OUTPUT_DIR a run is given; /run/lock is there for every user to take one in.
 OPENSEARCH_LOCK=${OPENSEARCH_LOCK:-/run/lock/unipept-opensearch.lock}
 
+# Seconds a build or a clone waits for that lock once its work is done, rather than throw the work
+# away: a switch holds it while OpenSearch starts, which takes minutes.
+# shellcheck disable=SC2034 # read by the scripts that source this file
+readonly LOCK_WAIT=3600
+
 # What this host decides. Read after the defaults, so it wins over them, and before the arguments
 # are parsed, so a flag wins over both. One file per host: a checkout's own deploy.conf where it has
 # one, which is how a checkout is run on its own; the installed one beside these scripts, as
@@ -466,8 +471,10 @@ opensearch_lock_usable() {
 }
 
 # Loads of different versions run side by side, but two of the same version would drop the index
-# the other fills, and the first to finish would mark what the other left as whole. One lock per
-# version, beside OPENSEARCH_LOCK, on file descriptor 8. Fails where another load of it holds it.
+# the other fills, and the first to finish would mark what the other left as whole; and a build or a
+# clone replacing its files would pull the table from under a load of it. One lock per version,
+# beside OPENSEARCH_LOCK, on file descriptor 8. Fails with 1 where another holds it, 2 where it
+# cannot be opened, which it says.
 take_load_lock() {
     local lock
     lock="$(dirname "$OPENSEARCH_LOCK")/unipept-load-${1}.lock"

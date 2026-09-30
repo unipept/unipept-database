@@ -61,7 +61,6 @@ version_of_index() {
     fi
 }
 
-# The index an alias of that name points at, or nothing where there is none.
 # Every index an alias of that name points at, one per line, or nothing where there is none. Fails
 # where OpenSearch does not answer the question, which is not the same as there being no alias.
 alias_targets() {
@@ -79,7 +78,7 @@ index_status() {
 
 # Whether an index carries the mark, open or closed: a closed index still answers for its mapping.
 is_complete() {
-    curl -s -f "${OPENSEARCH_URL}/$1/_mapping" 2> /dev/null | grep -qF "$COMPLETE_MARK"
+    [ "$(index_state "$1")" = complete ]
 }
 
 # What OpenSearch says of an index, where telling "not whole" from "did not answer" matters: complete,

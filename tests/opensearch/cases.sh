@@ -244,7 +244,10 @@ echo 2.7.0 > /tmp/api-bin/version
 roll_back_to 2.6.0
 prune_with_api "${WORK}/prune-oldprevious.log" --keep 1 --dry-run
 check "and so does an older one deploy.sh would roll back to" "$(grep -c 'plain' "${WORK}/prune-oldprevious.log")" "0"
-check_true "and it says why" grep -q 'from before versioned indices, are kept: the API installed, or the one deploy.sh would roll back to' "${WORK}/prune-oldprevious.log"
+check_true "and it says why" grep -q "from before versioned indices, are kept: ${API_BIN}.previous is older than 2.7.0" "${WORK}/prune-oldprevious.log"
+chmod 644 "${API_BIN}.previous"
+prune_with_api "${WORK}/prune-norun.log" --keep 1 --dry-run
+check_true "one it cannot run is said to be that" grep -q "${API_BIN}.previous cannot be run" "${WORK}/prune-norun.log"
 rm -f "${API_BIN}.previous"
 
 # Unless the index of the version it serves is not whole to serve from: then it may be the only copy.
