@@ -29,11 +29,17 @@ die() {
 }
 
 # The ERR trap of every script here: a command that failed where nothing expected it to. Names the
-# script, the command and the line. Not the pipelines' own, which also cleans up what they leave.
+# script, the command, and the file and line it is on, which is a part of lib.sh where it failed in
+# one. In a subshell, such as a command substitution or a process substitution, it says nothing and
+# passes the status on: errtrace runs it there even where the shell that started the subshell
+# expects the failure, as in `x=$(...) || true`, and where it does not, that shell's own trap
+# reports it once, at the line that started it. Not the pipelines' own, which also cleans up what
+# they leave.
 errorAndExit() {
-    local status=$? line=${BASH_LINENO[0]} command=$BASH_COMMAND
+    local status=$? line=${BASH_LINENO[0]} file=${BASH_SOURCE[1]} command=$BASH_COMMAND
 
-    echo "Error: ${0##*/} stopped: '${command}' failed with exit status ${status} at line ${line}." 1>&2
+    [ "$$" = "$BASHPID" ] || exit "$status"
+    echo "Error: ${0##*/} stopped: '${command}' failed with exit status ${status} at line ${line} of ${file}." 1>&2
     exit 2
 }
 

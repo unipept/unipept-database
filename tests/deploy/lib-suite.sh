@@ -59,8 +59,31 @@ section "core.sh: errorAndExit"
 script=$(lib_script failing.sh 'false')
 output=$("$script" 2>&1)
 check "a command that fails where nothing expected it stops the script" "$?" "2"
-check "and names the script, the command and the line" "$output" \
-    "Error: failing.sh stopped: 'false' failed with exit status 1 at line 6."
+check "and names the script, the command, and the line of the file it is on" "$output" \
+    "Error: failing.sh stopped: 'false' failed with exit status 1 at line 6 of ${script}."
+
+script=$(lib_script failing-in-lib.sh "swap_into_place '${TEMP_DIR}/no-such-staging' '${TEMP_DIR}/target'")
+output=$("$script" 2> "${TEMP_DIR}/stderr")
+check "a command that fails in a part of lib.sh stops the script" "$?" "2"
+check_true "and names that part, not the script, as where" \
+    grep -q "stopped: 'mv \"\$staging\" \"\$target\"' failed with exit status 1 at line [0-9]* of ${LIB%/lib.sh}/lib/database.sh\.\$" "${TEMP_DIR}/stderr"
+
+# shellcheck disable=SC2016 # expanded by the script it writes
+script=$(lib_script fails-inside.sh 'inner() { false; echo "went on"; }
+result=$(inner)')
+output=$("$script" 2>&1)
+check "a command that fails inside a command substitution stops the script" "$?" "2"
+check "and is reported once, at the line that started it" "$output" \
+    "Error: fails-inside.sh stopped: 'result=\$(inner)' failed with exit status 1 at line 7 of ${script}."
+
+# As install.sh asks dpkg-query about a package that may not be there.
+# shellcheck disable=SC2016 # expanded by the script it writes
+script=$(lib_script expected-inside.sh 'read -r answer < <(false) || true
+x=$(false) || true
+echo "went on"')
+output=$("$script" 2>&1)
+check "a failure the script expects, inside a substitution, does not stop it" "$?" "0"
+check "nor is it reported" "$output" "went on"
 
 
 section "core.sh: die"
