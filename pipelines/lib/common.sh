@@ -193,7 +193,7 @@ errorAndExit() {
   local line_no=${BASH_LINENO[0]}  # Get the line number where the error occurred
   local command="${BASH_COMMAND}"  # Get the command that was executed
 
-	echo "Error: the script experienced an error while trying to build the requested database." 1>&2
+	echo "Error: ${0##*/} experienced an error." 1>&2
 	echo "Error details:" 1>&2
   echo "Command '$command' failed with exit status $exit_status at line $line_no." 1>&2
 

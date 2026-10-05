@@ -27,8 +27,7 @@ die() {
 }
 
 # The ERR trap of every script here: a command that failed where nothing expected it to. Names the
-# script, the command and the line, since none of these scripts builds tables and the pipelines'
-# own message, about building a database, misled every one that is not build.sh.
+# script, the command and the line. Not the pipelines' own, which also cleans up what they leave.
 errorAndExit() {
     local status=$? line=${BASH_LINENO[0]} command=$BASH_COMMAND
 
