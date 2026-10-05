@@ -40,9 +40,10 @@ permissions:
 
 jobs:
   pipelines:
-    # lz() and luz() against a stand-in lz4, and .deploy/verify.sh against a fixture index
-    # directory. Both need nothing installed and run in seconds, so they share a runner.
-    name: Pipeline and verify suites
+    # lz() and luz() against a stand-in lz4, .deploy/verify.sh against a fixture index directory,
+    # and the parts of .deploy/lib.sh. They need nothing installed and run in seconds, so they share
+    # a runner.
+    name: Pipeline, verify and deploy library suites
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -58,6 +59,10 @@ jobs:
       - name: Run the verify suite
         if: ${{ !cancelled() }}
         run: tests/run-tests.sh verify
+
+      - name: Run the deploy library suite
+        if: ${{ !cancelled() }}
+        run: tests/run-tests.sh lib
 
   shell:
     # The helpers in pipelines/lib/common.sh. No container.
