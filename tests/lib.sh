@@ -57,6 +57,19 @@ summary() {
 }
 
 # A heading between suites, or between the steps of one.
+# The scripts in .deploy as a checkout lays them out, in DEST, which has to exist: the scripts, the
+# parts of lib.sh, and the OpenSearch helpers lib.sh loads from beside .deploy. What a checkout needs
+# beyond that, such as the pipelines build.sh runs, is the caller's to add.
+copy_deploy_scripts() {
+    local repo="$1" dest="$2"
+
+    mkdir -p "${dest}/.deploy/opensearch" "${dest}/opensearch"
+    cp "${repo}"/.deploy/*.sh "${repo}/.deploy/deploy.conf.example" "${dest}/.deploy/"
+    cp -R "${repo}/.deploy/lib" "${dest}/.deploy/"
+    cp "${repo}"/.deploy/opensearch/*.sh "${dest}/.deploy/opensearch/"
+    cp "${repo}/opensearch/lib.sh" "${dest}/opensearch/"
+}
+
 heading() { printf '\n\033[1m%s\033[0m\n' "$*"; }
 
 # For the suites that start containers.
