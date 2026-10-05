@@ -1,7 +1,8 @@
 # shellcheck shell=bash
 #
 # What every script in .deploy runs on: logging, stopping, the commands it needs, and the trap that
-# reports a command that failed. Needs nothing else. Sourced through .deploy/lib.sh, never run. The
+# reports a command that failed. Nothing in it is particular to this repository: unipept-api's
+# .deploy/lib/core.sh does the same. Needs nothing else. Sourced through .deploy/lib.sh, never run. The
 # pipelines have their own, in pipelines/lib/common.sh: these scripts build no tables, and do not
 # need what that carries.
 
@@ -32,8 +33,10 @@ die() {
 # script, the command, and the file and line it is on, which is a part of lib.sh where it failed in
 # one. In a subshell, such as a command substitution or a process substitution, it says nothing and
 # passes the status on: errtrace runs it there even where the shell that started the subshell
-# expects the failure, as in `x=$(...) || true`, and where it does not, that shell's own trap
-# reports it once, at the line that started it. Not the pipelines' own, which also cleans up what
+# expects the failure, as in `x=$(...) || return 1`, and a subshell cannot tell. Where that shell
+# acts on the status, as an assignment from $(...) does, its own trap reports the failure once, at
+# the line that started the subshell. Where it does not, as in `echo "$(...)"`, nothing is reported,
+# as set -e alone would not stop there either. Not the pipelines' own, which also cleans up what
 # they leave.
 errorAndExit() {
     local status=$? line=${BASH_LINENO[0]} file=${BASH_SOURCE[1]} command=$BASH_COMMAND
@@ -48,19 +51,4 @@ need_value() {
     local flag="$1" value="$2"
 
     { [ -n "$value" ] && [[ "$value" != --* ]]; } || die "${flag} requires a value."
-}
-
-# Who builds, clones and owns the databases. The API on this host runs as the same user, which is
-# what makes every file a build writes one the API can read. opensearch/install.sh creates it and
-# gives it OUTPUT_DIR; after that, nothing here needs root.
-DEPLOY_USER=unipept
-
-# build.sh and clone.sh write what the API serves, so they run as the user the API reads as. Run as
-# root, they leave a database owned by root: one the next run as DEPLOY_USER cannot replace, and
-# one whose readability check passes only because root reads everything. verify.sh and load.sh
-# write nothing there, but both check through that same readability check, so they refuse root
-# for that reason alone. prune.sh removes databases, so it runs as the user who owns them.
-refuse_root() {
-    [ "$(id -u)" -ne 0 ] \
-        || die "do not run this as root. Run it as ${DEPLOY_USER}, for example: sudo -iu ${DEPLOY_USER}. Only .deploy/opensearch/install.sh needs root."
 }
