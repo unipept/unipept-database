@@ -9,6 +9,9 @@ DEPLOY_DIR="${BASH_SOURCE%/*}"
 # log, checkdep and errorAndExit, the same ones the pipelines and the OpenSearch loader use.
 # shellcheck source=../pipelines/lib/common.sh
 source "${DEPLOY_DIR}/../pipelines/lib/common.sh"
+# The names of the indices, and the requests to OpenSearch every script here shares.
+# shellcheck source=../opensearch/lib.sh
+source "${DEPLOY_DIR}/../opensearch/lib.sh"
 
 ################################################################################
 #                                   Settings                                   #
@@ -34,6 +37,28 @@ DEPLOY_USER=unipept
 # Where opensearch/install.sh installs the scripts a host runs, and their configuration. The build
 # host still builds from a checkout, which needs the whole repository.
 readonly INSTALL_ROOT=/opt/unipept-database
+
+# The API on this host, which unipept-api's install puts there: its settings, of which INDEX_LOCATION
+# is read here, and the script that stops and starts it. A host without them runs no API.
+# shellcheck disable=SC2034 # read by the scripts that source this file
+API_ENV_FILE=${API_ENV_FILE:-/opt/unipept-api/etc/unipept-api.env}
+# shellcheck disable=SC2034 # read by the scripts that source this file
+API_DEPLOY=${API_DEPLOY:-/opt/unipept-api/lib/deploy.sh}
+API_BINARY=${API_BINARY:-/opt/unipept-api/bin/unipept-api}
+
+# The first unipept-api release that queries uniprot_entries-<version>, the index of the version its
+# files are from (unipept-api#286). An older one queries uniprot_entries itself, or the alias of that
+# name, and needs what a host loaded before versioned indices kept.
+readonly API_VERSIONED_INDEX_SINCE=2.7.0
+
+# The lock that keeps loads and switches apart. One per host, as the OpenSearch it guards is, whatever
+# OUTPUT_DIR a run is given; /run/lock is there for every user to take one in.
+OPENSEARCH_LOCK=${OPENSEARCH_LOCK:-/run/lock/unipept-opensearch.lock}
+
+# Seconds a build or a clone waits for that lock once its work is done, rather than throw the work
+# away: a switch holds it while OpenSearch starts, which takes minutes.
+# shellcheck disable=SC2034 # read by the scripts that source this file
+readonly LOCK_WAIT=3600
 
 # What this host decides. Read after the defaults, so it wins over them, and before the arguments
 # are parsed, so a flag wins over both. One file per host: a checkout's own deploy.conf where it has
@@ -294,3 +319,169 @@ unipept-index: ${index_commit}
 sources: ${DATABASE_SOURCES:-none}
 INFO
 }
+
+################################################################################
+#                          The version a host serves                           #
+################################################################################
+
+# The version a host serves is a link in OUTPUT_DIR to its directory, and the API's INDEX_LOCATION
+# names the suffix array through it, so switch.sh switches by moving the link. `previous` is the one
+# before, for switch.sh --back. Neither is named uniprot-*, so DATABASE_GLOB never takes them for a
+# version. Functions rather than settings, since OUTPUT_DIR is only final once the flags are read.
+current_link() { echo "${OUTPUT_DIR%/}/current"; }
+previous_link() { echo "${OUTPUT_DIR%/}/previous"; }
+
+# The version a link points at, as YYYY-MM. Fails for no link, or one to no version's directory.
+linked_version() {
+    local target
+
+    target=$(readlink "$1") || return 1
+    database_version_of "$target"
+}
+
+# Points a link at a target in one rename, so a reader finds the old target or the new one and
+# never neither. Relative targets stay relative, so OUTPUT_DIR can move with its links.
+point_link() {
+    local link="$1" target="$2"
+
+    ln -sfn "$target" "${link}.new"
+    mv -T "${link}.new" "$link"
+}
+
+# INDEX_LOCATION in the API's settings on this host, or nothing where there are none.
+api_index_location() {
+    [ -r "$API_ENV_FILE" ] || return 0
+    sed -n 's/^INDEX_LOCATION=//p' "$API_ENV_FILE" | tail -n 1
+}
+
+# The versions this host serves, one per line, in this order: what current points at, what
+# INDEX_LOCATION names where it names a version's directory itself, as on a host not yet pointed
+# through current, and what every alias of the old name an earlier release left points at, which an
+# API from before versioned indices queries, legacy included. The one definition of served, which
+# load.sh, build.sh, clone.sh and prune.sh all go by. Often the same one more than once. Fails, after
+# printing the rest, where OpenSearch does not say what the alias points at.
+served_versions() {
+    local targets index
+
+    linked_version "$(current_link)" 2> /dev/null || true
+    database_version_of "$(api_index_location)" 2> /dev/null || true
+    targets=$(alias_targets 2> /dev/null) || return 1
+    for index in $targets; do
+        version_of_index "$index"
+    done
+}
+
+# Whether this host serves a version, by any of them. Not grep -q: it would stop reading at the first
+# match, and the write of a later line would then fail the pipeline under pipefail. With strict, what
+# the alias points at has to be known where OpenSearch answers: a load cannot take it for nothing.
+# Without, as for a build on a host whose OpenSearch is stopped for it, the links suffice.
+is_served() {
+    local versions
+    if ! versions=$(served_versions); then
+        # An OpenSearch that does not answer at all drops nothing either: the load fails on its own.
+        [ "${2:-}" != strict ] || ! opensearch_answers \
+            || die "OpenSearch does not say what the alias ${ALIAS} points at, so what this host serves is not known."
+    fi
+    printf '%s\n' "$versions" | grep -x "$1" > /dev/null
+}
+
+# The X.Y.Z of an API binary, from its own --version, a pre-release or build suffix left off: 2.7.0 for
+# 2.7.0-rc.1, which already is that release's code. Fails where it cannot be run or says nothing so.
+api_binary_version() {
+    local reported
+    [ -x "$1" ] || return 1
+    reported=$("$1" --version 2> /dev/null | awk '{ print $NF }') || return 1
+    reported="${reported%%[-+]*}"
+    [[ "$reported" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || return 1
+    printf '%s\n' "$reported"
+}
+
+# Whether a version is API_VERSIONED_INDEX_SINCE or newer.
+queries_versioned_index() {
+    [ "$(printf '%s\n%s\n' "$API_VERSIONED_INDEX_SINCE" "$1" | sort -V | head -n 1)" = "$API_VERSIONED_INDEX_SINCE" ]
+}
+
+# Whether an API binary queries the index of the version it serves: 0 it does, 1 it is older than
+# API_VERSIONED_INDEX_SINCE, 2 it cannot be run to say. The one test switch.sh and prune.sh make.
+api_state() {
+    local version
+    version=$(api_binary_version "$1") || return 2
+    queries_versioned_index "$version" || return 1
+}
+
+# The binary unipept-api's deploy.sh keeps beside the one installed, for deploy.sh rollback.
+api_rollback_binary() { echo "${API_BINARY}.previous"; }
+
+# Whether nothing installed still needs what a host loaded before versioned indices kept: the API
+# installed queries the index of its version, and so does the one deploy.sh would roll back to, where
+# there is one. A rollback to an older one would serve nothing without uniprot_entries or its alias.
+old_indices_unneeded() {
+    api_state "$API_BINARY" || return 1
+    [ ! -e "$(api_rollback_binary)" ] || api_state "$(api_rollback_binary)"
+}
+
+# What a script that could not take OPENSEARCH_LOCK says, by why: 1 another holds it, anything else
+# it could not be opened.
+lock_refused() {
+    case $1 in
+        1) echo "a load, a switch, a prune or migrate.sh is running on this host; wait for it to finish." ;;
+        *) echo "without the lock, a load, a switch or a prune could run at the same time. Make ${OPENSEARCH_LOCK} writable for $(id -un), or set OPENSEARCH_LOCK." ;;
+    esac
+}
+
+# Replacing the files of a version this host serves, under an API that has them open, is not a
+# switch: it would serve other files from its next start, with nothing checked. Switch away first.
+refuse_replacing_served() {
+    ! is_served "$1" \
+        || die "${1} is the version this host serves, so its files are not replaced under the running API. ${2}Switch this host to another version with switch.sh first."
+}
+
+# Whether INDEX_LOCATION names the suffix array through current, so the API follows a switch. By
+# the directories they resolve to, the one holding current, so a trailing slash or a path through a
+# link to OUTPUT_DIR says the same.
+api_follows_current() {
+    local location
+    location=$(api_index_location)
+    location="${location%/}"
+    [[ "$location" == */current/suffix-array ]] || return 1
+    [ "$(readlink -f "${location%/current/suffix-array}")" = "$(readlink -f "$OUTPUT_DIR")" ]
+}
+
+# Loads and switches exclude each other: a switch stops OpenSearch, which breaks a load running then.
+# A load takes OPENSEARCH_LOCK shared, so loads of different versions still run side by side, and a
+# switch takes it exclusively, from its checks to its end. On file descriptor 9, held until the
+# script exits. Fails, rather than waits: 1 where the other holds it, 2 where the lock cannot be
+# opened at all, which says so.
+take_opensearch_lock() {
+    { exec 9>> "$OPENSEARCH_LOCK"; } 2> /dev/null || {
+        echo "Error: cannot open the lock ${OPENSEARCH_LOCK} as $(id -un)." 1>&2
+        return 2
+    }
+    if [ -n "${2:-}" ]; then
+        # Waiting, up to the seconds given, where giving up would throw away work already done.
+        flock -w "$2" "$1" 9
+    else
+        flock -n "$1" 9
+    fi
+}
+
+# Whether this user can take OPENSEARCH_LOCK at all, for a check made before the work that needs it.
+opensearch_lock_usable() {
+    ( exec 9>> "$OPENSEARCH_LOCK" ) 2> /dev/null
+}
+
+# Loads of different versions run side by side, but two of the same version would drop the index
+# the other fills, and the first to finish would mark what the other left as whole; and a build or a
+# clone replacing its files would pull the table from under a load of it. One lock per version,
+# beside OPENSEARCH_LOCK, on file descriptor 8. Fails with 1 where another holds it, 2 where it
+# cannot be opened, which it says.
+take_load_lock() {
+    local lock
+    lock="$(dirname "$OPENSEARCH_LOCK")/unipept-load-${1}.lock"
+    { exec 8>> "$lock"; } 2> /dev/null || {
+        echo "Error: cannot open the lock ${lock} as $(id -un)." 1>&2
+        return 2
+    }
+    flock -n -x 8
+}
+

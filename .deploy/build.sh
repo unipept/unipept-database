@@ -196,16 +196,16 @@ check_host() {
     [ -z "$problems" ] && return 0
     die "this host has no room for a build:${problems}
 
-Take the host out of the pool and free what is named above: remove what is not needed from
-${OUTPUT_DIR}, and stop the API and OpenSearch:
+Free what is named above: remove what is not needed from ${OUTPUT_DIR}, and stop the API and
+OpenSearch:
 
-  sudo systemctl --user -M ${DEPLOY_USER}@ stop unipept-api
+  ${API_DEPLOY} stop
   sudo systemctl stop opensearch
 
-Build again, then start them, OpenSearch first, and put the host back in the pool:
+Build again, then start them, OpenSearch first:
 
   sudo systemctl start opensearch
-  sudo systemctl --user -M ${DEPLOY_USER}@ start unipept-api
+  ${API_DEPLOY} start
 
 --skip-checks builds anyway."
 }
@@ -233,6 +233,11 @@ STAGING_DIR="${OUTPUT_DIR}/.build"
 
 # Before the staging directory is removed, so a build refused here keeps what an earlier one left.
 check_host
+# The swap at the end is made under the lock that keeps loads and switches apart: found now, not
+# hours in.
+checkdep flock "util-linux"
+opensearch_lock_usable \
+    || die "cannot open the lock ${OPENSEARCH_LOCK} as $(id -un), which the build is swapped in under. Make it writable, or set OPENSEARCH_LOCK."
 
 rm -rf "${STAGING_DIR:?}"
 mkdir -p "${STAGING_DIR}"/{suffix-array,tables,temp}
@@ -259,6 +264,13 @@ BUILD_DIR="${OUTPUT_DIR}/uniprot-${UNIPROT_VERSION}"
 if [ -e "$BUILD_DIR" ] && [ "$REPLACE" != true ]; then
     die "${BUILD_DIR} already exists. This build is in ${STAGING_DIR}; pass --replace to replace it."
 fi
+# Under the lock a switch holds, and the version's own that a load holds, so neither can start between
+# the check that the version is not served and the swap. Waited for, since the build is hours in.
+take_opensearch_lock -s "$LOCK_WAIT" \
+    || die "$(lock_refused $?) Waited ${LOCK_WAIT} seconds for it. This build is in ${STAGING_DIR}."
+take_load_lock "$UNIPROT_VERSION" \
+    || die "a load of ${UNIPROT_VERSION} is running on this host, and reads the files this would replace. This build is in ${STAGING_DIR}; build again once it has finished."
+[ ! -e "$BUILD_DIR" ] || refuse_replacing_served "$UNIPROT_VERSION" "This build is in ${STAGING_DIR}. "
 
 # Last, so a directory that carries this file is a finished build.
 write_build_info "${STAGING_DIR}/suffix-array" "$UNIPROT_VERSION" "$DATABASE_COMMIT" "$INDEX_COMMIT"

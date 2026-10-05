@@ -19,8 +19,10 @@
 #      over ssh as that user, and sshd needs a shell to run a remote command.
 #   3. Install the tools build.sh, clone.sh and load.sh use, the ones not installed already.
 #   4. Create OUTPUT_DIR owned by DEPLOY_USER, and hand it the databases a run as root left.
-#   5. Install clone.sh, load.sh, verify.sh, prune.sh and what they call into INSTALL_ROOT, from
-#      this checkout, and write etc/deploy.conf there unless it is already there.
+#   5. Install clone.sh, load.sh, verify.sh, prune.sh, switch.sh, migrate.sh and what they call
+#      into INSTALL_ROOT, from this checkout, and write etc/deploy.conf there unless it is already there.
+#      Allow DEPLOY_USER to stop and start OpenSearch through sudo, and nothing else, which is what
+#      switch.sh needs to switch without root.
 #   6. Add the OpenSearch APT repository, unless it is already there.
 #   7. Install the pinned version, or upgrade an older one of the same major version to it, keeping
 #      the configuration this script writes, and hold it so an unrelated upgrade cannot move it.
@@ -31,7 +33,7 @@
 #  10. Enable and start the service, restarting it only when something above changed, and wait
 #      for it to answer.
 #  11. Set every index to hold no replica.
-#  12. Say what is left to do as DEPLOY_USER.
+#  12. Say what is left to do, on this host.
 #
 # A second run with the same settings changes nothing and restarts nothing.
 
@@ -119,6 +121,7 @@ readonly APT_KEYRING=/usr/share/keyrings/opensearch-keyring.gpg
 readonly CONFIG_FILE=/etc/opensearch/opensearch.yml
 readonly HEAP_FILE=/etc/opensearch/jvm.options.d/heap.options
 readonly UNIT_DROPIN=/etc/systemd/system/opensearch.service.d/unipept.conf
+readonly SUDOERS_FILE=/etc/sudoers.d/unipept-opensearch
 
 # How long systemd gives OpenSearch to start, and how soon it starts it again after a failure. The
 # package gives it 75 seconds and never starts it again. That is enough on its own, but not while
@@ -278,8 +281,11 @@ install_scripts() {
     local repository="${HERE}/../.." commit
 
     install -d -m 0755 "$PREFIX" "${PREFIX}/bin" "${PREFIX}/opensearch/mappings" "${PREFIX}/pipelines/lib"
-    install -m 0755 "${repository}/.deploy/"{lib.sh,clone.sh,load.sh,verify.sh,prune.sh} "${PREFIX}/bin/"
-    install -m 0755 "${repository}/opensearch/"{load.sh,activate.sh} "${PREFIX}/opensearch/"
+    install -m 0755 "${repository}/.deploy/"{lib.sh,clone.sh,load.sh,verify.sh,prune.sh,switch.sh,migrate.sh} "${PREFIX}/bin/"
+    install -m 0755 "${repository}/opensearch/load.sh" "${PREFIX}/opensearch/"
+    # What an earlier release installed: it moved an alias the API no longer queries, and closed the
+    # index the API did.
+    rm -f "${PREFIX}/opensearch/activate.sh"
     install -m 0644 "${repository}/opensearch/"{lib.sh,bulk_load.py} "${PREFIX}/opensearch/"
     install -m 0644 "${repository}/opensearch/mappings/uniprot_entries.json" "${PREFIX}/opensearch/mappings/"
     install -m 0644 "${repository}/pipelines/lib/common.sh" "${PREFIX}/pipelines/lib/"
@@ -295,6 +301,25 @@ install_scripts() {
     commit=$(git -c safe.directory='*' -C "$repository" rev-parse HEAD 2>/dev/null || echo unknown)
     printf 'commit: %s\ninstalled: %s\n' "$commit" "$(date -u +'%F %T UTC')" > "${PREFIX}/INSTALLED"
     log "Installed the scripts of ${commit} in ${PREFIX}."
+}
+
+# switch.sh stops and starts OpenSearch as DEPLOY_USER, which a system service allows root alone.
+# Exactly those two commands, by full path, as sudo matches them, and checked by visudo before it is
+# put in place: a sudoers file sudo cannot parse stops sudo for everyone on the host.
+allow_opensearch_restart() {
+    local rule staged
+
+    rule="${DEPLOY_USER} ALL=(root) NOPASSWD: /usr/bin/systemctl stop opensearch, /usr/bin/systemctl start opensearch"
+    if [ -f "$SUDOERS_FILE" ] && [ "$(cat "$SUDOERS_FILE")" = "$(printf '%s\n%s' "$MARKER" "$rule")" ]; then
+        return 0
+    fi
+
+    staged=$(mktemp)
+    printf '%s\n%s\n' "$MARKER" "$rule" > "$staged"
+    visudo -c -q -f "$staged" > /dev/null || { rm -f "$staged"; die "visudo refuses the rule for ${DEPLOY_USER}, so it is not written."; }
+    install -m 0440 -o root -g root "$staged" "$SUDOERS_FILE"
+    rm -f "$staged"
+    log "Allowed ${DEPLOY_USER} to stop and start OpenSearch through sudo, for switch.sh."
 }
 
 add_repository() {
@@ -518,6 +543,7 @@ checkdep systemctl
 checkdep getent
 checkdep useradd
 checkdep usermod
+checkdep visudo "sudo"
 
 # Before anything on the host changes, so a refused run leaves it as it was.
 check_installed_version
@@ -526,6 +552,7 @@ ensure_user
 install_tools
 prepare_output_dir
 install_scripts
+allow_opensearch_restart
 
 # Installed with the tools above.
 checkdep curl
@@ -548,5 +575,6 @@ As ${DEPLOY_USER} (sudo -iu ${DEPLOY_USER}), none of it as root:
   3. To build: clone unipept-database, which build.sh needs whole, and install Rust with rustup
      (https://rustup.rs); the repository pins the toolchain. .deploy/build.sh in that clone reads
      the same deploy.conf.
+  4. On a host that runs the API, once: ${PREFIX}/bin/migrate.sh, which sets it up for switch.sh.
 EOF
 log "The host is ready."

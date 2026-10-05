@@ -61,7 +61,6 @@ printf '%s\n' "${STUB_UNIPROT_VERSION:-2026.03}" > "${OUT}/.version"
 PIPELINE
 
     make_loader "${CHECKOUT}/opensearch/load.sh" /work/loader-calls
-    make_loader "${CHECKOUT}/opensearch/activate.sh" /work/activate-calls
     chmod +x "${CHECKOUT}/pipelines/suffix-array/build.sh"
 
     # Through the configuration file, which is how a host sets this, so the suite covers that path
@@ -133,6 +132,11 @@ chown -R "${DEPLOY}:" "$WORK"
 setup_sshd
 
 
+# The lock loads, clones, switches and prunes take, one per host, where a host has it.
+mkdir -p /run/lock
+chmod 1777 /run/lock
+
+
 section "build.sh, clone.sh, load.sh and verify.sh as root"
 
 "${CHECKOUT}/.deploy/build.sh" --output-dir /work/as-root --scratch-dir /work/scratch > /work/last-output 2>&1
@@ -195,6 +199,32 @@ check_true "the database that was there is untouched" test -f "${OUT}/uniprot-20
 check_true "its own result is kept for inspection" test -d "${OUT}/.build"
 check_true "it says how to replace it" grep -q -- '--replace' /work/last-output
 
+# Not while a load of it reads the table this would replace.
+as_deployer touch /run/lock/unipept-load-2026-03.lock
+# shellcheck disable=SC2016 # $1 belongs to the inner shell
+setpriv --reuid "$DEPLOY" --regid "$DEPLOY" --init-groups bash -c 'exec 8>> "$1"; flock -x 8; exec sleep 30' _ /run/lock/unipept-load-2026-03.lock &
+loading=$!
+for _ in $(seq 50); do
+    as_deployer flock -n -x /run/lock/unipept-load-2026-03.lock true 2> /dev/null || break
+    sleep 0.1
+done
+build --output-dir "$OUT" --scratch-dir /work/scratch --replace
+check "--replace while a load of the version runs stops it" "$?" "2"
+check_true "and says so" grep -q 'a load of 2026-03 is running on this host' /work/last-output
+check_true "keeping the build" grep -qF "This build is in ${OUT}/.build" /work/last-output
+check_true "and the database that was there" test -f "${OUT}/uniprot-2026-03/marker"
+kill "$loading"
+wait "$loading" 2> /dev/null
+
+# Not while this host serves it: its files would change under the running API, with nothing checked.
+as_deployer ln -s uniprot-2026-03 "${OUT}/current"
+build --output-dir "$OUT" --scratch-dir /work/scratch --replace
+check "--replace of the version this host serves stops it" "$?" "2"
+check_true "and says to switch away first" grep -q '2026-03 is the version this host serves, so its files are not replaced' /work/last-output
+check_true "keeping the build" grep -qF "This build is in ${OUT}/.build" /work/last-output
+check_true "and the database that was there" test -f "${OUT}/uniprot-2026-03/marker"
+as_deployer unlink "${OUT}/current"
+
 build --output-dir "$OUT" --scratch-dir /work/scratch --replace
 check "--replace succeeds" "$?" "0"
 check_true "the old database is gone" test ! -f "${OUT}/uniprot-2026-03/marker"
@@ -220,10 +250,10 @@ check "a running API and OpenSearch stop it" "$?" "2"
 check_true "naming the API" grep -q 'The Unipept API is running' /work/last-output
 check_true "and OpenSearch" grep -q 'OpenSearch is running' /work/last-output
 # Each command on a line of its own, so a line copied from the message runs as it is.
-check_true "saying how to stop the API" grep -qx "  sudo systemctl --user -M ${DEPLOY}@ stop unipept-api" /work/last-output
+check_true "saying how to stop the API" grep -qx "  /opt/unipept-api/lib/deploy.sh stop" /work/last-output
 check_true "and OpenSearch" grep -qx "  sudo systemctl stop opensearch" /work/last-output
 check_true "and to start them again afterwards" grep -qx "  sudo systemctl start opensearch" /work/last-output
-check_true "both of them" grep -qx "  sudo systemctl --user -M ${DEPLOY}@ start unipept-api" /work/last-output
+check_true "both of them" grep -qx "  /opt/unipept-api/lib/deploy.sh start" /work/last-output
 check_true "nothing is built" test ! -e "${CHECK_OUT}/uniprot-2026-03"
 check_true "and before what an earlier build left is removed" test -e "${CHECK_OUT}/.build/kept"
 kill "$api_pid" 2> /dev/null; wait "$api_pid" 2> /dev/null
@@ -336,6 +366,41 @@ check "a version that is already here stops" "$?" "2"
 check_true "it says how to replace it" grep -q -- '--replace' /work/last-output
 check_true "it stops before copying anything" test ! -e "${LOCAL}/.clone"
 
+# The lock it swaps the copy in under, which it cannot open: found before the copy, hours earlier.
+mv /run/lock/unipept-opensearch.lock /run/lock/unipept-opensearch.lock.away 2> /dev/null
+touch /run/lock/unipept-opensearch.lock
+chmod 644 /run/lock/unipept-opensearch.lock
+clone --remote-output-dir "$REMOTE" --output-dir "$LOCAL" --replace
+check "a lock it cannot open stops it" "$?" "2"
+check_true "before copying anything" test ! -e "${LOCAL}/.clone"
+rm -f /run/lock/unipept-opensearch.lock
+mv /run/lock/unipept-opensearch.lock.away /run/lock/unipept-opensearch.lock 2> /dev/null
+
+as_deployer ln -s uniprot-2026-03 "${LOCAL}/current"
+clone --remote-output-dir "$REMOTE" --output-dir "$LOCAL" --replace
+check "--replace of the version this host serves stops" "$?" "2"
+check_true "it says to switch away first" grep -q '2026-03 is the version this host serves' /work/last-output
+check_true "before copying anything" test ! -e "${LOCAL}/.clone"
+as_deployer unlink "${LOCAL}/current"
+
+# A switch to the version while it is being copied, which takes hours on a real one.
+cat > "${STUBS}/scp" <<SCP
+#!/usr/bin/env bash
+/usr/bin/scp "\$@" || exit
+ln -sfn uniprot-2026-03 ${LOCAL}/current
+SCP
+chmod +x "${STUBS}/scp"
+printf 'do not lose me\n' | as_deployer tee "${LOCAL}/uniprot-2026-03/marker" > /dev/null
+clone --remote-output-dir "$REMOTE" --output-dir "$LOCAL" --replace
+check "a switch to it during the copy stops it before the copy replaces it" "$?" "2"
+check_true "and says so" grep -q '2026-03 is the version this host serves' /work/last-output
+check_true "and that the copy is removed" grep -q 'The copy is removed' /work/last-output
+check_true "which it is" test ! -e "${LOCAL}/.clone"
+check_true "the files the API reads are untouched" test -f "${LOCAL}/uniprot-2026-03/marker"
+as_deployer unlink "${LOCAL}/current"
+as_deployer rm -f "${LOCAL}/uniprot-2026-03/marker"
+rm "${STUBS}/scp"
+
 # An scp that loses the k-mer table on the way, which the remote has.
 cat > "${STUBS}/scp" <<SCP
 #!/usr/bin/env bash
@@ -403,15 +468,10 @@ check "the loader is called once" "$(grep -c -- '--uniprot-entries' /work/loader
 check_true "with the newest database, into an index of its version, at the instance named" \
     grep -qxF -- "--opensearch-url http://stub:9200 --uniprot-entries ${OUT}/uniprot-2026-03/tables/uniprot_entries.tsv.lz4 --index-name uniprot_entries-2026-03" \
     /work/loader-calls
-check_true "the alias the API queries is left alone" test ! -e /work/activate-calls
-check_true "it says the API does not query it yet" grep -q 'does not query it yet' /work/last-output
+check_true "it says how to switch to it" grep -qF 'until this host switches to it: switch.sh --uniprot-version 2026-03' /work/last-output
 
-rm -f /work/loader-calls
-load_proteins --output-dir "$OUT" --opensearch-url http://stub:9200 --activate
-check "--activate succeeds" "$?" "0"
-check_true "it points the alias at what it loaded" \
-    grep -qxF -- "--opensearch-url http://stub:9200 --index-name uniprot_entries-2026-03" /work/activate-calls
-check_true "after the load" test -s /work/loader-calls
+load_proteins --output-dir "$OUT" --activate
+check "--activate, which moved an alias the API no longer queries, is gone" "$?" "2"
 
 rm -f /work/loader-calls
 load_proteins --output-dir "$OUT" --uniprot-version 2025-11 --check
@@ -420,10 +480,98 @@ check_true "asking about the version's own index" \
     grep -qxF -- "--opensearch-url http://localhost:9200 --index-name uniprot_entries-2025-11 --check-complete" /work/loader-calls
 check "and loads nothing" "$(grep -c -- '--uniprot-entries' /work/loader-calls)" "0"
 
+# The version this host serves, whose index the API queries while it runs. A stand-in for OpenSearch
+# says whether that index is loaded to the end, as a real one would answer the mapping request.
+as_deployer ln -s uniprot-2026-03 "${OUT}/current"
+cat > "${STUBS}/curl" <<CURL
+#!/usr/bin/env bash
+case "\$*" in
+    *_mapping*)
+        if [ -e /work/index-whole ]; then printf '{"_meta":{"unipept_load":"complete"}}\n200'
+        elif [ -e /work/index-error ]; then printf 'too busy\n429'
+        else printf '{}\n200'; fi ;;
+    *_cat/aliases*) ;;
+    *) exit 7 ;;
+esac
+CURL
+chmod +x "${STUBS}/curl"
+touch /work/index-whole
 rm -f /work/loader-calls
+load_proteins --output-dir "$OUT"
+check "reloading the version this host serves stops it" "$?" "2"
+check_true "and says why" grep -q '2026-03 is the version this host serves, and uniprot_entries-2026-03 is loaded to the end' /work/last-output
+check_true "before the loader drops anything" test ! -e /work/loader-calls
+check_true "and says to switch away first" grep -q 'Switch this host to another version with switch.sh first' /work/last-output
 load_proteins --output-dir "$OUT" --replace-live
-check "--replace-live succeeds" "$?" "0"
-check_true "it is handed to the loader" grep -q -- '--index-name uniprot_entries-2026-03 --replace-live' /work/loader-calls
+check "--replace-live, which reloaded it under the running API, is gone" "$?" "2"
+load_proteins --output-dir "$OUT" --skip 0
+check "--skip 0 is refused too" "$?" "2"
+load_proteins --output-dir "$OUT" --skip 500
+check "and so is a load continued with --skip, which would change what the API answers" "$?" "2"
+load_proteins --output-dir "$OUT" --uniprot-version 2025-11
+check "another version loads beside it" "$?" "0"
+# An error from OpenSearch is not an index that is not whole.
+rm /work/index-whole
+touch /work/index-error
+load_proteins --output-dir "$OUT"
+check "OpenSearch answering with an error stops it" "$?" "2"
+check_true "and says so, rather than taking the index for not whole" grep -q 'OpenSearch did not say whether uniprot_entries-2026-03 is whole' /work/last-output
+rm /work/index-error
+touch /work/index-whole
+
+# A second load of one version, which would drop the index the first fills.
+as_deployer touch /run/lock/unipept-load-2025-11.lock
+# shellcheck disable=SC2016 # $1 belongs to the inner shell
+setpriv --reuid "$DEPLOY" --regid "$DEPLOY" --init-groups bash -c 'exec 8>> "$1"; flock -x 8; exec sleep 30' _ /run/lock/unipept-load-2025-11.lock &
+first_load=$!
+for _ in $(seq 50); do
+    as_deployer flock -n -x /run/lock/unipept-load-2025-11.lock true 2> /dev/null || break
+    sleep 0.1
+done
+load_proteins --output-dir "$OUT" --uniprot-version 2025-11
+check "a second load of a version stops it" "$?" "2"
+check_true "and says so" grep -q 'another load of 2025-11, or a build or a clone replacing it, is running' /work/last-output
+kill "$first_load"
+wait "$first_load" 2> /dev/null
+load_proteins --output-dir "$OUT" --uniprot-version 2025-11
+check "once it is done, it loads" "$?" "0"
+# A lock of its own it cannot open is said to be that, not taken for another load.
+mv /run/lock/unipept-load-2025-11.lock /run/lock/unipept-load-2025-11.lock.away
+touch /run/lock/unipept-load-2025-11.lock
+chmod 644 /run/lock/unipept-load-2025-11.lock
+load_proteins --output-dir "$OUT" --uniprot-version 2025-11
+check "a lock of its version it cannot open stops it" "$?" "2"
+check_true "and says so" grep -q 'without its lock, two loads of 2025-11' /work/last-output
+rm -f /run/lock/unipept-load-2025-11.lock
+mv /run/lock/unipept-load-2025-11.lock.away /run/lock/unipept-load-2025-11.lock
+
+# An index that is missing, or was not loaded to the end, gives the API nothing to lose.
+rm /work/index-whole
+rm -f /work/loader-calls
+load_proteins --output-dir "$OUT"
+check "a served version whose index is not whole loads" "$?" "0"
+check_true "into its index" grep -q -- '--index-name uniprot_entries-2026-03' /work/loader-calls
+load_proteins --output-dir "$OUT" --skip 500
+check "and so does its load, continued" "$?" "0"
+touch /work/index-whole
+as_deployer unlink "${OUT}/current"
+
+# A host that runs the API and has no current link yet: INDEX_LOCATION says what it serves.
+mkdir -p /opt/unipept-api/etc
+printf 'INDEX_LOCATION=%s/uniprot-2026-03/suffix-array\n' "$OUT" > /opt/unipept-api/etc/unipept-api.env
+load_proteins --output-dir "$OUT"
+check "without current, the version INDEX_LOCATION names is refused too" "$?" "2"
+check_true "and says why" grep -q '2026-03 is the version this host serves' /work/last-output
+as_deployer ln -s uniprot-2025-11 "${OUT}/current"
+load_proteins --output-dir "$OUT"
+check "and so it is where current points elsewhere" "$?" "2"
+as_deployer ln -sfn uniprot-2026-03 "${OUT}/current"
+load_proteins --output-dir "$OUT"
+check "and where current and INDEX_LOCATION name the same one" "$?" "2"
+check_true "saying so" grep -q '2026-03 is the version this host serves' /work/last-output
+as_deployer unlink "${OUT}/current"
+rm -f /opt/unipept-api/etc/unipept-api.env
+rm "${STUBS}/curl" /work/index-whole
 
 rm -f /work/loader-calls
 load_proteins --output-dir "$OUT" --uniprot-version 2025-11 --skip 500
@@ -461,6 +609,41 @@ rm "${STUBS}/curl" /work/disk-percent
 
 load_proteins --output-dir "$OUT" --opensearch-url http://stub:9200
 check_true "an OpenSearch that cannot be asked gives no warning" not grep -q 'watermark' /work/last-output
+
+
+section "load.sh waits for no switch"
+
+# switch.sh holds the lock exclusively while it stops OpenSearch; a load then would break part way.
+LOCK=/run/lock/unipept-opensearch.lock
+mkdir -p /run/lock
+chmod 1777 /run/lock
+as_deployer touch "$LOCK"
+# As the deploy user, as switch.sh runs: /run/lock is sticky, and even root may not open a file another
+# user owns there. setpriv replaces itself, so killing it releases the lock.
+# shellcheck disable=SC2016 # $1 belongs to the inner shell
+setpriv --reuid "$DEPLOY" --regid "$DEPLOY" --init-groups bash -c 'exec 9>> "$1"; flock -x 9; exec sleep 30' _ "$LOCK" &
+switcher=$!
+for _ in $(seq 50); do
+    as_deployer flock -n -s "$LOCK" true 2> /dev/null || break
+    sleep 0.1
+done
+rm -f /work/loader-calls
+load_proteins --output-dir "$OUT"
+check "a load during a switch stops it" "$?" "2"
+check_true "and says why" grep -q 'is running on this host; wait for it to finish' /work/last-output
+check_true "before the loader is called" test ! -e /work/loader-calls
+kill "$switcher"
+wait "$switcher" 2> /dev/null
+
+# A lock it cannot open is said to be that, not taken for a switch.
+mv "$LOCK" "${LOCK}.away"
+touch "$LOCK"
+chmod 644 "$LOCK"
+load_proteins --output-dir "$OUT"
+check "a lock it cannot open stops it" "$?" "2"
+check_true "and says so" grep -q "cannot open the lock ${LOCK} as ${DEPLOY}" /work/last-output
+check_true "not that another is running" not grep -q 'is running on this host; wait for it to finish' /work/last-output
+mv "${LOCK}.away" "$LOCK"
 
 
 section "load.sh refuses a database it cannot load"
@@ -504,10 +687,8 @@ check_true "none of these reaches the loader" test ! -e /work/loader-calls
 section "load.sh whose loader fails"
 
 printf '#!/usr/bin/env bash\nexit 1\n' > "${CHECKOUT}/opensearch/load.sh"
-rm -f /work/activate-calls
-load_proteins --output-dir "$OUT" --activate
+load_proteins --output-dir "$OUT"
 check "it stops" "$?" "2"
-check_true "nothing is activated" test ! -e /work/activate-calls
 check_true "it does not say it finished" not grep -q 'Finished loading' /work/last-output
 check_true "the database is left in place, to load again" test -s "${OUT}/uniprot-2026-03/tables/uniprot_entries.tsv.lz4"
 as_deployer git -C "$CHECKOUT" checkout -q -- opensearch/load.sh
@@ -860,13 +1041,18 @@ check_true "it says what is left to do as that user" grep -q "As ${DEPLOY} (sudo
 section "install.sh installs the scripts a host runs"
 
 PREFIX_A=/work/opt-a
+# What an earlier release installed, and this one removes.
+mkdir -p "${PREFIX_A}/opensearch"
+touch "${PREFIX_A}/opensearch/activate.sh"
 packaged_host
 install_opensearch --user "$DEPLOY" --output-dir "$OUT" --prefix "$PREFIX_A"
 check "it succeeds" "$?" "0"
+check_true "the activate.sh an earlier release installed is gone" test ! -e "${PREFIX_A}/opensearch/activate.sh"
 check_true "the scripts a host runs are there" \
-    test -x "${PREFIX_A}/bin/clone.sh" -a -x "${PREFIX_A}/bin/load.sh" -a -x "${PREFIX_A}/bin/verify.sh" -a -x "${PREFIX_A}/bin/prune.sh"
+    test -x "${PREFIX_A}/bin/clone.sh" -a -x "${PREFIX_A}/bin/load.sh" -a -x "${PREFIX_A}/bin/verify.sh" -a -x "${PREFIX_A}/bin/prune.sh" \
+        -a -x "${PREFIX_A}/bin/switch.sh" -a -x "${PREFIX_A}/bin/migrate.sh"
 check_true "and what they call" \
-    test -x "${PREFIX_A}/opensearch/activate.sh" -a -f "${PREFIX_A}/opensearch/lib.sh" \
+    test -x "${PREFIX_A}/opensearch/load.sh" -a -f "${PREFIX_A}/opensearch/lib.sh" \
         -a -f "${PREFIX_A}/opensearch/mappings/uniprot_entries.json" -a -f "${PREFIX_A}/pipelines/lib/common.sh"
 check_true "but not build.sh, which needs the whole repository" test ! -e "${PREFIX_A}/bin/build.sh"
 check "the scripts belong to root, which alone changes them" "$(stat -c %U "${PREFIX_A}/bin/load.sh")" "root"
@@ -878,6 +1064,28 @@ check "INSTALLED names the commit" "$(sed -n 's/^commit: //p' "${PREFIX_A}/INSTA
 as_deployer "${PREFIX_A}/bin/verify.sh" > /work/last-output 2>&1
 check "the installed verify.sh runs, reading the installed deploy.conf" "$?" "0"
 check_true "and checks the newest database there" grep -qF "Checking ${OUT}/uniprot-2026-03/suffix-array" /work/last-output
+
+
+section "install.sh lets the deploy user stop and start OpenSearch, and nothing more"
+
+SUDOERS=/etc/sudoers.d/unipept-opensearch
+# sudo -l answers only for a command that is there, and this container runs no systemd.
+printf '#!/bin/sh\nexit 1\n' > /usr/bin/systemctl
+chmod 755 /usr/bin/systemctl
+check "the rule is root's, and only readable" "$(stat -c '%U %a' "$SUDOERS")" "root 440"
+check_true "visudo accepts it" visudo -c -q -f "$SUDOERS"
+check_true "it allows a stop" sudo -l -U "$DEPLOY" /usr/bin/systemctl stop opensearch
+check_true "and a start" sudo -l -U "$DEPLOY" /usr/bin/systemctl start opensearch
+check_true "not a restart" not sudo -l -U "$DEPLOY" /usr/bin/systemctl restart opensearch
+check_true "or another service" not sudo -l -U "$DEPLOY" /usr/bin/systemctl stop ssh
+check_true "or anything else" not sudo -l -U "$DEPLOY" /bin/bash
+check_true "without a password" grep -q "^${DEPLOY} ALL=(root) NOPASSWD: " "$SUDOERS"
+rm -f /usr/bin/systemctl
+
+touch -d '2000-01-01' "$SUDOERS"
+install_opensearch --user "$DEPLOY" --output-dir "$OUT" --prefix "$PREFIX_A"
+check "a second run succeeds" "$?" "0"
+check "and leaves the rule as it is" "$(stat -c %Y "$SUDOERS")" "$(date -d '2000-01-01' +%s)"
 rm -f /work/loader-calls
 as_deployer "${PREFIX_A}/bin/load.sh" --check > /work/last-output 2>&1
 check "the installed load.sh reaches the installed loader" "$?" "0"

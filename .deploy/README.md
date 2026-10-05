@@ -8,15 +8,18 @@ orchestrate; the pipeline itself lives in `pipelines/` and the loader in `opense
 - `clone.sh` copies a finished database from another host. The build runs once; every other host
   clones the result.
 - `load.sh` loads the proteins of a database that is in place into the OpenSearch of this host,
-  as an index of that version beside the one the API queries. With `--activate` it then switches
-  the API to it; that is the only step that changes what the API's protein search answers.
+  as an index of that version beside the one the API queries. It changes nothing the API answers.
+- `switch.sh` switches the API on this host to another version it holds, its files and its
+  proteins together, stopping the API and OpenSearch to do so. See
+  [Switching the API to another version](#switching-the-api-to-another-version).
 - `verify.sh` checks a finished database against the files the API needs. The others make the same
   checks, through the same `verify_database` in `lib.sh`: `build.sh` before it puts a build in
   place, `clone.sh` on the remote host before it copies and again on the copy, and `load.sh`
   before it loads. Run it by hand to check a database that is already there.
 
-A new database on a host is therefore two steps, `build.sh` or `clone.sh` and then `load.sh`. A
-load that fails is rerun on its own, without building or copying again.
+A new database on a host is therefore two steps, `build.sh` or `clone.sh` and then `load.sh`, and
+serving it a third, `switch.sh`. A load that fails is rerun on its own, without building or
+copying again.
 
 `distribute.sh` does those two steps on every API server at once, from wherever it is run. See
 [Distributing a database](#distributing-a-database).
@@ -131,7 +134,8 @@ A build writes to `${OUTPUT_DIR}/.build/` and is renamed into place at the end, 
 this host serves is only ever replaced by a finished one. A build whose version already exists
 stops and keeps its result in `.build/`; `--replace` lets it take the place of the old one. The
 same holds for `clone.sh`, through `${OUTPUT_DIR}/.clone/`. Both therefore need room for two
-databases at the moment they finish.
+databases at the moment they finish. Neither replaces the version this host serves, whose files the
+running API has open: switch away from it with `switch.sh` first.
 
 Before it removes what an earlier build left in `.build/`, `build.sh` checks the host has room for
 the build, and stops, naming every problem, when it does not:
@@ -142,10 +146,10 @@ the build, and stops, naming every problem, when it does not:
   less than 1.2 times that size in memory. The previous database is the measure of the next; a
   first build has none, and is only checked for the API and OpenSearch.
 
-Take the host out of the pool, and stop both before building:
+Stop both before building:
 
 ```sh
-sudo systemctl --user -M unipept@ stop unipept-api
+/opt/unipept-api/lib/deploy.sh stop
 sudo systemctl stop opensearch
 ```
 
@@ -157,33 +161,99 @@ and start them again afterwards, OpenSearch first. `--skip-checks` builds anyway
 .deploy/load.sh                                # the newest one under OUTPUT_DIR
 .deploy/load.sh --uniprot-version 2026-03
 .deploy/load.sh --uniprot-version 2026-03 --skip 120000000   # continue a load that stopped
-.deploy/load.sh --uniprot-version 2026-03 --activate         # and switch the API to it
 ```
 
 It checks the database as `verify.sh` does, and refuses one that fails, before it loads
-`tables/uniprot_entries.tsv.lz4` into `uniprot_entries-<version>`. The API queries
-`uniprot_entries`, which is an alias, so a load changes nothing the API answers, and a load that
+`tables/uniprot_entries.tsv.lz4` into `uniprot_entries-<version>`. The API queries the index of the
+version this host serves, so a load of another one changes nothing the API answers, and a load that
 fails can be rerun at any time. `--skip` passes over the rows a load that stopped already wrote,
-and keeps the index as it is.
+and keeps the index as it is. The loader marks an index once its last row is in, and
+`load.sh --check` asks for that mark.
 
-The switch is `opensearch/activate.sh`, which `--activate` runs after the load:
+`opensearch/load.sh`, which this calls, is the loader alone: it drops and fills the index it is
+named, with none of these checks and no lock. Load through `bin/load.sh`.
 
-- it points `uniprot_entries` at the new index in one request, so the API never finds the name
-  missing. It refuses an index that is not there, holds no documents, or was not loaded to the
-  end: the loader marks an index once its last row is in, and `load.sh --check` asks for that mark;
-- it closes the index it switched away from, which frees the memory that holds and keeps its data.
-  Going back is activating that one again, which opens it. It deletes nothing: see
-  [Removing old versions](#removing-old-versions);
-- on a host loaded before versioned indices, where `uniprot_entries` is still an index, the first
-  switch keeps that index as `uniprot_entries-legacy`, by a clone that shares its files, so there
-  is something to go back to from the start.
+Loading into a version this host serves is refused while its index is loaded to the end, from the
+start or continued with `--skip`: it would change what the running API answers with nothing stopped.
+Switch away from it with `switch.sh` first, as any change to what the API serves goes through a
+stop. Where that index is missing or was not loaded to the end, the API answers from it badly
+already, and loading it is how the host gets it back, so that goes ahead. Which versions are served,
+`current` says, `INDEX_LOCATION` where it names a version's directory itself, and an alias
+`uniprot_entries` an earlier release left. Two loads of the same version never run at once: the
+second stops.
 
-Switching the index is only half of moving the API to a new version: its files are the other
-half, `INDEX_LOCATION` in its environment file. Until the API's rollout switches both together,
-`--activate` moves only the proteins, as a load did before.
+## Switching the API to another version
 
-Reloading the version the alias points at is refused, because the loader drops it first and the API
-would search a partial index until it finishes. `--replace-live` does it anyway.
+As `unipept`, on the host, once the version is there and its proteins are loaded:
+
+```sh
+bin/switch.sh --uniprot-version 2026-03 --check      # can it switch? changes nothing
+bin/switch.sh --uniprot-version 2026-03
+bin/switch.sh --back                                 # to the version before
+```
+
+The API reads what it serves when it starts: `INDEX_LOCATION` names the suffix array through the
+`current` link in `OUTPUT_DIR`, and the `.version` there names the index of its proteins,
+`uniprot_entries-2026-03`. A switch moves that link while the API and OpenSearch are stopped, so
+the files and the proteins always change together.
+
+- **It checks everything first**, while both still run, and reports every problem: the API installed
+  is unipept-api 2.7.0 or newer, and so is the one `deploy.sh rollback` would go back to,
+  `bin/unipept-api.previous` (after the rollout of 2.7.0 that is still the 2.6.x one: remove it, as
+  `unipept`, before the first switch), the version's files, its index loaded to the end, the index
+  of the version it leaves open and whole to go back to, `INDEX_LOCATION` naming `current`,
+  `OUTPUT_DIR` writable for the links, no load running, the sudo rule below, and the API's own
+  `deploy.sh check --index` on the new files, which covers the memory its variant needs for them. A
+  host with any problem is left as it is. The one change before the stop is opening the new
+  version's index where it is closed, which the API's check needs, and it is only made once
+  everything else has passed. `--check` makes no change at all, so on a closed index it says the
+  API's check could not run.
+- **Loads and switches exclude each other**, through one lock per host,
+  `/run/lock/unipept-opensearch.lock` unless `OPENSEARCH_LOCK` says otherwise: `load.sh` holds it
+  shared while it loads, and a switch exclusively from its checks to its end. Whichever comes
+  second stops, and says why.
+- **Then** it stops the API and OpenSearch, points `current` at the new version and `previous` at
+  the old one, starts OpenSearch and waits for the new index, and starts the API, which waits
+  until it answers `/health` and `/health/database`.
+- **A start that fails, a link that cannot be moved, or an interrupt**, points the links back and
+  starts both on the version it left, so the host serves what it served. It says which of the two
+  it ended on.
+- **Once the API serves, it removes the alias `uniprot_entries`** an earlier release of these
+  scripts left, which only an API from before versioned indices queried, and **closes the indices of
+  versions older than both**, which frees their memory. It refuses to switch while the API
+  `deploy.sh rollback` would go back to is older than 2.7.0: that one queries the alias, which holds
+  the proteins of the version served before any switch, and after one would serve the new files with
+  them. Removing `bin/unipept-api.previous`, as `unipept`, gives up that rollback. It deletes
+  nothing; `prune.sh` does, and takes the same lock, so it never removes a version a load or a
+  switch is working on.
+
+It knows nothing of a load balancer: take the host out of the pool first where it is in one.
+
+OpenSearch is a system service, so stopping it takes root. `install.sh` allows `unipept` exactly
+`systemctl stop opensearch` and `systemctl start opensearch` through sudo, without a password, in
+`/etc/sudoers.d/unipept-opensearch`, and nothing more.
+
+### Setting up a host for it
+
+Once, on a host that runs the API, as `unipept`:
+
+```sh
+bin/migrate.sh
+```
+
+It points `current` at the version the API's `INDEX_LOCATION` names, and, on a host loaded before
+versioned indices, keeps the proteins it serves in the index named after that version too: a clone
+of `uniprot_entries`, or of `uniprot_entries-legacy` where an alias of that name points there, as an
+earlier release of these scripts left it, which costs no copy. Neither changes what the API serves,
+and running it again changes nothing on a host that is set up. What is left is one line in the API's
+environment file, which it asks for:
+
+```sh
+INDEX_LOCATION=/mnt/data/current/suffix-array
+```
+
+It names the same files, so nothing changes until the API next starts. After that, `switch.sh` is
+how the version changes.
 
 ## Distributing a database
 
@@ -211,7 +281,8 @@ connection, which that server's `deploy.conf` decides for its `clone.sh`, and wh
 checks.
 
 Nothing it does changes what the API serves: the copy lands beside the database in use, and the
-load in an index of its own, so every server stays in rotation. The API's rollout switches them.
+load in an index of its own, so every server stays in rotation. `switch.sh` on each server switches
+it.
 
 - **It never builds.** A version the source does not have whole stops it, before any server is
   touched.
@@ -235,13 +306,17 @@ Every version stays on a host until this removes it, its directory and its OpenS
 together, so going back to one is a switch rather than a build or a copy. A closed index costs no
 memory; what old versions cost is disk.
 
-What the API serves is two things, which can be on different versions for a while: the proteins,
-through the `uniprot_entries` alias, and the files, through `INDEX_LOCATION` in the API's
-environment file, which it reads where the API runs on the host. `--activate` moves only the first.
-It keeps both versions, every version newer than the older of the two, since those are loaded ahead
-of a switch still to come, and the `--keep` newest ones older than that. The old index kept at a
-host's first switch, `uniprot_entries-legacy`, counts as the oldest. Without an alias, or with an
-environment file it cannot read or that names no version, it removes nothing.
+It keeps the version `current` points at, the one `previous` points at, the one `INDEX_LOCATION`
+names where it names one rather than going through `current`, every version newer than the oldest of
+those, since those are loaded ahead of a switch still to come, and the `--keep` newest ones older
+than that. What a host loaded before versioned indices kept, `uniprot_entries-legacy` and
+`uniprot_entries` itself, counts as the oldest, and only once nothing may still need it: the API
+installed is unipept-api 2.7.0 or newer, and so is the one `deploy.sh rollback` would go back to,
+both of which query the index of the version they serve, `INDEX_LOCATION` goes through `current`,
+and that index is open and loaded to the end. Until then it may be the only copy of the proteins an
+API serves. Whatever an alias of the old name still points at is kept too. Without a `current` link,
+or with API settings it cannot read, it removes nothing. It takes the same lock as a load and a
+switch, and `migrate.sh` takes it too.
 
 `load.sh` warns when OpenSearch's disk is past its low watermark, 85% unless the cluster sets
 another. At 95% OpenSearch makes every index read-only, and a load running then fails part way, so
