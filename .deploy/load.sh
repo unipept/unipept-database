@@ -113,7 +113,7 @@ if is_served "$UNIPROT_VERSION" strict; then
     esac
 fi
 
-warn_opensearch_disk "$OPENSEARCH_URL"
+warn_opensearch_disk
 
 log "Started loading UniProtKB ${UNIPROT_VERSION} into ${INDEX_NAME} at ${OPENSEARCH_URL}."
 loader_arguments=(--opensearch-url "$OPENSEARCH_URL" --uniprot-entries "$ENTRIES" --index-name "$INDEX_NAME")

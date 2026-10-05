@@ -188,14 +188,14 @@ ensure_versioned_index() {
 # .deploy/prune.sh removes it, so this is how running out is heard about before a load breaks on it.
 # Says nothing when OpenSearch cannot be asked: the load that follows reports that itself.
 warn_opensearch_disk() {
-    local url="$1" watermark used
+    local watermark used
 
     watermark=$(curl -s -f --max-time 10 \
-        "${url}/_cluster/settings?include_defaults=true&flat_settings=true&filter_path=*.cluster.routing.allocation.disk.watermark.low" 2>/dev/null \
+        "${OPENSEARCH_URL}/_cluster/settings?include_defaults=true&flat_settings=true&filter_path=*.cluster.routing.allocation.disk.watermark.low" 2>/dev/null \
         | sed -n 's/.*"cluster.routing.allocation.disk.watermark.low":"\([0-9]*\)%".*/\1/p') || true
     [ -n "$watermark" ] || watermark=85
 
-    used=$(curl -s -f --max-time 10 "${url}/_cat/allocation?h=disk.percent" 2>/dev/null \
+    used=$(curl -s -f --max-time 10 "${OPENSEARCH_URL}/_cat/allocation?h=disk.percent" 2>/dev/null \
         | awk '$1 ~ /^[0-9]+$/ && $1 > max { max = $1 } END { if (max != "") print max }') || true
     [ -n "$used" ] || return 0
 

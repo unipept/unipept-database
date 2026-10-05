@@ -190,7 +190,7 @@ check_api() {
     "$API_DEPLOY" check --index "${TARGET_DIR}/suffix-array" > /dev/null \
         || problem "the API's own check refuses ${TARGET_DIR}/suffix-array (above)."
 
-    warn_opensearch_disk "$OPENSEARCH_URL"
+    warn_opensearch_disk
 }
 
 wait_for_opensearch() {
