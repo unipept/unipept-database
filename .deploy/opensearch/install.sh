@@ -46,7 +46,6 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${HERE}/../lib.sh"
 
 trap errorAndExit ERR
-trap 'exit 2' USR1
 
 # The settings only this script has.
 
@@ -281,16 +280,18 @@ install_scripts() {
     local repository="${HERE}/../.." commit
 
     install -d -m 0755 "$PREFIX" "${PREFIX}/bin" "${PREFIX}/bin/lib" "${PREFIX}/opensearch/mappings" "${PREFIX}/pipelines/lib"
-    # What lib.sh loads first, so a script started meanwhile finds what the lib.sh beside it loads.
+    # What is loaded before what loads it, so a script started meanwhile finds the files its own
+    # release has: the libraries first, then the loader, then the scripts.
+    install -m 0644 "${repository}/pipelines/lib/common.sh" "${PREFIX}/pipelines/lib/"
+    install -m 0644 "${repository}/opensearch/"{lib.sh,bulk_load.py} "${PREFIX}/opensearch/"
+    install -m 0644 "${repository}/opensearch/mappings/uniprot_entries.json" "${PREFIX}/opensearch/mappings/"
     install -m 0644 "${repository}/.deploy/lib/"*.sh "${PREFIX}/bin/lib/"
-    install -m 0755 "${repository}/.deploy/"{lib.sh,clone.sh,load.sh,verify.sh,prune.sh,switch.sh,migrate.sh} "${PREFIX}/bin/"
     install -m 0755 "${repository}/opensearch/load.sh" "${PREFIX}/opensearch/"
+    install -m 0755 "${repository}/.deploy/lib.sh" "${PREFIX}/bin/"
+    install -m 0755 "${repository}/.deploy/"{clone.sh,load.sh,verify.sh,prune.sh,switch.sh,migrate.sh} "${PREFIX}/bin/"
     # What an earlier release installed: it moved an alias the API no longer queries, and closed the
     # index the API did.
     rm -f "${PREFIX}/opensearch/activate.sh"
-    install -m 0644 "${repository}/opensearch/"{lib.sh,bulk_load.py} "${PREFIX}/opensearch/"
-    install -m 0644 "${repository}/opensearch/mappings/uniprot_entries.json" "${PREFIX}/opensearch/mappings/"
-    install -m 0644 "${repository}/pipelines/lib/common.sh" "${PREFIX}/pipelines/lib/"
 
     install -d -m 0755 -o root -g root "${PREFIX}/etc"
     if [ ! -f "${PREFIX}/etc/deploy.conf" ]; then
