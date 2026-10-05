@@ -34,7 +34,7 @@ api_follows_current() {
     [[ "$location" == */current/suffix-array ]] || return 1
     named=$(readlink -f "${location%/current/suffix-array}") || return 1
     output=$(readlink -f "$OUTPUT_DIR") || return 1
-    [ -n "$named" ] && [ "$named" = "$output" ]
+    [ "$named" = "$output" ]
 }
 
 # The versions this host serves, one per line, in this order: what current points at, what
