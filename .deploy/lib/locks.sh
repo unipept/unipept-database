@@ -17,13 +17,30 @@ cannot_open_lock() {
     echo "Error: cannot open the lock ${1} as $(id -un)." 1>&2
 }
 
+# Opens a lock file for flock on a file descriptor of this shell, made first where no one has made
+# it. For reading, which is all flock needs: /run/lock is sticky, so opening another user's file
+# there for writing is refused even to root, which is how opensearch/install.sh takes these. As
+# unipept-api's take_rollout_lock opens its lock. On descriptor 8 or 9, the two these locks use.
+# Fails, saying so, where it cannot.
+open_lock() {
+    local fd=$1 lock=$2
+
+    {
+        { [ -e "$lock" ] || : >> "$lock"; } &&
+            case $fd in
+                8) exec 8< "$lock" ;;
+                9) exec 9< "$lock" ;;
+            esac
+    } 2> /dev/null || { cannot_open_lock "$lock"; return 2; }
+}
+
 # Loads and switches exclude each other: a switch stops OpenSearch, which breaks a load running then.
 # A load takes OPENSEARCH_LOCK shared, so loads of different versions still run side by side, and a
 # switch takes it exclusively, from its checks to its end. On file descriptor 9, held until the
 # script exits. Fails, rather than waits: 1 where the other holds it, 2 where the lock cannot be
 # opened at all, which says so.
 take_opensearch_lock() {
-    { exec 9>> "$OPENSEARCH_LOCK"; } 2> /dev/null || { cannot_open_lock "$OPENSEARCH_LOCK"; return 2; }
+    open_lock 9 "$OPENSEARCH_LOCK" || return 2
     if [ -n "${2:-}" ]; then
         # Waiting, up to the seconds given, where giving up would throw away work already done.
         flock -w "$2" "$1" 9
@@ -34,7 +51,7 @@ take_opensearch_lock() {
 
 # Whether this user can take OPENSEARCH_LOCK at all, for a check made before the work that needs it.
 opensearch_lock_usable() {
-    ( exec 9>> "$OPENSEARCH_LOCK" ) 2> /dev/null
+    ( open_lock 9 "$OPENSEARCH_LOCK" ) 2> /dev/null
 }
 
 # Loads of different versions run side by side, but two of the same version would drop the index
@@ -45,7 +62,7 @@ opensearch_lock_usable() {
 take_load_lock() {
     local lock
     lock="$(dirname "$OPENSEARCH_LOCK")/unipept-load-${1}.lock"
-    { exec 8>> "$lock"; } 2> /dev/null || { cannot_open_lock "$lock"; return 2; }
+    open_lock 8 "$lock" || return 2
     flock -n -x 8
 }
 

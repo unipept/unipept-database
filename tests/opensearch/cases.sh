@@ -450,7 +450,7 @@ wait "$loader" 2> /dev/null
 # A lock it cannot open is said to be that, not taken for a load.
 mv "$LOCK" "${LOCK}.away"
 touch "$LOCK"
-chmod 644 "$LOCK"
+chmod 600 "$LOCK"
 switch "${WORK}/switch-lockopen.log" --uniprot-version 2027-02
 check "a lock it cannot open stops it" "$rc" "2"
 check_true "and says so" grep -q "cannot open the lock ${LOCK} as unipept" "${WORK}/switch-lockopen.log"

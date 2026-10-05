@@ -279,6 +279,15 @@ prepare_output_dir() {
 install_scripts() {
     local repository="${HERE}/../.." commit
 
+    # A load, a switch, a prune or migrate.sh running from these files while they are replaced
+    # could pair a new lib.sh with an old script, or start opensearch/load.sh from the new release
+    # halfway through a run of the old one. Each holds OPENSEARCH_LOCK, so this holds it
+    # exclusively until it is done, and refuses while one runs. /run/lock is emptied at boot, and a
+    # lock file root made here could not be opened by the deploy user, so it is made the deploy
+    # user's, as the first script to take it would have made it.
+    [ -e "$OPENSEARCH_LOCK" ] || install -m 0644 -o "$DEPLOY_USER" -g "$DEPLOY_USER" /dev/null "$OPENSEARCH_LOCK"
+    take_opensearch_lock -x || die "$(lock_refused $?) Install once it has finished."
+
     install -d -m 0755 "$PREFIX" "${PREFIX}/bin" "${PREFIX}/bin/lib" "${PREFIX}/opensearch/mappings" "${PREFIX}/pipelines/lib"
     # What is loaded before what loads it, so a script started meanwhile finds the files its own
     # release has: the libraries first, then the loader, then the scripts.
@@ -287,7 +296,7 @@ install_scripts() {
     install -m 0644 "${repository}/opensearch/mappings/uniprot_entries.json" "${PREFIX}/opensearch/mappings/"
     install -m 0644 "${repository}/.deploy/lib/"*.sh "${PREFIX}/bin/lib/"
     install -m 0755 "${repository}/opensearch/load.sh" "${PREFIX}/opensearch/"
-    install -m 0755 "${repository}/.deploy/lib.sh" "${PREFIX}/bin/"
+    install -m 0644 "${repository}/.deploy/lib.sh" "${PREFIX}/bin/"
     install -m 0755 "${repository}/.deploy/"{clone.sh,load.sh,verify.sh,prune.sh,switch.sh,migrate.sh} "${PREFIX}/bin/"
     # What an earlier release installed: it moved an alias the API no longer queries, and closed the
     # index the API did.
