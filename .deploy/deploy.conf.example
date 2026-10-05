@@ -4,7 +4,7 @@
 # where it has one, and otherwise this host's installed one. Neither is in this repository.
 #
 # Only what a host has to decide is listed. Everything the scripts already default to sensibly is
-# left out, so this file cannot go stale. The defaults are in lib.sh and in each script.
+# left out, so this file cannot go stale. The defaults are in lib/config.sh and in each script.
 #
 # A flag on the command line wins over this file, and this file wins over those defaults.
 

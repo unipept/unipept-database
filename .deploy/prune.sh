@@ -8,9 +8,9 @@
 # is a switch and not a rebuild. What that costs is disk, which is what this gives back.
 #
 # Kept, whatever --keep says:
-#   - every version this host serves, by served_versions in lib.sh: what `current` points at, what
-#     INDEX_LOCATION names where it names a version's directory itself, and what an alias of the old
-#     name points at;
+#   - every version this host serves, by served_versions in lib/api.sh: what `current` points at,
+#     what INDEX_LOCATION names where it names a version's directory itself, and what an alias of
+#     the old name points at;
 #   - the one `previous` points at, which switch.sh --back goes to;
 #   - every version newer than the oldest of those, which is loaded ahead of a switch still to come;
 #   - the --keep newest versions older than that, to go back to.
