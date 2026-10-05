@@ -10,9 +10,9 @@ DATASTORE_TABLES=(taxons lineages interpro_entries go_terms ec_numbers proteomes
 PIPELINE_TABLES=(uniprot_entries "${DATASTORE_TABLES[@]}")
 
 # What the API needs under the directory it is pointed at, relative to it. The same list as
-# INDEX_FILES in unipept-api/.deploy/lib.sh: that repository starts a service against this layout
-# and this one produces it, so the two have to agree. A change here is a change there. The tables
-# come from DATASTORE_TABLES, so one fill_datastore writes is one this checks.
+# INDEX_FILES in unipept-api/.deploy/server/deploy.sh: that repository starts a service against this
+# layout and this one produces it, so the two have to agree. A change here is a change there. The
+# tables come from DATASTORE_TABLES, so one fill_datastore writes is one this checks.
 INDEX_FILES=(.version sa.bin proteins.bin mapping.bin datastore/sampledata.json)
 for datastore_table in "${DATASTORE_TABLES[@]}"; do
     INDEX_FILES+=("datastore/${datastore_table}.tsv")
