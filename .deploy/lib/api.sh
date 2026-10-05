@@ -12,13 +12,15 @@ api_index_location() {
 
 # Whether INDEX_LOCATION names the suffix array through current, so the API follows a switch. By
 # the directories they resolve to, the one holding current, so a trailing slash or a path through a
-# link to OUTPUT_DIR says the same.
+# link to OUTPUT_DIR says the same. Two paths that resolve to nothing are not the same one.
 api_follows_current() {
-    local location
+    local location named output
     location=$(api_index_location)
     location="${location%/}"
     [[ "$location" == */current/suffix-array ]] || return 1
-    [ "$(readlink -f "${location%/current/suffix-array}")" = "$(readlink -f "$OUTPUT_DIR")" ]
+    named=$(readlink -f "${location%/current/suffix-array}") || return 1
+    output=$(readlink -f "$OUTPUT_DIR") || return 1
+    [ -n "$named" ] && [ "$named" = "$output" ]
 }
 
 # The versions this host serves, one per line, in this order: what current points at, what
