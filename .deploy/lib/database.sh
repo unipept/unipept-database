@@ -1,11 +1,10 @@
 # shellcheck shell=bash
 #
-# What a finished database holds, how it is checked, and how one is put in place. Sourced through
-# .deploy/lib.sh, after versions.sh, whose read_version and database_version_of it uses.
+# What a finished database holds, how it is checked, and how one is put in place. Uses read_version
+# and database_version_of from versions.sh. Sourced through .deploy/lib.sh.
 
 # What the pipeline writes. uniprot_entries feeds the suffix array and OpenSearch; the other six
 # are the datastore the API reads.
-# shellcheck disable=SC2034 # read by the scripts that source this file
 DATASTORE_TABLES=(taxons lineages interpro_entries go_terms ec_numbers proteomes)
 # shellcheck disable=SC2034 # read by the scripts that source this file
 PIPELINE_TABLES=(uniprot_entries "${DATASTORE_TABLES[@]}")
@@ -90,15 +89,21 @@ check_index_version() {
 
 # The whole contract a database is held to before the API is pointed at it, reporting every
 # failure rather than the first. build.sh, clone.sh, load.sh and verify.sh all check through this,
-# so a check added here is one all four make. clone.sh also sends it to the remote host, so it may
-# only call check_index, check_index_version, database_version_of and read_version, and read the
-# lists they read: clone.sh sends exactly those.
+# so a check added here is one all four make. clone.sh also runs it on the remote host, through
+# verify_database_source, so whatever it calls has to be listed there.
 verify_database() {
     local index="$1" status=0
 
     check_index "$index" || status=1
     check_index_version "$index" || status=1
     return "$status"
+}
+
+# verify_database as code another host runs on its own: the functions it calls and the lists they
+# read, for clone.sh to check a database before it copies it.
+verify_database_source() {
+    declare -p INDEX_FILES OPTIONAL_INDEX_FILES
+    declare -f verify_database check_index check_index_version database_version_of read_version
 }
 
 # Puts a finished build where the API reads it. The directory it replaces is kept until the rename
@@ -113,26 +118,4 @@ swap_into_place() {
     fi
     mv "$staging" "$target"
     rm -rf "${previous:?}"
-}
-
-# Clones a repository at the tip of its default branch and prints the commit it got.
-clone_repo() {
-    local url="$1" target="$2"
-
-    rm -rf "${target:?}"
-    git clone --quiet "$url" "$target" || die "could not clone $url"
-    git -C "$target" rev-parse HEAD
-}
-
-# What this build was made of, next to the index it belongs to.
-write_build_info() {
-    local target="$1" uniprot_version="$2" database_commit="$3" index_commit="${4:-none}"
-
-    cat > "$target/build-info.txt" <<INFO
-built: $(date -u +'%F %T UTC')
-uniprot: ${uniprot_version}
-unipept-database: ${database_commit}
-unipept-index: ${index_commit}
-sources: ${DATABASE_SOURCES:-none}
-INFO
 }

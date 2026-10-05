@@ -33,7 +33,6 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${HERE}/lib.sh"
 
 trap errorAndExit ERR
-trap 'exit 2' USR1
 
 # The settings only this script has, before read_conf, so deploy.conf can set them.
 

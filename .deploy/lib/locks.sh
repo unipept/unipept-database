@@ -1,7 +1,21 @@
 # shellcheck shell=bash
 #
-# The locks that keep the scripts on one host from working on the same thing at once. Sourced
-# through .deploy/lib.sh, after config.sh, which sets OPENSEARCH_LOCK.
+# The locks that keep the scripts on one host from working on the same thing at once. Needs
+# nothing else. Sourced through .deploy/lib.sh.
+
+# The lock that keeps loads and switches apart. One per host, as the OpenSearch it guards is, whatever
+# OUTPUT_DIR a run is given; /run/lock is there for every user to take one in.
+OPENSEARCH_LOCK=${OPENSEARCH_LOCK:-/run/lock/unipept-opensearch.lock}
+
+# Seconds a build or a clone waits for that lock once its work is done, rather than throw the work
+# away: a switch holds it while OpenSearch starts, which takes minutes.
+# shellcheck disable=SC2034 # read by the scripts that source this file
+readonly LOCK_WAIT=3600
+
+# What a script says where a lock file cannot be opened, which is a permission to fix.
+cannot_open_lock() {
+    echo "Error: cannot open the lock ${1} as $(id -un)." 1>&2
+}
 
 # Loads and switches exclude each other: a switch stops OpenSearch, which breaks a load running then.
 # A load takes OPENSEARCH_LOCK shared, so loads of different versions still run side by side, and a
@@ -9,10 +23,7 @@
 # script exits. Fails, rather than waits: 1 where the other holds it, 2 where the lock cannot be
 # opened at all, which says so.
 take_opensearch_lock() {
-    { exec 9>> "$OPENSEARCH_LOCK"; } 2> /dev/null || {
-        echo "Error: cannot open the lock ${OPENSEARCH_LOCK} as $(id -un)." 1>&2
-        return 2
-    }
+    { exec 9>> "$OPENSEARCH_LOCK"; } 2> /dev/null || { cannot_open_lock "$OPENSEARCH_LOCK"; return 2; }
     if [ -n "${2:-}" ]; then
         # Waiting, up to the seconds given, where giving up would throw away work already done.
         flock -w "$2" "$1" 9
@@ -34,10 +45,7 @@ opensearch_lock_usable() {
 take_load_lock() {
     local lock
     lock="$(dirname "$OPENSEARCH_LOCK")/unipept-load-${1}.lock"
-    { exec 8>> "$lock"; } 2> /dev/null || {
-        echo "Error: cannot open the lock ${lock} as $(id -un)." 1>&2
-        return 2
-    }
+    { exec 8>> "$lock"; } 2> /dev/null || { cannot_open_lock "$lock"; return 2; }
     flock -n -x 8
 }
 

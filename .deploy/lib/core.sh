@@ -1,8 +1,9 @@
 # shellcheck shell=bash
 #
 # What every script in .deploy runs on: logging, stopping, the commands it needs, and the trap that
-# reports a command that failed. Sourced through .deploy/lib.sh, never run. The pipelines have their
-# own, in pipelines/lib/common.sh: these scripts build no tables, and do not need what that carries.
+# reports a command that failed. Needs nothing else. Sourced through .deploy/lib.sh, never run. The
+# pipelines have their own, in pipelines/lib/common.sh: these scripts build no tables, and do not
+# need what that carries.
 
 log() { echo "$(date +'[%s (%F %T)]')" "$@"; }
 
@@ -17,8 +18,9 @@ checkdep() {
 # The script's own process, captured before any subshell can shadow it. A die inside a command
 # substitution only ends that subshell, and the caller then reports the same failure a second time
 # through the ERR trap, so die signals the script itself. USR1 rather than TERM, so a real
-# interrupt still reads as one. Each script arms the trap that answers it.
+# interrupt still reads as one.
 readonly MAIN_PID=$$
+trap 'exit 2' USR1
 
 die() {
     echo "Error: $*" 1>&2
@@ -41,6 +43,11 @@ need_value() {
 
     { [ -n "$value" ] && [[ "$value" != --* ]]; } || die "${flag} requires a value."
 }
+
+# Who builds, clones and owns the databases. The API on this host runs as the same user, which is
+# what makes every file a build writes one the API can read. opensearch/install.sh creates it and
+# gives it OUTPUT_DIR; after that, nothing here needs root.
+DEPLOY_USER=unipept
 
 # build.sh and clone.sh write what the API serves, so they run as the user the API reads as. Run as
 # root, they leave a database owned by root: one the next run as DEPLOY_USER cannot replace, and

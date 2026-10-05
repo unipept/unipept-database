@@ -1,9 +1,8 @@
 # shellcheck shell=bash
 #
 # What the scripts that talk to OpenSearch share: the names, the mark of an index loaded to the end,
-# and the requests each of them makes. Sourced, never run: by opensearch/load.sh, after
-# pipelines/lib/common.sh, and by the scripts in .deploy, after .deploy/lib/core.sh. Each of them
-# sets OPENSEARCH_URL.
+# and the requests each of them makes. Needs nothing else; each script that sources it sets
+# OPENSEARCH_URL. Sourced, never run: by opensearch/load.sh, and through .deploy/lib.sh.
 
 # What every version's index is named after, uniprot_entries-2026-03 for 2026-03, which is the one
 # the API queries. A host loaded before versioned indices has its proteins in an index of this name

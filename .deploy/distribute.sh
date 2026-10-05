@@ -35,7 +35,6 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${HERE}/lib.sh"
 
 trap errorAndExit ERR
-trap 'exit 2' USR1
 
 # The servers to put the database on.
 SERVERS_FILE="${HERE}/servers.conf"

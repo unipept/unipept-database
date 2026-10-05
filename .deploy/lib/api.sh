@@ -2,7 +2,21 @@
 #
 # What this repository knows of the API on the same host: which version it serves, which release of
 # it is installed, and whether it follows a switch. The one place that looks at the API's files.
-# Sourced through .deploy/lib.sh, after versions.sh and the OpenSearch helpers it uses.
+# Uses die from core.sh, OUTPUT_DIR from config.sh, the links of versions.sh, and alias_targets,
+# version_of_index, opensearch_answers and ALIAS from opensearch/lib.sh. Sourced through
+# .deploy/lib.sh.
+
+# The API on this host, which unipept-api's install puts there: its settings, of which INDEX_LOCATION
+# is read here, and the script that stops and starts it. A host without them runs no API.
+API_ENV_FILE=${API_ENV_FILE:-/opt/unipept-api/etc/unipept-api.env}
+# shellcheck disable=SC2034 # read by the scripts that source this file
+API_DEPLOY=${API_DEPLOY:-/opt/unipept-api/lib/deploy.sh}
+API_BINARY=${API_BINARY:-/opt/unipept-api/bin/unipept-api}
+
+# The first unipept-api release that queries uniprot_entries-<version>, the index of the version its
+# files are from (unipept-api#286). An older one queries uniprot_entries itself, or the alias of that
+# name, and needs what a host loaded before versioned indices kept.
+readonly API_VERSIONED_INDEX_SINCE=2.7.0
 
 # INDEX_LOCATION in the API's settings on this host, or nothing where there are none.
 api_index_location() {

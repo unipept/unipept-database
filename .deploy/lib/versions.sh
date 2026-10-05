@@ -2,12 +2,11 @@
 #
 # How a UniProtKB version is written, read and found: the names of database directories, the
 # .version files in them, and the current and previous links that say which one a host serves.
-# Sourced through .deploy/lib.sh.
+# Uses die from core.sh and OUTPUT_DIR from config.sh. Sourced through .deploy/lib.sh.
 
 # What a finished database is called under OUTPUT_DIR, as a glob. Narrow on purpose: a swap that
 # was interrupted leaves a uniprot-<version>.replaced beside it, and an operator may keep a copy
 # under another suffix, and neither is a database to pick as the newest.
-# shellcheck disable=SC2034 # read by the scripts that source this file
 readonly DATABASE_GLOB='uniprot-[0-9][0-9][0-9][0-9]-[0-9][0-9]'
 
 # Stops on a UniProtKB version not written YYYY-MM, the form every database directory is named in.
@@ -43,16 +42,6 @@ latest_version() {
 
     [ -n "$newest" ] || die "found no database in ${OUTPUT_DIR}."
     database_version_of "$newest"
-}
-
-# The UniProtKB version the pipeline wrote beside the tables, as YYYY-MM.
-uniprot_version_from() {
-    local version_file="$1" version
-
-    [ -s "$version_file" ] || die "the pipeline wrote no version in ${version_file}"
-    version=$(read_version "$version_file")
-    [ -n "$version" ] || die "the version in ${version_file} is empty"
-    echo "$version"
 }
 
 # The version a host serves is a link in OUTPUT_DIR to its directory, and the API's INDEX_LOCATION
