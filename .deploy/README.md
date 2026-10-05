@@ -345,6 +345,24 @@ its default branch, so two builds of the same UniProtKB release can differ; this
 tell. It is written last, so a directory that has one is a finished build. Whether its proteins
 are in OpenSearch is not something it records.
 
+## The shared library
+
+Every script sources `lib.sh`, which loads its parts from `lib/`. Each part says in its header what
+it uses of the others. unipept-api's `.deploy/lib.sh` has the same layout, and the parts both
+repositories have carry the same names: `core.sh`, `config.sh` and `locks.sh`.
+
+| Part | What it holds |
+| --- | --- |
+| `lib/core.sh` | `log`, `die`, `checkdep`, `need_value`, the error trap |
+| `lib/config.sh` | the settings the parts share, the deploy user, reading `deploy.conf` |
+| `lib/locks.sh` | the OpenSearch lock and the lock per version |
+| `lib/versions.sh` | version names, `.version`, the `current` and `previous` links |
+| `lib/database.sh` | what a database holds, and how it is checked and put in place |
+| `lib/api.sh` | what this host serves, and which API release is installed |
+
+`install.sh` installs them as `/opt/unipept-database/bin/lib.sh` and `/opt/unipept-database/bin/lib/`,
+root's like the scripts beside them.
+
 ## What a host needs
 
 `install.sh` installs all of it but Rust. For reference, or for a host prepared another way:
