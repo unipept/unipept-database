@@ -56,7 +56,6 @@ summary() {
     [ "$fail" -eq 0 ]
 }
 
-# A heading between suites, or between the steps of one.
 # The scripts in .deploy as a checkout lays them out, in DEST, which has to exist: the scripts, the
 # parts of lib.sh, and the OpenSearch helpers lib.sh loads from beside .deploy. What a checkout needs
 # beyond that, such as the pipelines build.sh runs, is the caller's to add.
@@ -70,6 +69,7 @@ copy_deploy_scripts() {
     cp "${repo}/opensearch/lib.sh" "${dest}/opensearch/"
 }
 
+# A heading between suites, or between the steps of one.
 heading() { printf '\n\033[1m%s\033[0m\n' "$*"; }
 
 # For the suites that start containers.
