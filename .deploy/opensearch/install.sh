@@ -84,8 +84,8 @@ OPENSEARCH_READY_TIMEOUT=180
 PREFIX="$INSTALL_ROOT"
 
 # The configuration of the install this run makes or updates, so --prefix reads its own and not
-# /opt/unipept-database's; a checkout's own deploy.conf still comes first, as lib.sh has it. Found
-# before the arguments are parsed, since read_conf comes first for a flag to win over it.
+# /opt/unipept-database's; a checkout's own deploy.conf still comes first, as lib/config.sh has
+# it. Found before the arguments are parsed, since read_conf comes first for a flag to win over it.
 for ((argument = 1; argument < $#; argument++)); do
     [ "${!argument}" != --prefix ] || { next=$((argument + 1)); PREFIX="${!next}"; }
 done
@@ -281,8 +281,9 @@ install_scripts() {
     local repository="${HERE}/../.." commit
 
     install -d -m 0755 "$PREFIX" "${PREFIX}/bin" "${PREFIX}/bin/lib" "${PREFIX}/opensearch/mappings" "${PREFIX}/pipelines/lib"
-    install -m 0755 "${repository}/.deploy/"{lib.sh,clone.sh,load.sh,verify.sh,prune.sh,switch.sh,migrate.sh} "${PREFIX}/bin/"
+    # What lib.sh loads first, so a script started meanwhile finds what the lib.sh beside it loads.
     install -m 0644 "${repository}/.deploy/lib/"*.sh "${PREFIX}/bin/lib/"
+    install -m 0755 "${repository}/.deploy/"{lib.sh,clone.sh,load.sh,verify.sh,prune.sh,switch.sh,migrate.sh} "${PREFIX}/bin/"
     install -m 0755 "${repository}/opensearch/load.sh" "${PREFIX}/opensearch/"
     # What an earlier release installed: it moved an alias the API no longer queries, and closed the
     # index the API did.
