@@ -55,6 +55,8 @@ setup_tree() {
     done
 
     make_loader "${TREE}/opensearch/load.sh" "${WORK}/loader-calls"
+    # The OpenSearch helpers .deploy/lib.sh loads, the real ones beside the stand-in loader.
+    ln -s "${REPO}/opensearch/lib.sh" "${TREE}/opensearch/lib.sh"
 
     printf 'INDEX_REPO=%s\n' "$INDEX_REPO" > "${TREE}/.deploy/deploy.conf"
 }
