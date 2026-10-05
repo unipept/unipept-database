@@ -233,9 +233,9 @@ section "a deploy.conf that pins the version clone.sh fetches"
 
 # verify.sh reads deploy.conf beside itself, so this runs a copy of the scripts with one there.
 checkout="${TEMP_DIR}/checkout"
-mkdir -p "${checkout}/.deploy" "${checkout}/pipelines/lib" "${checkout}/opensearch"
+mkdir -p "${checkout}/.deploy" "${checkout}/opensearch"
 cp "${HERE}"/../../.deploy/*.sh "${checkout}/.deploy/"
-cp "${HERE}/../../pipelines/lib/common.sh" "${checkout}/pipelines/lib/"
+cp -R "${HERE}"/../../.deploy/lib "${checkout}/.deploy/"
 # .deploy/lib.sh loads the OpenSearch helpers beside it, as the installed layout has them.
 cp "${HERE}/../../opensearch/lib.sh" "${checkout}/opensearch/"
 printf 'OUTPUT_DIR=%s\nUNIPROT_VERSION=2025-11\n' "$root" > "${checkout}/.deploy/deploy.conf"

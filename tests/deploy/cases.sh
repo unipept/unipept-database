@@ -34,6 +34,7 @@ setup_checkout() {
     mkdir -p "${CHECKOUT}"/{.deploy/opensearch,pipelines/lib,pipelines/suffix-array,opensearch/mappings,assets}
 
     cp /repo/.deploy/*.sh /repo/.deploy/deploy.conf.example "${CHECKOUT}/.deploy/"
+    cp -R /repo/.deploy/lib "${CHECKOUT}/.deploy/"
     cp /repo/.deploy/opensearch/*.sh "${CHECKOUT}/.deploy/opensearch/"
     cp /repo/pipelines/lib/common.sh "${CHECKOUT}/pipelines/lib/"
     # What install.sh installs beside the loader, which is a stand-in below.
@@ -1053,7 +1054,8 @@ check_true "the scripts a host runs are there" \
         -a -x "${PREFIX_A}/bin/switch.sh" -a -x "${PREFIX_A}/bin/migrate.sh"
 check_true "and what they call" \
     test -x "${PREFIX_A}/opensearch/load.sh" -a -f "${PREFIX_A}/opensearch/lib.sh" \
-        -a -f "${PREFIX_A}/opensearch/mappings/uniprot_entries.json" -a -f "${PREFIX_A}/pipelines/lib/common.sh"
+        -a -f "${PREFIX_A}/opensearch/mappings/uniprot_entries.json" -a -f "${PREFIX_A}/pipelines/lib/common.sh" \
+        -a -f "${PREFIX_A}/bin/lib/core.sh" -a -f "${PREFIX_A}/bin/lib/api.sh"
 check_true "but not build.sh, which needs the whole repository" test ! -e "${PREFIX_A}/bin/build.sh"
 check "the scripts belong to root, which alone changes them" "$(stat -c %U "${PREFIX_A}/bin/load.sh")" "root"
 # install.sh reads it as root, so a file the deploy user could write would hand that user root.

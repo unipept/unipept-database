@@ -13,8 +13,8 @@ orchestrate; the pipeline itself lives in `pipelines/` and the loader in `opense
   proteins together, stopping the API and OpenSearch to do so. See
   [Switching the API to another version](#switching-the-api-to-another-version).
 - `verify.sh` checks a finished database against the files the API needs. The others make the same
-  checks, through the same `verify_database` in `lib.sh`: `build.sh` before it puts a build in
-  place, `clone.sh` on the remote host before it copies and again on the copy, and `load.sh`
+  checks, through the same `verify_database` in `lib/database.sh`: `build.sh` before it puts a
+  build in place, `clone.sh` on the remote host before it copies and again on the copy, and `load.sh`
   before it loads. Run it by hand to check a database that is already there.
 
 A new database on a host is therefore two steps, `build.sh` or `clone.sh` and then `load.sh`, and
@@ -91,8 +91,8 @@ index is off.
 ## Configuration
 
 A host's settings are in `/opt/unipept-database/etc/deploy.conf`, which `install.sh` writes from
-`deploy.conf.example`. A flag wins over that file, and the file wins over the defaults in `lib.sh`
-for the settings the scripts share, and in each script for the settings only it has.
+`deploy.conf.example`. A flag wins over that file, and the file wins over the defaults in
+`lib/config.sh` for the settings the scripts share, and in each script for the settings only it has.
 
 The installed scripts and `build.sh` in a clone read that same file, so a build host has one set of
 settings. A clone with a `.deploy/deploy.conf` of its own reads that one instead, which is how a

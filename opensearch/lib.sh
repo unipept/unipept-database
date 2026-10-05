@@ -1,9 +1,9 @@
 # shellcheck shell=bash
 #
 # What the scripts that talk to OpenSearch share: the names, the mark of an index loaded to the end,
-# and the requests each of them makes. Sourced, never run, after pipelines/lib/common.sh, by
-# opensearch/load.sh and the scripts in .deploy that talk to OpenSearch, each of which sets
-# OPENSEARCH_URL.
+# and the requests each of them makes. Sourced, never run: by opensearch/load.sh, after
+# pipelines/lib/common.sh, and by the scripts in .deploy, after .deploy/lib/core.sh. Each of them
+# sets OPENSEARCH_URL.
 
 # What every version's index is named after, uniprot_entries-2026-03 for 2026-03, which is the one
 # the API queries. A host loaded before versioned indices has its proteins in an index of this name
@@ -180,4 +180,26 @@ ensure_versioned_index() {
 
     keep_as "$source" "$index" "$timeout"
     echo "Kept ${source} as ${index}, the index the API queries for ${version}." 1>&2
+}
+
+# Warns when OpenSearch's disk is past its low watermark, 85% unless the cluster says otherwise.
+# Past it OpenSearch places no new shard on that node, and at the flood stage, 95%, it makes every
+# index read-only, so a load running then fails part way. Each loaded version keeps its index until
+# .deploy/prune.sh removes it, so this is how running out is heard about before a load breaks on it.
+# Says nothing when OpenSearch cannot be asked: the load that follows reports that itself.
+warn_opensearch_disk() {
+    local url="$1" watermark used
+
+    watermark=$(curl -s -f --max-time 10 \
+        "${url}/_cluster/settings?include_defaults=true&flat_settings=true&filter_path=*.cluster.routing.allocation.disk.watermark.low" 2>/dev/null \
+        | sed -n 's/.*"cluster.routing.allocation.disk.watermark.low":"\([0-9]*\)%".*/\1/p') || true
+    [ -n "$watermark" ] || watermark=85
+
+    used=$(curl -s -f --max-time 10 "${url}/_cat/allocation?h=disk.percent" 2>/dev/null \
+        | awk '$1 ~ /^[0-9]+$/ && $1 > max { max = $1 } END { if (max != "") print max }') || true
+    [ -n "$used" ] || return 0
+
+    if [ "$used" -ge "$watermark" ]; then
+        echo "WARN OpenSearch's disk is ${used}% full, past its ${watermark}% watermark. A load can fail part way once it reaches 95%; .deploy/prune.sh --keep N removes old versions." 1>&2
+    fi
 }
