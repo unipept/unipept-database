@@ -14,7 +14,7 @@ source "${HERE}/lib.sh"
 
 trap errorAndExit ERR
 
-# The settings only this script has. lib/config.sh holds the ones it shares.
+# The settings only this script has. lib/ holds the ones it shares.
 
 # Where the repositories are cloned and built. The tables are not built here: they go to a staging
 # directory under OUTPUT_DIR, which is the volume that has to hold the whole build.
@@ -89,7 +89,7 @@ API reads. .deploy/load.sh then loads its proteins into OpenSearch.
   --skip-checks            build without first checking the host has room for it
   --help                   print this message
 
-A flag wins over .deploy/deploy.conf, which wins over the defaults in lib/config.sh and in this script.
+A flag wins over .deploy/deploy.conf, which wins over the defaults in lib/ and in this script.
 USAGE
 }
 

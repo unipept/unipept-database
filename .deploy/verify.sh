@@ -15,7 +15,7 @@ trap errorAndExit ERR
 
 read_conf
 
-# The settings only this script has. lib/config.sh holds the ones it shares. After read_conf
+# The settings only this script has. lib/ holds the ones it shares. After read_conf
 # rather than before: a UNIPROT_VERSION in deploy.conf is the release clone.sh fetches, not the one
 # to check, so it takes no part here.
 

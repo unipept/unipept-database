@@ -17,7 +17,7 @@ trap errorAndExit ERR
 
 read_conf
 
-# The settings only this script has. lib/config.sh holds the ones it shares. After read_conf
+# The settings only this script has. lib/ holds the ones it shares. After read_conf
 # rather than before, as in verify.sh: a UNIPROT_VERSION in deploy.conf is the release clone.sh
 # fetches, and which database to load is said here or is the newest.
 
@@ -45,7 +45,7 @@ Loads the proteins of a finished database into this host's OpenSearch.
   --check                  load nothing: exit 0 if the version is loaded to the end, 1 if not
   --help                   print this message
 
-A flag wins over .deploy/deploy.conf, which wins over the defaults in lib/config.sh and in this script.
+A flag wins over .deploy/deploy.conf, which wins over the defaults in lib/ and in this script.
 USAGE
 }
 

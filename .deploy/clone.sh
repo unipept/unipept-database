@@ -14,7 +14,7 @@ source "${HERE}/lib.sh"
 
 trap errorAndExit ERR
 
-# The settings only this script has. lib/config.sh holds the ones it shares.
+# The settings only this script has. lib/ holds the ones it shares.
 
 # The host a finished database is copied from.
 REMOTE_ADDRESS=
@@ -53,7 +53,7 @@ host's OpenSearch.
   --check                  copy nothing: check that the copy could be made, and exit 0 if so
   --help                   print this message
 
-A flag wins over .deploy/deploy.conf, which wins over the defaults in lib/config.sh and in this script.
+A flag wins over .deploy/deploy.conf, which wins over the defaults in lib/ and in this script.
 USAGE
 }
 

@@ -92,7 +92,7 @@ index is off.
 
 A host's settings are in `/opt/unipept-database/etc/deploy.conf`, which `install.sh` writes from
 `deploy.conf.example`. A flag wins over that file, and the file wins over the defaults in
-`lib/config.sh` for the settings the scripts share, and in each script for the settings only it has.
+`lib/` for the settings the scripts share, and in each script for the settings only it has.
 
 The installed scripts and `build.sh` in a clone read that same file, so a build host has one set of
 settings. A clone with a `.deploy/deploy.conf` of its own reads that one instead, which is how a
