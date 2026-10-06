@@ -26,15 +26,10 @@
 #   A failure in 3, 4 or 5, or an interrupt from 2 on, points the links back and starts both on the
 #   version it left, so the host serves what it served before.
 
-set -eo pipefail
-set -o errtrace
-
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # shellcheck source=lib.sh
 source "${HERE}/lib.sh"
-
-trap errorAndExit ERR
 
 read_conf
 
@@ -288,7 +283,7 @@ switch_back() {
 
 parse_arguments "$@"
 refuse_root
-checkdep flock "util-linux"
+require flock:util-linux
 
 CURRENT=$(current_link)
 PREVIOUS=$(previous_link)

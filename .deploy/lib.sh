@@ -1,10 +1,10 @@
 # shellcheck shell=bash
-################################################################################
-# Settings and helpers the scripts in .deploy share. Sourced, never run.       #
-################################################################################
+#
+# Shared by the deploy scripts. Sourced, never run. Sourcing it sets the shell options and the traps
+# every script runs with: see lib/core.sh.
 
 # The directory of this file. Not HERE, which belongs to the script that sources it.
-DEPLOY_DIR="${BASH_SOURCE%/*}"
+DEPLOY_DIR="${BASH_SOURCE[0]%/*}"
 
 # Each part in its own file under lib/, and each says in its header what it uses of the others. They
 # define functions and settings, and run nothing that needs another part while being sourced, so

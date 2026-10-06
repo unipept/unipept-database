@@ -26,15 +26,10 @@
 # The copy and the load take hours over one ssh session per step. Run it in tmux or screen, so a
 # dropped connection on this side does not end them; a rerun picks up where it stopped.
 
-set -eo pipefail
-set -o errtrace
-
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # shellcheck source=lib.sh
 source "${HERE}/lib.sh"
-
-trap errorAndExit ERR
 
 # The servers to put the database on.
 SERVERS_FILE="${HERE}/servers.conf"

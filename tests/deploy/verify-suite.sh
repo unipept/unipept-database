@@ -10,8 +10,10 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=../lib.sh
 source "${HERE}/../lib.sh"
 
-# shellcheck source=../../.deploy/lib.sh
-source "${HERE}/../../.deploy/lib.sh"
+# For INDEX_FILES and OPTIONAL_INDEX_FILES. The part alone, not lib.sh, which would also set the
+# options and traps a deploy script runs with: a suite carries on past a failure.
+# shellcheck source=../../.deploy/lib/database.sh
+source "${HERE}/../../.deploy/lib/database.sh"
 
 VERIFY="${HERE}/../../.deploy/verify.sh"
 

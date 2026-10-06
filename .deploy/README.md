@@ -351,7 +351,7 @@ it uses of the others.
 
 | Part | What it holds |
 | --- | --- |
-| `lib/core.sh` | `log`, `die`, `checkdep`, `need_value`, the error trap |
+| `lib/core.sh` | the shell options, `log`, `die`, `require`, `need_value`, the error trap |
 | `lib/config.sh` | the settings the parts share, the deploy user, reading `deploy.conf` |
 | `lib/locks.sh` | the OpenSearch lock and the lock per version |
 | `lib/versions.sh` | version names, `.version`, the `current` and `previous` links |
@@ -360,6 +360,8 @@ it uses of the others.
 
 `install.sh` installs them as `/opt/unipept-database/bin/lib.sh` and `/opt/unipept-database/bin/lib/`,
 root's like the scripts beside them.
+
+`lib/core.sh` is the same file in every repository that deploys Unipept. Its header lists what a script's exit status means, which is the same for every script.
 
 ## What a host needs
 

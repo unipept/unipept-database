@@ -16,9 +16,11 @@ readonly LEGACY="${ALIAS}-legacy"
 # way has documents too, so this is how switch.sh and the API's check tell a whole one from it.
 readonly COMPLETE_MARK='"unipept_load":"complete"'
 
+# Stops with an error, exit 2. Not die: this file needs nothing else, and opensearch/load.sh loads
+# it without core.sh. In a subshell it ends only that subshell, which keep_as relies on.
 opensearch_fail() {
     echo "Error: $*" 1>&2
-    exit 1
+    exit 2
 }
 
 # Sends one request, and fails unless OpenSearch answers one of the accepted status codes, given
@@ -128,7 +130,7 @@ keep_as() {
     # the source first.
     ( opensearch_request "keeping ${source} as ${target}" "200" POST "${source}/_clone/${target}" \
         -H 'Content-Type: application/json' -d '{"settings":{"index.number_of_replicas":0,"index.blocks.write":null}}' > /dev/null ) \
-        || { allow_writes "$source"; exit 1; }
+        || { allow_writes "$source"; exit 2; }
     # The clone recovers from the source's files, so the source takes no writes until it is ready,
     # and takes them again whether it becomes ready or not.
     if ! index_ready "$target" "$timeout"; then

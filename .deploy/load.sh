@@ -5,15 +5,10 @@
 # changes, so a load of another version changes nothing it answers. Run it with --help for the
 # options.
 
-set -eo pipefail
-set -o errtrace
-
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # shellcheck source=lib.sh
 source "${HERE}/lib.sh"
-
-trap errorAndExit ERR
 
 read_conf
 
@@ -92,7 +87,7 @@ verify_database "${DATABASE_DIR}/suffix-array" \
 
 # Held until the load ends, so switch.sh does not stop OpenSearch under it. Before what is served is
 # read, so no switch moves it between the reading and the load.
-checkdep flock "util-linux"
+require flock:util-linux
 take_opensearch_lock -s || die "$(lock_refused $?)"
 # And a lock of this version's own, since two loads of one version would drop each other's index.
 take_load_lock "$UNIPROT_VERSION" || case $? in
