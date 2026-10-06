@@ -132,8 +132,9 @@ read_servers() {
 }
 
 # The directory the source keeps its databases in, from what verify.sh there says it checked. The
-# source's own deploy.conf decides it, so this is the one place that knows.
-check_source() {
+# source's own deploy.conf decides it, so this is the one place that knows. Stops where the source
+# does not hold the version whole, which is what verify.sh is asked first.
+source_output_dir() {
     local output
 
     # To stderr, like everything else here that is not the answer, which the caller captures.
@@ -231,7 +232,7 @@ parse_arguments "$@"
 SERVERS=$(read_servers)
 [ -n "$SERVERS" ] || die "${SERVERS_FILE} lists no server."
 
-SOURCE_OUTPUT_DIR=$(check_source)
+SOURCE_OUTPUT_DIR=$(source_output_dir)
 preflight_servers
 
 results=''
