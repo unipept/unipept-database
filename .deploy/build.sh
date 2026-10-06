@@ -162,18 +162,6 @@ fill_datastore() {
     log "Filled the datastore."
 }
 
-# The newest database under OUTPUT_DIR, which is what the next one is sized by. Nothing when there
-# is none.
-previous_database() {
-    local candidate newest=''
-
-    # shellcheck disable=SC2231 # DATABASE_GLOB is a glob, and has to expand
-    for candidate in "${OUTPUT_DIR}"/${DATABASE_GLOB}; do
-        [ -d "$candidate" ] && newest="$candidate"
-    done
-    printf '%s\n' "$newest"
-}
-
 # A directory's size in KiB, as its files are long rather than as the disk packs them. Fails, with
 # du's own reason, on a directory it cannot measure whole.
 size_kib() {
@@ -201,7 +189,8 @@ check_host() {
     command -v systemctl > /dev/null && systemctl is-active --quiet opensearch 2> /dev/null \
         && problems+=$'\n'"  OpenSearch is running, and holds memory the suffix array needs."
 
-    previous=$(previous_database)
+    # The newest database, which is what the next one is sized by.
+    previous=$(newest_database)
     if [ -n "$previous" ] && ! size=$(size_kib "$previous"); then
         echo "Warning: the size of ${previous} cannot be measured, so disk and memory are not checked." 1>&2
     elif [ -n "$previous" ]; then
