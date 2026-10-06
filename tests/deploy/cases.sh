@@ -1254,7 +1254,7 @@ printf 'a localhost /work/server-a\nc localhost /work/server-c\n' > /work/server
 rm -f /work/a-loaded
 distribute --uniprot-version 2026-03
 check "a server that could not clone stops it" "$?" "2"
-check_true "it is named" grep -q "cannot clone 2026-03 from localhost: c" /work/last-output
+check_true "it is named" grep -q "FAIL c cannot clone 2026-03 from localhost" /work/last-output
 check_true "before the server before it is touched" test ! -e /work/a-loaded
 touch /work/a-loaded
 
@@ -1288,7 +1288,7 @@ check_true "no server is touched" not grep -q . /work/a-loader-calls
 printf 'a localhost /work/server-a\nnowhere localhost /work/no-install\n' > /work/servers.conf
 distribute --uniprot-version 2026-03
 check "a server without the scripts installed stops it" "$?" "2"
-check_true "it is named" grep -q 'on: nowhere' /work/last-output
+check_true "it is named" grep -q 'FAIL nowhere cannot be reached, or has no scripts installed' /work/last-output
 check_true "before the servers that are fine are touched" not grep -q . /work/a-loader-calls
 
 printf 'a localhost /work/server-a\na localhost /work/server-a\n' > /work/servers.conf

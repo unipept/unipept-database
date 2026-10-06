@@ -116,6 +116,143 @@ is_served 2026-04 strict"
 check "an OpenSearch that does not answer at all leaves it to the links" "$?" "1"
 
 
+section "checks.sh: each check, passing and failing"
+
+# One check, run as a script runs it, in a good setting and in one made bad for it: it passes in
+# the first, and fails in the second saying what is wrong. Each setting is the code before the check,
+# with stand-ins for what a check would otherwise ask of OpenSearch, the API or another host.
+both_ways() {
+    local name=$1 good=$2 bad=$3 says=$4 output
+    in_lib "$good" > /dev/null 2>&1
+    check "${name} passes" "$?" "0"
+    output=$(in_lib "$bad" 2>&1)
+    check "${name} fails" "$?" "1"
+    check_true "and says so" grep -qF -- "$says" <<< "$(grep '^FAIL ' <<< "$output")"
+}
+
+# A whole database, and one with no files in it.
+DB="${TEMP_DIR}/checks/uniprot-2026-03"
+mkdir -p "${DB}/tables" "${TEMP_DIR}/checks/empty"
+# shellcheck disable=SC2016 # expanded by the bash in_lib starts
+in_lib 'printf "%s\n" "${INDEX_FILES[@]}" "${OPTIONAL_INDEX_FILES[@]}"' | while read -r relative; do
+    mkdir -p "$(dirname "${DB}/suffix-array/${relative}")"
+    printf 'content\n' > "${DB}/suffix-array/${relative}"
+done
+printf '2026.03\n' > "${DB}/suffix-array/.version"
+printf 'rows\n' > "${DB}/tables/uniprot_entries.tsv.lz4"
+EMPTY="${TEMP_DIR}/checks/empty"
+
+both_ways check_db_present "check_db_present '${DB}'" "check_db_present '${TEMP_DIR}/checks/gone'" "there is no ${TEMP_DIR}/checks/gone"
+both_ways check_db_whole "check_db_whole '${DB}'" "check_db_whole '${EMPTY}'" "${EMPTY} is not a database the API can serve"
+both_ways check_db_table "check_db_table '${DB}'" "check_db_table '${EMPTY}'" "${EMPTY} has no tables/uniprot_entries.tsv.lz4"
+
+both_ways check_lock_usable \
+    "OPENSEARCH_LOCK='${TEMP_DIR}/checks/lock'; check_lock_usable 'the work'" \
+    "OPENSEARCH_LOCK='${TEMP_DIR}/checks/no/such/dir/lock'; check_lock_usable 'the work'" \
+    "cannot open the lock ${TEMP_DIR}/checks/no/such/dir/lock"
+both_ways check_build_disk "check_build_disk '${DB}' 1000 1500" "check_build_disk '${DB}' 1000 1499" "is free on disk"
+# Stand-ins for systemctl, the API's deploy.sh, sudo and ssh, on a PATH of their own.
+mkdir -p "${TEMP_DIR}/checks/bin"
+printf '#!/bin/sh\n[ -e "%s/checks/opensearch-active" ]\n' "$TEMP_DIR" > "${TEMP_DIR}/checks/bin/systemctl"
+printf '#!/bin/sh\n[ -e "%s/checks/sudo-allowed" ]\n' "$TEMP_DIR" > "${TEMP_DIR}/checks/bin/sudo"
+chmod +x "${TEMP_DIR}/checks/bin/"*
+STAND_INS="PATH='${TEMP_DIR}/checks/bin':\$PATH"
+both_ways check_build_opensearch_stopped \
+    "${STAND_INS}; check_build_opensearch_stopped" \
+    "${STAND_INS}; touch '${TEMP_DIR}/checks/opensearch-active'; check_build_opensearch_stopped" \
+    "OpenSearch is running"
+rm -f "${TEMP_DIR}/checks/opensearch-active"
+both_ways check_sudo_opensearch \
+    "${STAND_INS}; touch '${TEMP_DIR}/checks/sudo-allowed'; check_sudo_opensearch" \
+    "${STAND_INS}; rm -f '${TEMP_DIR}/checks/sudo-allowed'; check_sudo_opensearch" \
+    "may not stop and start OpenSearch through sudo"
+
+# What the kernel says of memory and processes, where it says it: /proc is Linux's.
+if [ -r /proc/meminfo ]; then
+    available=$(awk '/^MemAvailable:/ { print $2 }' /proc/meminfo)
+    both_ways check_build_memory "check_build_memory '${DB}' 1" "check_build_memory '${DB}' $((available * 2))" "of memory is available"
+    cp "$(command -v sleep)" "${TEMP_DIR}/checks/unipept-api"
+    in_lib "check_build_api_stopped" > /dev/null 2>&1
+    check "check_build_api_stopped passes" "$?" "0"
+    "${TEMP_DIR}/checks/unipept-api" 30 &
+    running=$!
+    output=$(in_lib "check_build_api_stopped" 2>&1)
+    check "check_build_api_stopped fails" "$?" "1"
+    check_true "and says so" grep -qF "FAIL The Unipept API is running" <<< "$output"
+    kill "$running" 2> /dev/null
+    wait "$running" 2> /dev/null
+fi
+
+# The API, as unipept-api's install lays it out: a deploy.sh that says what it takes, and a binary
+# that says its version.
+API_GOOD="API_DEPLOY='$(fake_api deploy-good 'echo "usage: deploy.sh start"')' API_BINARY='$(fake_api new-api 'echo unipept-api 2.7.0')'"
+API_BAD="API_DEPLOY='$(fake_api deploy-old 'echo "usage: deploy.sh deploy"; exit 1')' API_BINARY='$(fake_api old-api 'echo unipept-api 2.6.4')'"
+both_ways check_api_stop_start "${API_GOOD}; check_api_stop_start" "${API_BAD}; check_api_stop_start" "has no stop and start"
+both_ways check_api_version "${API_GOOD}; check_api_version" "${API_BAD}; check_api_version" "the API installed is 2.6.4, older than 2.7.0"
+cp "$(fake_api old-rollback 'echo unipept-api 2.6.4')" "$(fake_api new-api 'echo unipept-api 2.7.0').previous"
+both_ways check_api_rollback_version \
+    "API_BINARY='${TEMP_DIR}/api-no-rollback'; check_api_rollback_version" \
+    "API_BINARY='${TEMP_DIR}/api-new-api'; check_api_rollback_version" \
+    "deploy.sh rollback would go back to ${TEMP_DIR}/api-new-api.previous"
+both_ways check_api_accepts "${API_GOOD}; check_api_accepts '${DB}'" "API_DEPLOY='$(fake_api refuses 'exit 1')'; check_api_accepts '${DB}'" "the API's own check refuses ${DB}/suffix-array"
+
+# The links of a host whose API follows current, and of one whose does not.
+LINKS="${TEMP_DIR}/checks/links"
+mkdir -p "${LINKS}/data/uniprot-2026-03"
+ln -sfn uniprot-2026-03 "${LINKS}/data/current"
+printf 'INDEX_LOCATION=%s/data/current/suffix-array\n' "$LINKS" > "${LINKS}/follows.env"
+printf 'INDEX_LOCATION=%s/data/uniprot-2026-03/suffix-array\n' "$LINKS" > "${LINKS}/fixed.env"
+both_ways check_links_follows_current \
+    "OUTPUT_DIR='${LINKS}/data' API_ENV_FILE='${LINKS}/follows.env'; check_links_follows_current" \
+    "OUTPUT_DIR='${LINKS}/data' API_ENV_FILE='${LINKS}/fixed.env'; check_links_follows_current" \
+    "so the API would not follow the switch"
+mkdir -p "${LINKS}/locked" && chmod 555 "${LINKS}/locked"
+both_ways check_links_movable "OUTPUT_DIR='${LINKS}/data'; check_links_movable" "OUTPUT_DIR='${LINKS}/locked'; check_links_movable" "${LINKS}/locked is not writable"
+chmod 755 "${LINKS}/locked"
+mkdir -p "${LINKS}/odd/previous"
+both_ways check_links_previous "OUTPUT_DIR='${LINKS}/data'; check_links_previous" "OUTPUT_DIR='${LINKS}/odd'; check_links_previous" "${LINKS}/odd/previous is there and is not a link"
+
+# OpenSearch, through stand-ins for what it would answer.
+both_ways check_opensearch_answers \
+    "opensearch_answers() { return 0; }; check_opensearch_answers uniprot_entries-2026-03" \
+    "opensearch_answers() { return 1; }; check_opensearch_answers uniprot_entries-2026-03" \
+    "OpenSearch does not answer at"
+both_ways check_index_to_go_back_to \
+    "index_status() { echo open; }; is_complete() { return 0; }; check_index_to_go_back_to uniprot_entries-2026-01" \
+    "index_status() { echo close; }; is_complete() { return 0; }; check_index_to_go_back_to uniprot_entries-2026-01" \
+    "uniprot_entries-2026-01, of the version this host serves, is not open and loaded to the end"
+both_ways check_index_present "check_index_present uniprot_entries-2026-03 2026-03 open" "check_index_present uniprot_entries-2026-03 2026-03 ''" \
+    "uniprot_entries-2026-03 is not in OpenSearch. Load it with load.sh --uniprot-version 2026-03"
+both_ways check_index_complete \
+    "is_complete() { return 0; }; check_index_complete uniprot_entries-2026-03" \
+    "is_complete() { return 1; }; check_index_complete uniprot_entries-2026-03" \
+    "uniprot_entries-2026-03 was not loaded to the end"
+
+# Another host, reached through a stand-in that runs the command here, as clone.sh's remote_sh and
+# distribute.sh's on would run it there.
+REMOTE='remote_sh() { bash -c "$*"; }; REMOTE_ADDRESS=elsewhere'
+both_ways check_remote_db_present "${REMOTE}; check_remote_db_present '${DB}'" "${REMOTE}; check_remote_db_present '${EMPTY}/gone'" "the remote host has no ${EMPTY}/gone"
+both_ways check_remote_db_whole "${REMOTE}; check_remote_db_whole '${DB}'" "${REMOTE}; check_remote_db_whole '${EMPTY}'" "the database on elsewhere is missing files the API needs"
+mkdir -p "${TEMP_DIR}/checks/lost/suffix-array"
+both_ways check_copy_kept_kmer_table \
+    "${REMOTE}; check_copy_kept_kmer_table '${DB}' '${DB}'" \
+    "${REMOTE}; check_copy_kept_kmer_table '${TEMP_DIR}/checks/lost' '${DB}'" \
+    "the remote has a k-mer table and the copy does not"
+output=$(in_lib "remote_sh() { return 255; }; REMOTE_ADDRESS=elsewhere; check_copy_kept_kmer_table '${DB}' '${DB}'" 2>&1)
+check "check_copy_kept_kmer_table fails where it cannot ask" "$?" "1"
+check_true "and says so" grep -qF "FAIL could not ask elsewhere whether it has a k-mer table" <<< "$output"
+SERVER="on() { local host=\$1 root=\$2; shift 2; (cd \"\$root\" && \"\$@\"); }; UNIPROT_VERSION=2026-03 SOURCE=source"
+mkdir -p "${TEMP_DIR}/checks/server/bin" "${TEMP_DIR}/checks/bare"
+# The server's clone.sh cannot clone the version named never.
+for script in verify clone load; do printf '#!/bin/sh\ncase "$*" in *never*) exit 1 ;; esac\n' > "${TEMP_DIR}/checks/server/bin/${script}.sh"; done
+chmod +x "${TEMP_DIR}/checks/server/bin/"*
+both_ways check_server_scripts "${SERVER}; check_server_scripts a host '${TEMP_DIR}/checks/server'" "${SERVER}; check_server_scripts b host '${TEMP_DIR}/checks/bare'" \
+    "b cannot be reached, or has no scripts installed in ${TEMP_DIR}/checks/bare"
+both_ways check_server_can_clone "${SERVER}; check_server_can_clone a host '${TEMP_DIR}/checks/server' --uniprot-version 2026-03" \
+    "${SERVER}; UNIPROT_VERSION=never; check_server_can_clone a host '${TEMP_DIR}/checks/server' --uniprot-version never" \
+    "a cannot clone never from source"
+
+
 section "every script's --help"
 
 # Every option in one column, and which setting wins said the same way. From a copy with an empty

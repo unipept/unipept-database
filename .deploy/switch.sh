@@ -91,100 +91,57 @@ parse_arguments() {
 }
 
 problems=0
-# open or close, once check_host has found the index to switch to.
+# open or close, once preflight has found the index to switch to.
 TARGET_STATUS=''
-problem() {
-    echo "  $*" 1>&2
-    problems=$((problems + 1))
-}
 
 # Everything the switch depends on that can be known without changing anything, while the API and
-# OpenSearch still run, so a host that cannot switch keeps serving exactly as it did. Every problem is
-# reported.
-check_host() {
-    local usage_text
-
-    [ -d "$TARGET_DIR" ] \
-        || problem "there is no ${TARGET_DIR}. Copy it with clone.sh, or build it, first."
-    [ ! -d "$TARGET_DIR" ] || verify_database "${TARGET_DIR}/suffix-array" \
-        || problem "${TARGET_DIR} is not a database the API can serve (above)."
-
-    if [ ! -x "$API_DEPLOY" ]; then
-        problem "there is no API here: ${API_DEPLOY} is missing. unipept-api's install puts it there."
-    else
-        usage_text=$("$API_DEPLOY" 2>&1 || true)
-        [[ "$usage_text" == *"deploy.sh start"* ]] \
-            || problem "${API_DEPLOY} has no stop and start: update unipept-api on this host first."
-    fi
-    # An older API queries uniprot_entries or its alias whatever version its files are: the switch
-    # would move the files and not the proteins.
-    local rollback
-    api_state "$API_BINARY" || case $? in
-        1) problem "the API installed is $(api_binary_version "$API_BINARY"), older than ${API_VERSIONED_INDEX_SINCE}, and queries no version's own index. Roll out unipept-api ${API_VERSIONED_INDEX_SINCE} or newer first." ;;
-        *) problem "cannot run ${API_BINARY} --version to learn which API is installed. Set API_BINARY where it is elsewhere." ;;
-    esac
-    # The one deploy.sh rollback would go back to. An older one queries uniprot_entries or its alias,
-    # which hold the proteins of the version served before any switch: after one, a rollback would
-    # pair the new version's files with those proteins, and nothing would notice.
-    rollback=$(api_rollback_binary)
-    [ ! -e "$rollback" ] || api_state "$rollback" \
-        || problem "deploy.sh rollback would go back to ${rollback}, which is not ${API_VERSIONED_INDEX_SINCE} or newer, and after a switch would serve this version's files with another's proteins. Remove it, as $(id -un), to give up rolling back past ${API_VERSIONED_INDEX_SINCE}: rm ${rollback}"
-
-    api_follows_current \
-        || problem "INDEX_LOCATION in ${API_ENV_FILE} is '$(api_index_location)', so the API would not follow the switch. Set it to ${CURRENT}/suffix-array."
-
-    # The links are moved once both are stopped, where a failure would leave the host down.
-    [ -w "$OUTPUT_DIR" ] || problem "${OUTPUT_DIR} is not writable by $(id -un), so ${CURRENT} cannot be moved."
-    [ ! -e "$PREVIOUS" ] || [ -L "$PREVIOUS" ] \
-        || problem "${PREVIOUS} is there and is not a link, so it cannot point at the version this host leaves."
+# OpenSearch still run, so a host that cannot switch keeps serving exactly as it did. Every check
+# runs, and each problem is counted.
+preflight() {
+    check_db_present "$TARGET_DIR" || problems=$((problems + 1))
+    [ ! -d "$TARGET_DIR" ] || check_db_whole "$TARGET_DIR" || problems=$((problems + 1))
+    check_api_stop_start || problems=$((problems + 1))
+    check_api_version || problems=$((problems + 1))
+    check_api_rollback_version || problems=$((problems + 1))
+    check_links_follows_current || problems=$((problems + 1))
+    check_links_movable || problems=$((problems + 1))
+    check_links_previous || problems=$((problems + 1))
 
     # A load writes to OpenSearch for hours, and stopping OpenSearch under it breaks it part way.
     # Held until the switch ends, so no load starts during it either.
-    take_opensearch_lock -x || problem "$(lock_refused $?)"
+    take_opensearch_lock -x || { echo "FAIL $(lock_refused $?)" 1>&2; problems=$((problems + 1)); }
 
-    { sudo -n -l systemctl stop opensearch && sudo -n -l systemctl start opensearch; } > /dev/null 2>&1 \
-        || problem "${DEPLOY_USER} may not stop and start OpenSearch through sudo. Run .deploy/opensearch/install.sh again, as root."
-
-    if ! opensearch_answers; then
-        problem "OpenSearch does not answer at ${OPENSEARCH_URL}, so whether ${TARGET_INDEX} is there is unknown."
-        return 0
-    fi
-
-    # The version it leaves, which going back after a failed start needs as it is now.
-    if [ "$(index_status "$FROM_INDEX")" != open ] || ! is_complete "$FROM_INDEX"; then
-        problem "${FROM_INDEX}, of the version this host serves, is not open and loaded to the end, so a switch that fails could not go back to it. Run migrate.sh, or load it again, first."
-    fi
-
+    check_sudo_opensearch || problems=$((problems + 1))
+    check_opensearch_answers "$TARGET_INDEX" || { problems=$((problems + 1)); return 0; }
+    check_index_to_go_back_to "$FROM_INDEX" || problems=$((problems + 1))
     TARGET_STATUS=$(index_status "$TARGET_INDEX")
-    if [ -z "$TARGET_STATUS" ]; then
-        problem "${TARGET_INDEX} is not in OpenSearch. Load it with load.sh --uniprot-version ${TARGET}."
-        return 0
-    fi
-    is_complete "$TARGET_INDEX" \
-        || problem "${TARGET_INDEX} was not loaded to the end. Continue its load with --skip, or load it again."
+    check_index_present "$TARGET_INDEX" "$TARGET" "$TARGET_STATUS" || { problems=$((problems + 1)); return 0; }
+    check_index_complete "$TARGET_INDEX" || problems=$((problems + 1))
 
     # The API's check searches the index, which it cannot do closed. Opening it is the one change
     # before the stop, made only once nothing else stands in the way; --check changes nothing, so it
     # says what it could not check.
     if [ "$TARGET_STATUS" = close ] && [ "$CHECK_ONLY" = true ]; then
-        problem "${TARGET_INDEX} is closed, so the API's own check of ${TARGET} cannot run. Run this without --check: it opens the index before it stops anything."
+        echo "FAIL ${TARGET_INDEX} is closed, so the API's own check of ${TARGET} cannot run. Run this without --check: it opens the index before it stops anything." 1>&2
+        problems=$((problems + 1))
     fi
 }
 
 # What the API itself needs of the new version, its files, the memory for them and the index of its
 # proteins, which its own check decides. Opens a closed index first, which serves nothing new: the
 # API does not query it until it is switched to.
-check_api() {
+preflight_api() {
     if [ "$TARGET_STATUS" = close ]; then
         opensearch_request "opening ${TARGET_INDEX}" "200" POST "${TARGET_INDEX}/_open" > /dev/null
-        index_ready "$TARGET_INDEX" "$OPENSEARCH_START_TIMEOUT" \
-            || { problem "${TARGET_INDEX} was opened and did not become ready within ${OPENSEARCH_START_TIMEOUT} seconds."; return 0; }
+        if ! index_ready "$TARGET_INDEX" "$OPENSEARCH_START_TIMEOUT"; then
+            echo "FAIL ${TARGET_INDEX} was opened and did not become ready within ${OPENSEARCH_START_TIMEOUT} seconds." 1>&2
+            problems=$((problems + 1))
+            return 0
+        fi
         log "Opened ${TARGET_INDEX}, which was closed."
     fi
 
-    "$API_DEPLOY" check --index "${TARGET_DIR}/suffix-array" > /dev/null \
-        || problem "the API's own check refuses ${TARGET_DIR}/suffix-array (above)."
-
+    check_api_accepts "$TARGET_DIR" || problems=$((problems + 1))
     warn_opensearch_disk
 }
 
@@ -316,10 +273,10 @@ if [ "$TARGET" = "$FROM" ]; then
 fi
 
 log "Checking that this host can switch from ${FROM} to ${TARGET}."
-check_host
+preflight
 [ "$problems" -eq 0 ] || die "${problems} problem(s), so nothing was changed."
 # A --check on a closed index has stopped above, so what is left can be checked.
-check_api
+preflight_api
 if [ "$problems" -gt 0 ]; then
     [ "$TARGET_STATUS" = close ] \
         && die "${problems} problem(s), so nothing was changed but opening ${TARGET_INDEX}, which serves nothing new."

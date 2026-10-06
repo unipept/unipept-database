@@ -91,22 +91,12 @@ remote_latest_version() {
     database_version_of "$newest"
 }
 
-# The same checks the copy gets afterwards, run on the remote host before anything is copied. A
-# database the remote holds incomplete, or under a name its .version disagrees with, is refused here
-# rather than after hundreds of gigabytes of scp. The functions and the lists they read are sent
-# along, so both sides check against this checkout's contract.
-check_remote_database() {
-    local remote_dir="$1"
-
-    remote_sh "[ -d '${remote_dir}' ]" || die "the remote host has no ${remote_dir}"
-
-    remote_sh bash -s <<REMOTE || die "the database on ${REMOTE_ADDRESS} is missing files the API needs, or is not the version it is named after."
-$(verify_database_source)
-status=0
-verify_database '${remote_dir}/suffix-array' || status=1
-[ -s '${remote_dir}/tables/uniprot_entries.tsv.lz4' ] || { echo "FAIL tables/uniprot_entries.tsv.lz4 is missing" 1>&2; status=1; }
-exit "\$status"
-REMOTE
+# The database on the remote host, before anything is copied: a database it holds incomplete, or
+# under a name its .version disagrees with, is refused here rather than after hundreds of gigabytes
+# of scp.
+preflight_remote() {
+    check_remote_db_present "$1" || die "nothing was copied (above)."
+    check_remote_db_whole "$1" || die "nothing was copied (above)."
 }
 
 copy_database() {
@@ -122,31 +112,16 @@ copy_database() {
     log "Copied the database from ${REMOTE_ADDRESS}."
 }
 
-# What the API needs, and the table clone.sh itself reads. A copy that stopped part way leaves
-# files that exist and are short, so the check is on content.
-check_database() {
-    local dir="$1" remote_dir="$2"
+# The copy: what the API needs, and the table load.sh reads. A copy that stopped part way leaves files
+# that exist and are short, so the checks are on content. The k-mer table alone first: a copy that
+# lost it stops there, before verify_database's warning that the table is optional says otherwise.
+preflight_copy() {
+    local copy=$1 remote_dir=$2 problems=0
 
-    # The k-mer table is an accelerator the API runs without, so a database built before build.sh
-    # wrote one has none and is still worth cloning. The remote decides: one the remote has and the
-    # copy does not is a copy that lost it. Before verify_database, whose warning that the table is
-    # optional would otherwise precede the error that says it is not. test answers 0 or 1; anything
-    # else is ssh failing, which says nothing about the table.
-    local remote_has_kmer=0
-    remote_sh "[ -s '${remote_dir}/suffix-array/kmer_table.bin' ]" || remote_has_kmer=$?
-    case "$remote_has_kmer" in
-        0) [ -s "${dir}/suffix-array/kmer_table.bin" ] \
-            || die "the remote has a k-mer table and the copy does not" ;;
-        1) ;;
-        *) die "could not ask ${REMOTE_ADDRESS} whether it has a k-mer table, so cannot tell whether the copy lost one." ;;
-    esac
-
-    verify_database "${dir}/suffix-array" \
-        || die "the copy is missing files the API needs, or is not the version it is named after."
-
-    # Outside the index, so not in INDEX_FILES: it is what load.sh feeds to OpenSearch.
-    [ -s "${dir}/tables/uniprot_entries.tsv.lz4" ] \
-        || die "the copied database has no tables/uniprot_entries.tsv.lz4"
+    check_copy_kept_kmer_table "$copy" "$remote_dir" || die "the copy cannot be used (above)."
+    check_db_whole "$copy" || problems=$((problems + 1))
+    check_db_table "$copy" || problems=$((problems + 1))
+    [ "$problems" -eq 0 ] || die "the copy cannot be used (above)."
 }
 
 parse_arguments "$@"
@@ -156,14 +131,13 @@ refuse_root
 
 require ssh scp flock:util-linux
 # Before the copy rather than after it, which is hours in.
-opensearch_lock_usable \
-    || die "cannot open the lock ${OPENSEARCH_LOCK} as $(id -un), which the copy is swapped in under. Make it writable, or set OPENSEARCH_LOCK."
+check_lock_usable "the copy" || die "the copy could not be put in place at its end (above)."
 
 [ -n "$UNIPROT_VERSION" ] || UNIPROT_VERSION=$(remote_latest_version)
 
 if [ "$CHECK" = true ]; then
     [ -r "$LOCAL_SSH_KEY" ] || die "cannot read the ssh key ${LOCAL_SSH_KEY}."
-    check_remote_database "${REMOTE_OUTPUT_DIR}/uniprot-${UNIPROT_VERSION}"
+    preflight_remote "${REMOTE_OUTPUT_DIR}/uniprot-${UNIPROT_VERSION}"
     log "UniProtKB ${UNIPROT_VERSION} can be cloned from ${REMOTE_ADDRESS}."
     exit 0
 fi
@@ -180,11 +154,11 @@ fi
 # host already serves untouched.
 STAGING_DIR="${OUTPUT_DIR}/.clone"
 REMOTE_DIR="${REMOTE_OUTPUT_DIR}/uniprot-${UNIPROT_VERSION}"
-check_remote_database "$REMOTE_DIR"
+preflight_remote "$REMOTE_DIR"
 copy_database "$STAGING_DIR" "$REMOTE_DIR"
 
 COPIED_DIR="${STAGING_DIR}/uniprot-${UNIPROT_VERSION}"
-check_database "$COPIED_DIR" "$REMOTE_DIR"
+preflight_copy "$COPIED_DIR" "$REMOTE_DIR"
 
 # Again, since the copy took hours in which this host may have switched to the version. Under the
 # lock a switch holds, so none can start between this and the swap, waited for rather than given up

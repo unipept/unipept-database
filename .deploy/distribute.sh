@@ -156,34 +156,30 @@ declare -A FILES_OF=()
 # its own deploy.conf decides and what would otherwise fail only after the servers before it had
 # spent hours. verify.sh answers 3 for a version that is not there at all and 1 for one that is
 # there and is not whole; ssh answers 255 for a host it could not reach.
-check_servers() {
-    local name host root status unready='' uncloneable=''
+preflight_servers() {
+    local name host root status problems=0
     local clone_arguments=(--remote-address "$SOURCE" --remote-output-dir "$SOURCE_OUTPUT_DIR" --uniprot-version "$UNIPROT_VERSION")
 
     while read -r name host root; do
-        if ! on "$host" "$root" test -x bin/verify.sh -a -x bin/clone.sh -a -x bin/load.sh 2> /dev/null; then
-            unready+=" ${name}"
-            continue
-        fi
+        check_server_scripts "$name" "$host" "$root" || { problems=$((problems + 1)); continue; }
 
         status=0
         on "$host" "$root" bin/verify.sh --uniprot-version "$UNIPROT_VERSION" > /dev/null 2>&1 || status=$?
         case "$status" in
             0) FILES_OF[$name]=had; continue ;;
             3) FILES_OF[$name]=missing ;;
-            255) unready+=" ${name}"; continue ;;
+            255) echo "FAIL ${name} cannot be reached." 1>&2; problems=$((problems + 1)); continue ;;
             *) FILES_OF[$name]=broken ;;
         esac
 
         # A broken copy is only copied again when --replace says so, so only then does it matter
         # whether it could be.
         [ "${FILES_OF[$name]}" = missing ] || [ "$REPLACE" = true ] || continue
-        on "$host" "$root" bin/clone.sh --check "${clone_arguments[@]}" > /dev/null 2>&1 || uncloneable+=" ${name}"
+        check_server_can_clone "$name" "$host" "$root" "${clone_arguments[@]}" || problems=$((problems + 1))
     done <<< "$SERVERS"
 
-    [ -z "$unready" ] || die "cannot reach, or find the scripts installed on:${unready}. Nothing was changed; .deploy/opensearch/install.sh installs them."
-    [ -z "$uncloneable" ] \
-        || die "these cannot clone ${UNIPROT_VERSION} from ${SOURCE}:${uncloneable}. Nothing was changed; run clone.sh --check there to see why."
+    [ "$problems" -eq 0 ] \
+        || die "${problems} problem(s) on the servers, so nothing was changed. .deploy/opensearch/install.sh installs the scripts."
 }
 
 # Puts the version on one server, and prints what it found and did as files|proteins|result.
@@ -236,7 +232,7 @@ SERVERS=$(read_servers)
 [ -n "$SERVERS" ] || die "${SERVERS_FILE} lists no server."
 
 SOURCE_OUTPUT_DIR=$(check_source)
-check_servers
+preflight_servers
 
 results=''
 failed=0

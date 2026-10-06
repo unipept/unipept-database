@@ -57,6 +57,8 @@ parse_arguments() {
         esac
     done
 
+    # As the loader checks it too, but before the locks and the checks of what is served, rather
+    # than after them.
     [ -z "$SKIP_ROWS" ] || [[ "$SKIP_ROWS" =~ ^[0-9]+$ ]] || die "--skip takes a number of rows, not '${SKIP_ROWS}'."
 }
 
@@ -81,9 +83,10 @@ fi
 
 # Before the load, and so before anything can switch to it: proteins loaded from a database the API
 # cannot serve would pair with files that are not there.
-verify_database "${DATABASE_DIR}/suffix-array" \
-    || die "${DATABASE_DIR} is missing files the API needs, or is not the version it is named after."
-[ -s "$ENTRIES" ] || die "${DATABASE_DIR} has no tables/uniprot_entries.tsv.lz4 to load."
+problems=0
+check_db_whole "$DATABASE_DIR" || problems=$((problems + 1))
+check_db_table "$DATABASE_DIR" || problems=$((problems + 1))
+[ "$problems" -eq 0 ] || die "${DATABASE_DIR} cannot be loaded (above)."
 
 # Held until the load ends, so switch.sh does not stop OpenSearch under it. Before what is served is
 # read, so no switch moves it between the reading and the load.

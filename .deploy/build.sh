@@ -170,46 +170,36 @@ size_kib() {
     echo "${line%%[[:space:]]*}"
 }
 
-gib() {
-    echo "$(( $1 / 1024 / 1024 )) GiB"
-}
-
 # Stops a build the host has no room for, before anything is removed or built. The suffix array is
 # the step that needs the most memory, and a build found out hours in, on a host whose API and
 # OpenSearch held it, when the kernel killed sa-builder. The previous database is the measure of
 # what the next one needs: 1.5 times its size free on disk, for the new database beside the old one
 # and the files the build works through, and 1.2 times its size free in memory. Every problem is
 # reported, not only the first.
-check_host() {
+preflight() {
     [ "$SKIP_CHECKS" != true ] || return 0
-    local problems='' previous size free available staging
+    local problems=0 previous size free staging=0
 
-    grep -qsx unipept-api /proc/[0-9]*/comm \
-        && problems+=$'\n'"  The Unipept API is running, and holds memory the suffix array needs."
-    command -v systemctl > /dev/null && systemctl is-active --quiet opensearch 2> /dev/null \
-        && problems+=$'\n'"  OpenSearch is running, and holds memory the suffix array needs."
+    check_build_api_stopped || problems=$((problems + 1))
+    check_build_opensearch_stopped || problems=$((problems + 1))
 
-    # The newest database, which is what the next one is sized by.
+    # Sized by the newest database. What the last build left in the staging directory is removed
+    # before this one starts, so it counts as free; left out when it cannot be measured, which only
+    # makes the check stricter.
     previous=$(newest_database)
-    if [ -n "$previous" ] && ! size=$(size_kib "$previous"); then
-        echo "Warning: the size of ${previous} cannot be measured, so disk and memory are not checked." 1>&2
-    elif [ -n "$previous" ]; then
-        # What the last build left in the staging directory is removed before this one starts. Left
-        # out when it cannot be measured, which only makes the check stricter.
-        staging=0
-        [ ! -d "$STAGING_DIR" ] || staging=$(size_kib "$STAGING_DIR") || staging=0
-        free=$(( $(df -Pk "$OUTPUT_DIR" | awk 'NR == 2 { print $4 }') + staging ))
-        [ "$free" -ge "$(( size * 3 / 2 ))" ] \
-            || problems+=$'\n'"  $(gib "$free") is free on disk in ${OUTPUT_DIR}, and a build needs 1.5 times the $(gib "$size") of ${previous##*/}: $(gib $(( size * 3 / 2 )))."
-        available=$(awk '/^MemAvailable:/ { print $2 }' /proc/meminfo)
-        if [ -n "$available" ]; then
-            [ "$available" -ge "$(( size * 6 / 5 ))" ] \
-                || problems+=$'\n'"  $(gib "$available") of memory is available, and a build needs 1.2 times the $(gib "$size") of ${previous##*/}: $(gib $(( size * 6 / 5 )))."
+    if [ -n "$previous" ]; then
+        if size=$(size_kib "$previous"); then
+            [ ! -d "$STAGING_DIR" ] || staging=$(size_kib "$STAGING_DIR") || staging=0
+            free=$(($(df -Pk "$OUTPUT_DIR" | awk 'NR == 2 { print $4 }') + staging))
+            check_build_disk "$previous" "$size" "$free" || problems=$((problems + 1))
+            check_build_memory "$previous" "$size" || problems=$((problems + 1))
+        else
+            echo "WARN the size of ${previous} cannot be measured, so disk and memory are not checked." 1>&2
         fi
     fi
 
-    [ -z "$problems" ] && return 0
-    die "this host has no room for a build:${problems}
+    [ "$problems" -eq 0 ] && return 0
+    die "this host has no room for a build (above).
 
 Free what is named above: remove what is not needed from ${OUTPUT_DIR}, and stop the API and
 OpenSearch:
@@ -245,12 +235,11 @@ DATABASE_COMMIT=$(git -C "${HERE}/.." rev-parse HEAD 2>/dev/null || echo unknown
 STAGING_DIR="${OUTPUT_DIR}/.build"
 
 # Before the staging directory is removed, so a build refused here keeps what an earlier one left.
-check_host
+preflight
 # The swap at the end is made under the lock that keeps loads and switches apart: found now, not
 # hours in.
 require flock:util-linux
-opensearch_lock_usable \
-    || die "cannot open the lock ${OPENSEARCH_LOCK} as $(id -un), which the build is swapped in under. Make it writable, or set OPENSEARCH_LOCK."
+check_lock_usable "the build" || die "the build could not be put in place at its end (above)."
 
 rm -rf "${STAGING_DIR:?}"
 mkdir -p "${STAGING_DIR}"/{suffix-array,tables,temp}
@@ -268,7 +257,7 @@ fill_datastore "$STAGING_DIR"
 
 # Before anything outside the staging directory changes, so a build that is not whole never
 # replaces one that is.
-verify_database "${STAGING_DIR}/suffix-array" || die "the build is missing files the API needs."
+check_db_whole "$STAGING_DIR" || die "the build is not whole (above). It is in ${STAGING_DIR}."
 
 UNIPROT_VERSION=$(uniprot_version_from "${STAGING_DIR}/tables/.version")
 log "UniProtKB version is ${UNIPROT_VERSION}."
