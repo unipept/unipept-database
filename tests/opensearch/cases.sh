@@ -430,7 +430,7 @@ mv "${WORK}/mapping.bin.away" "${SW_DATA}/uniprot-2027-02/suffix-array/mapping.b
 
 runuser -u unipept -- "${REPO}/.deploy/load.sh" --output-dir "$SW_DATA" --uniprot-version 2027-02 \
     --opensearch-url http://localhost:1 --check > "${WORK}/load-check-silent.log" 2>&1
-check "load.sh --check passes on an OpenSearch that does not say as an error" "$?" "2"
+check "load.sh --check answers 2 for an OpenSearch that does not say" "$?" "2"
 check_true "without calling it not loaded" not_in 'is not loaded' "${WORK}/load-check-silent.log"
 
 switch "${WORK}/switch-noopensearch.log" --uniprot-version 2027-02 --opensearch-url http://localhost:1

@@ -290,7 +290,7 @@ touch /run/lock/unipept-opensearch.lock
 chmod 600 /run/lock/unipept-opensearch.lock
 build --output-dir "$CHECK_OUT" --scratch-dir /work/scratch --replace --skip-checks
 check "a lock it cannot open stops it" "$?" "2"
-check_true "and says it is the lock the build is swapped in under" grep -q 'which the build is swapped in under' /work/last-output
+check_true "and says the lock has to be readable" grep -q 'FAIL without the lock, .*readable by' /work/last-output
 rm -f /run/lock/unipept-opensearch.lock
 mv /run/lock/unipept-opensearch.lock.away /run/lock/unipept-opensearch.lock 2> /dev/null
 
@@ -382,7 +382,7 @@ touch /run/lock/unipept-opensearch.lock
 chmod 600 /run/lock/unipept-opensearch.lock
 clone --remote-output-dir "$REMOTE" --output-dir "$LOCAL" --replace
 check "a lock it cannot open stops it" "$?" "2"
-check_true "and says it is the lock the copy is swapped in under" grep -q 'which the copy is swapped in under' /work/last-output
+check_true "and says the lock has to be readable" grep -q 'FAIL without the lock, .*readable by' /work/last-output
 check_true "before copying anything" test ! -e "${LOCAL}/.clone"
 rm -f /run/lock/unipept-opensearch.lock
 mv /run/lock/unipept-opensearch.lock.away /run/lock/unipept-opensearch.lock 2> /dev/null
@@ -1263,7 +1263,7 @@ touch /work/a-silent
 : > /work/a-loader-calls
 distribute --uniprot-version 2026-03
 check "a server whose OpenSearch does not say fails the run" "$?" "1"
-check_true "and is reported" row_says a had failed "its OpenSearch did not say whether the proteins are loaded"
+check_true "and is reported" row_says a had failed "could not tell whether the proteins are loaded"
 check "and is not loaded again" "$(grep -c -- '--uniprot-entries' /work/a-loader-calls)" "0"
 rm /work/a-silent
 

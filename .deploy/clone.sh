@@ -93,10 +93,16 @@ remote_latest_version() {
 
 # The database on the remote host, before anything is copied: a database it holds incomplete, or
 # under a name its .version disagrees with, is refused here rather than after hundreds of gigabytes
-# of scp.
+# of scp. Whether it is whole is only asked of one that is there.
 preflight_remote() {
-    check_remote_db_present "$1" || die "nothing was copied (above)."
-    check_remote_db_whole "$1" || die "nothing was copied (above)."
+    local problems=0
+
+    if check_remote_db_present "$1"; then
+        check_remote_db_whole "$1" || problems=$((problems + 1))
+    else
+        problems=$((problems + 1))
+    fi
+    [ "$problems" -eq 0 ] || die "${problems} problem(s), so nothing was copied."
 }
 
 copy_database() {
@@ -114,14 +120,14 @@ copy_database() {
 
 # The copy: what the API needs, and the table load.sh reads. A copy that stopped part way leaves files
 # that exist and are short, so the checks are on content. The k-mer table alone first: a copy that
-# lost it stops there, before verify_database's warning that the table is optional says otherwise.
+# lost it stops there, before check_index_files's warning that the table is optional says otherwise.
 preflight_copy() {
     local copy=$1 remote_dir=$2 problems=0
 
-    check_copy_kept_kmer_table "$copy" "$remote_dir" || die "the copy cannot be used (above)."
+    check_copy_kept_kmer_table "$copy" "$remote_dir" || die "the copy is not used (above)."
     check_db_whole "$copy" || problems=$((problems + 1))
     check_db_table "$copy" || problems=$((problems + 1))
-    [ "$problems" -eq 0 ] || die "the copy cannot be used (above)."
+    [ "$problems" -eq 0 ] || die "${problems} problem(s), so the copy is not used."
 }
 
 parse_arguments "$@"
@@ -131,7 +137,7 @@ refuse_root
 
 require ssh scp flock:util-linux
 # Before the copy rather than after it, which is hours in.
-check_lock_usable "the copy" || die "nothing was copied (above)."
+check_lock_usable || die "nothing was copied (above)."
 
 [ -n "$UNIPROT_VERSION" ] || UNIPROT_VERSION=$(remote_latest_version)
 

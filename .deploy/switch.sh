@@ -90,7 +90,6 @@ parse_arguments() {
     fi
 }
 
-problems=0
 # open or close, once preflight has found the index to switch to.
 TARGET_STATUS=''
 
@@ -98,6 +97,8 @@ TARGET_STATUS=''
 # OpenSearch still run, so a host that cannot switch keeps serving exactly as it did. Every check
 # runs, and each problem is counted.
 preflight() {
+    local problems=0
+
     if check_db_present "$TARGET_DIR"; then
         check_db_whole "$TARGET_DIR" || problems=$((problems + 1))
     else
@@ -115,37 +116,40 @@ preflight() {
     take_opensearch_lock -x || { echo "FAIL $(lock_refused $?)" 1>&2; problems=$((problems + 1)); }
 
     check_sudo_opensearch || problems=$((problems + 1))
-    check_opensearch_answers "$TARGET_INDEX" || { problems=$((problems + 1)); return 0; }
-    check_index_to_go_back_to "$FROM_INDEX" || problems=$((problems + 1))
-    TARGET_STATUS=$(index_status "$TARGET_INDEX")
-    check_index_present "$TARGET_INDEX" "$TARGET" "$TARGET_STATUS" || { problems=$((problems + 1)); return 0; }
-    check_index_complete "$TARGET_INDEX" || problems=$((problems + 1))
+    # The indices of the version left, which going back after a failed start needs as they are, and of
+    # the version switched to, which only an OpenSearch that answers can say anything of.
+    if check_opensearch_answers "$TARGET_INDEX"; then
+        check_opensearch_index_open "$FROM_INDEX" || problems=$((problems + 1))
+        check_opensearch_index_complete "$FROM_INDEX" || problems=$((problems + 1))
+        TARGET_STATUS=$(index_status "$TARGET_INDEX")
+        if check_opensearch_index_present "$TARGET_INDEX" "$TARGET" "$TARGET_STATUS"; then
+            check_opensearch_index_complete "$TARGET_INDEX" || problems=$((problems + 1))
+        else
+            problems=$((problems + 1))
+        fi
+    else
+        problems=$((problems + 1))
+    fi
 
-    # The API's check searches the index, which it cannot do closed. Opening it is the one change
-    # before the stop, made only once nothing else stands in the way; --check changes nothing, so it
-    # says what it could not check.
+    # The API's check searches the index, which it cannot do closed, and --check changes nothing, so
+    # it says what it could not check.
     if [ "$TARGET_STATUS" = close ] && [ "$CHECK_ONLY" = true ]; then
         echo "FAIL ${TARGET_INDEX} is closed, so the API's own check of ${TARGET} cannot run. Run this without --check: it opens the index before it stops anything." 1>&2
         problems=$((problems + 1))
     fi
+
+    [ "$problems" -eq 0 ] || die "${problems} problem(s), so nothing was changed."
 }
 
-# What the API itself needs of the new version, its files, the memory for them and the index of its
-# proteins, which its own check decides. Opens a closed index first, which serves nothing new: the
-# API does not query it until it is switched to.
-preflight_api() {
-    if [ "$TARGET_STATUS" = close ]; then
-        opensearch_request "opening ${TARGET_INDEX}" "200" POST "${TARGET_INDEX}/_open" > /dev/null
-        if ! index_ready "$TARGET_INDEX" "$OPENSEARCH_START_TIMEOUT"; then
-            echo "FAIL ${TARGET_INDEX} was opened and did not become ready within ${OPENSEARCH_START_TIMEOUT} seconds." 1>&2
-            problems=$((problems + 1))
-            return 0
-        fi
-        log "Opened ${TARGET_INDEX}, which was closed."
-    fi
-
-    check_api_accepts "$TARGET_DIR" || problems=$((problems + 1))
-    warn_opensearch_disk
+# Opens the index to switch to where it is closed, so the API's own check can search it. The one change
+# before the stop, made once nothing else stands in the way, and one that serves nothing new: the API
+# does not query the index until it is switched to.
+open_target_index() {
+    [ "$TARGET_STATUS" = close ] || return 0
+    opensearch_request "opening ${TARGET_INDEX}" "200" POST "${TARGET_INDEX}/_open" > /dev/null
+    index_ready "$TARGET_INDEX" "$OPENSEARCH_START_TIMEOUT" \
+        || die "${TARGET_INDEX} was opened and did not become ready within ${OPENSEARCH_START_TIMEOUT} seconds. Nothing was changed but opening it, which serves nothing new."
+    log "Opened ${TARGET_INDEX}, which was closed."
 }
 
 wait_for_opensearch() {
@@ -277,14 +281,17 @@ fi
 
 log "Checking that this host can switch from ${FROM} to ${TARGET}."
 preflight
-[ "$problems" -eq 0 ] || die "${problems} problem(s), so nothing was changed."
 # A --check on a closed index has stopped above, so what is left can be checked.
-preflight_api
-if [ "$problems" -gt 0 ]; then
-    [ "$TARGET_STATUS" = close ] \
-        && die "${problems} problem(s), so nothing was changed but opening ${TARGET_INDEX}, which serves nothing new."
-    die "${problems} problem(s), so nothing was changed."
+open_target_index
+# What the API itself needs of the new version, its files, the memory for them and the index of its
+# proteins, which its own check decides.
+if ! check_api_accepts "$TARGET_DIR"; then
+    if [ "$TARGET_STATUS" = close ]; then
+        die "1 problem(s), so nothing was changed but opening ${TARGET_INDEX}, which serves nothing new."
+    fi
+    die "1 problem(s), so nothing was changed."
 fi
+warn_opensearch_disk
 if [ "$CHECK_ONLY" = true ]; then
     log "This host can switch from ${FROM} to ${TARGET}."
     exit 0

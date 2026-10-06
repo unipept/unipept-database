@@ -28,30 +28,13 @@ TEMP_DIR="$(mktemp -d)"
 # The permission cases take access away, and rm cannot clear what it cannot enter.
 trap 'chmod -R u+rwx "${TEMP_DIR}" 2>/dev/null; rm -rf "${TEMP_DIR}"' EXIT
 
-# A whole database, which every case then takes one thing away from. Written fresh each time, so a
-# case cannot inherit what the one before it broke.
-make_index() {
-    local root="$1" index="${1}/uniprot-2026-03/suffix-array" relative
-
-    chmod -R u+rwx "${root}" 2>/dev/null
-    rm -rf "${root:?}"
-
-    for relative in "${INDEX_FILES[@]}" "${OPTIONAL_INDEX_FILES[@]}"; do
-        mkdir -p "$(dirname "${index}/${relative}")"
-        printf 'content\n' > "${index}/${relative}"
-    done
-
-    printf '2026.03\n' > "${index}/.version"
-    printf 'uniprot: 2026-03\n' > "${index}/build-info.txt"
-
-    echo "$index"
-}
-
 # Whether the output of the last verify.sh run contains the text.
 said() { grep -qF -- "$1" <<< "$output"; }
 not_said() { ! said "$1"; }
 
-INDEX="$(make_index "${TEMP_DIR}/whole")"
+# A whole database, which every case then takes one thing away from, made afresh each time so a case
+# cannot inherit what the one before it broke.
+INDEX="$(make_database "${TEMP_DIR}/whole" 2026-03)"
 
 
 section "a whole database"
@@ -63,7 +46,7 @@ check "passes" "$?" "0"
 section "each required file missing in turn"
 
 for required in "${INDEX_FILES[@]}"; do
-    index="$(make_index "${TEMP_DIR}/missing")"
+    index="$(make_database "${TEMP_DIR}/missing" 2026-03)"
     rm "${index}/${required}"
 
     output="$("$VERIFY" --index-dir "$index" 2>&1)"
@@ -75,7 +58,7 @@ done
 section "each required file empty in turn"
 
 for required in "${INDEX_FILES[@]}"; do
-    index="$(make_index "${TEMP_DIR}/empty")"
+    index="$(make_database "${TEMP_DIR}/empty" 2026-03)"
     : > "${index}/${required}"
 
     output="$("$VERIFY" --index-dir "$index" 2>&1)"
@@ -87,7 +70,7 @@ done
 section "every datastore table the build writes is checked"
 
 for table in "${DATASTORE_TABLES[@]}"; do
-    index="$(make_index "${TEMP_DIR}/table")"
+    index="$(make_database "${TEMP_DIR}/table" 2026-03)"
     rm "${index}/datastore/${table}.tsv"
 
     "$VERIFY" --index-dir "$index" > /dev/null 2>&1
@@ -97,7 +80,7 @@ done
 
 section "every failure is reported, not the first"
 
-index="$(make_index "${TEMP_DIR}/several")"
+index="$(make_database "${TEMP_DIR}/several" 2026-03)"
 rm "${index}/sa.bin" "${index}/datastore/taxons.tsv" "${index}/datastore/go_terms.tsv"
 output="$("$VERIFY" --index-dir "$index" 2>&1)"
 check "three missing files give three failures" "$(printf '%s\n' "$output" | grep -c '^FAIL')" "3"
@@ -106,7 +89,7 @@ check "three missing files give three failures" "$(printf '%s\n' "$output" | gre
 section "an optional file"
 
 for optional in "${OPTIONAL_INDEX_FILES[@]}"; do
-    index="$(make_index "${TEMP_DIR}/optional")"
+    index="$(make_database "${TEMP_DIR}/optional" 2026-03)"
     rm "${index}/${optional}"
 
     output="$("$VERIFY" --index-dir "$index" 2>&1)"
@@ -117,27 +100,27 @@ done
 
 section "files that are there and cannot be read"
 
-index="$(make_index "${TEMP_DIR}/unreadable-file")"
+index="$(make_database "${TEMP_DIR}/unreadable-file" 2026-03)"
 chmod 000 "${index}/sa.bin"
 output="$("$VERIFY" --index-dir "$index" 2>&1)"
 check "an unreadable file fails" "$?" "1"
 check_true "it is reported unreadable" said "sa.bin is not readable"
 
-index="$(make_index "${TEMP_DIR}/unreadable-dir")"
+index="$(make_database "${TEMP_DIR}/unreadable-dir" 2026-03)"
 chmod 000 "${index}/datastore"
 output="$("$VERIFY" --index-dir "$index" 2>&1)"
 check "an unreadable datastore fails" "$?" "1"
 check_true "the directory is reported unreadable" said "datastore/ is not readable"
 check_true "its tables are not reported missing" not_said "is missing"
 
-index="$(make_index "${TEMP_DIR}/unreadable-version")"
+index="$(make_database "${TEMP_DIR}/unreadable-version" 2026-03)"
 chmod 000 "${index}/.version"
 output="$("$VERIFY" --index-dir "$index" 2>&1)"
 check "an unreadable .version fails" "$?" "1"
 check_true "it is reported unreadable" said ".version is not readable"
 check_true "it is not also reported as a version mismatch" not_said ".version says"
 
-index="$(make_index "${TEMP_DIR}/unreadable-index")"
+index="$(make_database "${TEMP_DIR}/unreadable-index" 2026-03)"
 chmod 000 "$index"
 output="$("$VERIFY" --index-dir "$index" 2>&1)"
 check "an index directory that cannot be entered fails" "$?" "1"
@@ -148,7 +131,7 @@ check_true "build-info.txt is not called missing" not_said "build-info.txt is mi
 
 section "the directory name and .version"
 
-index="$(make_index "${TEMP_DIR}/mismatch")"
+index="$(make_database "${TEMP_DIR}/mismatch" 2026-03)"
 printf '2025.11\n' > "${index}/.version"
 output="$("$VERIFY" --index-dir "$index" 2>&1)"
 check "a version that is not the directory's fails" "$?" "1"
@@ -157,7 +140,7 @@ check_true "both versions are named" said "the directory says 2026-03 and .versi
 
 section "build-info.txt"
 
-index="$(make_index "${TEMP_DIR}/noinfo")"
+index="$(make_database "${TEMP_DIR}/noinfo" 2026-03)"
 rm "${index}/build-info.txt"
 output="$("$VERIFY" --index-dir "$index" 2>&1)"
 check "a database without one still passes" "$?" "0"
@@ -167,7 +150,7 @@ check_true "its absence is warned about" said "WARN build-info.txt"
 section "choosing what to check"
 
 root="${TEMP_DIR}/several-versions"
-make_index "$root" > /dev/null
+make_database "$root" 2026-03 > /dev/null
 cp -R "${root}/uniprot-2026-03" "${root}/uniprot-2025-11"
 printf '2025.11\n' > "${root}/uniprot-2025-11/suffix-array/.version"
 

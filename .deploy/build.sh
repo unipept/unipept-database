@@ -162,44 +162,26 @@ fill_datastore() {
     log "Filled the datastore."
 }
 
-# A directory's size in KiB, as its files are long rather than as the disk packs them. Fails, with
-# du's own reason, on a directory it cannot measure whole.
-size_kib() {
-    local line
-    line=$(du -sk --apparent-size -- "$1") || return 1
-    echo "${line%%[[:space:]]*}"
-}
-
 # Stops a build the host has no room for, before anything is removed or built. The suffix array is
 # the step that needs the most memory, and a build found out hours in, on a host whose API and
-# OpenSearch held it, when the kernel killed sa-builder. The previous database is the measure of
-# what the next one needs: 1.5 times its size free on disk, for the new database beside the old one
-# and the files the build works through, and 1.2 times its size free in memory. Every problem is
-# reported, not only the first.
+# OpenSearch held it, when the kernel killed sa-builder. The newest database is the measure of what
+# the next one needs. Every check runs, and each problem is counted.
 preflight() {
-    [ "$SKIP_CHECKS" != true ] || return 0
-    local problems=0 previous size free staging=0
+    local problems=0 previous size
 
     check_build_api_stopped || problems=$((problems + 1))
     check_build_opensearch_stopped || problems=$((problems + 1))
-
-    # Sized by the newest database. What the last build left in the staging directory is removed
-    # before this one starts, so it counts as free; left out when it cannot be measured, which only
-    # makes the check stricter.
     previous=$(newest_database)
     if [ -n "$previous" ]; then
         if size=$(size_kib "$previous"); then
-            [ ! -d "$STAGING_DIR" ] || staging=$(size_kib "$STAGING_DIR") || staging=0
-            free=$(($(df -Pk "$OUTPUT_DIR" | awk 'NR == 2 { print $4 }') + staging))
-            check_build_disk "$previous" "$size" "$free" || problems=$((problems + 1))
+            check_build_disk "$previous" "$size" || problems=$((problems + 1))
             check_build_memory "$previous" "$size" || problems=$((problems + 1))
         else
             echo "WARN the size of ${previous} cannot be measured, so disk and memory are not checked." 1>&2
         fi
     fi
 
-    [ "$problems" -eq 0 ] && return 0
-    die "this host has no room for a build (above).
+    [ "$problems" -eq 0 ] || die "${problems} problem(s): this host has no room for a build.
 
 Free what is named above: remove what is not needed from ${OUTPUT_DIR}, and stop the API and
 OpenSearch:
@@ -235,11 +217,11 @@ DATABASE_COMMIT=$(git -C "${HERE}/.." rev-parse HEAD 2>/dev/null || echo unknown
 STAGING_DIR="${OUTPUT_DIR}/.build"
 
 # Before the staging directory is removed, so a build refused here keeps what an earlier one left.
-preflight
+[ "$SKIP_CHECKS" = true ] || preflight
 # The swap at the end is made under the lock that keeps loads and switches apart: found now, not
 # hours in.
 require flock:util-linux
-check_lock_usable "the build" || die "nothing was built (above)."
+check_lock_usable || die "nothing was built (above)."
 
 rm -rf "${STAGING_DIR:?}"
 mkdir -p "${STAGING_DIR}"/{suffix-array,tables,temp}

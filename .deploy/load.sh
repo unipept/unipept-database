@@ -23,9 +23,20 @@ UNIPROT_VERSION=
 # then keeps the index as it is rather than recreating it.
 SKIP_ROWS=
 
-# Whether to only say if the version is loaded to the end, and load nothing. What distribute.sh and
-# switch.sh ask a host before they rely on its index.
+# Whether to only say if the version is loaded to the end, and load nothing. What distribute.sh asks
+# a server before it relies on its index.
 CHECK=false
+
+# The database before it is loaded, and so before anything can switch to it: proteins loaded from a
+# database the API cannot serve would pair with files that are not there. Every check runs, and each
+# problem is counted.
+preflight() {
+    local problems=0
+
+    check_db_whole "$DATABASE_DIR" || problems=$((problems + 1))
+    check_db_table "$DATABASE_DIR" || problems=$((problems + 1))
+    [ "$problems" -eq 0 ] || die "${problems} problem(s), so nothing was loaded."
+}
 
 usage() {
     cat <<'USAGE'
@@ -73,8 +84,8 @@ DATABASE_DIR="${OUTPUT_DIR}/uniprot-${UNIPROT_VERSION}"
 ENTRIES="${DATABASE_DIR}/tables/uniprot_entries.tsv.lz4"
 INDEX_NAME="uniprot_entries-${UNIPROT_VERSION}"
 
-# The loader's answer, passed on: 0 loaded to the end, 1 not, and 2 for an OpenSearch that did not
-# say, which the loader has said why.
+# The loader's answer, passed on: 0 loaded to the end, 1 not, and 2 where OpenSearch did not say,
+# which the loader has already reported.
 if [ "$CHECK" = true ]; then
     status=0
     "${HERE}/../opensearch/load.sh" --opensearch-url "$OPENSEARCH_URL" --index-name "$INDEX_NAME" --check-complete || status=$?
@@ -85,12 +96,7 @@ if [ "$CHECK" = true ]; then
     exit "$status"
 fi
 
-# Before the load, and so before anything can switch to it: proteins loaded from a database the API
-# cannot serve would pair with files that are not there.
-problems=0
-check_db_whole "$DATABASE_DIR" || problems=$((problems + 1))
-check_db_table "$DATABASE_DIR" || problems=$((problems + 1))
-[ "$problems" -eq 0 ] || die "${DATABASE_DIR} cannot be loaded (above)."
+preflight
 
 # Held until the load ends, so switch.sh does not stop OpenSearch under it. Before what is served is
 # read, so no switch moves it between the reading and the load.

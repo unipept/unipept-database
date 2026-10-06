@@ -19,7 +19,8 @@
 #   3. Per server, in the order of servers.conf:
 #        the files: verify.sh there. Missing, clone.sh copies them from the source. There but
 #        failing, the server is left alone unless --replace says to copy them again.
-#        the proteins: load.sh --check there. Not loaded to the end, load.sh loads them.
+#        the proteins: load.sh --check there. Not loaded to the end, load.sh loads them. Where it
+#        cannot tell, as when its OpenSearch does not say, the server is failed and not loaded.
 #      A server that fails is reported, and the next one is still attempted.
 #   4. A table of what each server had, what was done, and whether it is ready.
 #
@@ -159,7 +160,6 @@ declare -A FILES_OF=()
 # there and is not whole; ssh answers 255 for a host it could not reach.
 preflight_servers() {
     local name host root status problems=0
-    local clone_arguments=(--remote-address "$SOURCE" --remote-output-dir "$SOURCE_OUTPUT_DIR" --uniprot-version "$UNIPROT_VERSION")
 
     while read -r name host root; do
         check_server_scripts "$name" "$host" "$root" || { problems=$((problems + 1)); continue; }
@@ -176,11 +176,10 @@ preflight_servers() {
         # A broken copy is only copied again when --replace says so, so only then does it matter
         # whether it could be.
         [ "${FILES_OF[$name]}" = missing ] || [ "$REPLACE" = true ] || continue
-        check_server_can_clone "$name" "$host" "$root" "$UNIPROT_VERSION" "$SOURCE" "${clone_arguments[@]}" \
-            || problems=$((problems + 1))
+        check_server_can_clone "$name" "$host" "$root" || problems=$((problems + 1))
     done <<< "$SERVERS"
 
-    [ "$problems" -eq 0 ] || die "${problems} problem(s) on the servers (above), so nothing was changed."
+    [ "$problems" -eq 0 ] || die "${problems} problem(s), so nothing was changed."
 }
 
 # Puts the version on one server, and prints what it found and did as files|proteins|result.
@@ -211,11 +210,11 @@ distribute_to() {
 
     status=0
     on "$host" "$root" bin/load.sh --uniprot-version "$UNIPROT_VERSION" --check > /dev/null 2>&1 || status=$?
-    # 1 is a load that is not whole, which loading again mends. 2 is an OpenSearch that did not say,
-    # where a load would drop an index that may be whole.
+    # 1 is a load that is not whole, which loading again mends. 2 is an error, such as an OpenSearch
+    # that did not say, where a load would drop an index that may be whole.
     case "$status" in
         0) proteins=had ;;
-        2) echo "${files}|failed|its OpenSearch did not say whether the proteins are loaded"; return ;;
+        2) echo "${files}|failed|could not tell whether the proteins are loaded"; return ;;
         255) echo "${files}|failed|could not reach it to load"; return ;;
         *)
             log "${name}: loading the proteins of ${UNIPROT_VERSION}." 1>&2
