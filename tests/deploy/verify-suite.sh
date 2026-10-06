@@ -10,8 +10,12 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=../lib.sh
 source "${HERE}/../lib.sh"
 
+# For INDEX_FILES and OPTIONAL_INDEX_FILES. lib.sh also sets the options and the traps a deploy
+# script runs with, which stop at the first failure; a suite carries on past one, so they are undone.
 # shellcheck source=../../.deploy/lib.sh
 source "${HERE}/../../.deploy/lib.sh"
+set +eE
+trap - ERR USR1
 
 VERIFY="${HERE}/../../.deploy/verify.sh"
 

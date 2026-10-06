@@ -3,15 +3,11 @@
 # Checks a finished database against what the API needs, and reports everything that is wrong
 # rather than the first thing. Run it with --help for the options.
 
-set -eo pipefail
-set -o errtrace
-
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# Sets the shell options and the traps every script here runs with: see lib/core.sh.
 # shellcheck source=lib.sh
 source "${HERE}/lib.sh"
-
-trap errorAndExit ERR
 
 read_conf
 

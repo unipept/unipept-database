@@ -21,15 +21,11 @@
 #   4. Say what is left: INDEX_LOCATION naming the suffix array through `current`, which is a line
 #      in the API's settings, and nothing here edits them.
 
-set -eo pipefail
-set -o errtrace
-
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# Sets the shell options and the traps every script here runs with: see lib/core.sh.
 # shellcheck source=lib.sh
 source "${HERE}/lib.sh"
-
-trap errorAndExit ERR
 
 read_conf
 
@@ -66,7 +62,7 @@ refuse_root
 
 # It clones and opens indices, so no switch stops OpenSearch under it and no prune removes what it
 # clones from.
-checkdep flock "util-linux"
+require flock:util-linux
 take_opensearch_lock -x || die "$(lock_refused $?)"
 
 [ -f "$API_ENV_FILE" ] || die "there is no ${API_ENV_FILE}, so this host runs no API and has nothing to switch."

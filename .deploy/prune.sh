@@ -24,15 +24,11 @@
 # alias points at, there is no telling what the API serves, so nothing is removed. It holds the lock a
 # load, a switch and migrate.sh take, so none of them works on what it removes.
 
-set -eo pipefail
-set -o errtrace
-
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# Sets the shell options and the traps every script here runs with: see lib/core.sh.
 # shellcheck source=lib.sh
 source "${HERE}/lib.sh"
-
-trap errorAndExit ERR
 
 # The settings only this script has, before read_conf, so deploy.conf can set them.
 
@@ -87,7 +83,7 @@ refuse_root
 require_opensearch
 
 # Held until it ends, so no switch moves to a version, and no load fills one, while it removes them.
-checkdep flock "util-linux"
+require flock:util-linux
 take_opensearch_lock -x || die "$(lock_refused $?)"
 
 SERVED=$(linked_version "$(current_link)" 2> /dev/null) \

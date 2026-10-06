@@ -37,15 +37,11 @@
 #
 # A second run with the same settings changes nothing and restarts nothing.
 
-set -eo pipefail
-set -o errtrace
-
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# Sets the shell options and the traps every script here runs with: see lib/core.sh.
 # shellcheck source=../lib.sh
 source "${HERE}/../lib.sh"
-
-trap errorAndExit ERR
 
 # The settings only this script has.
 
@@ -548,14 +544,7 @@ single_node_settings() {
 parse_arguments "$@"
 
 [ "$(id -u)" -eq 0 ] || die "run this as root. It is the only step that needs it."
-checkdep apt-get
-checkdep dpkg-query
-checkdep dpkg
-checkdep systemctl
-checkdep getent
-checkdep useradd
-checkdep usermod
-checkdep visudo "sudo"
+require apt-get dpkg-query dpkg systemctl getent useradd usermod visudo:sudo
 
 # Before anything on the host changes, so a refused run leaves it as it was.
 check_installed_version
@@ -567,8 +556,7 @@ install_scripts
 allow_opensearch_restart
 
 # Installed with the tools above.
-checkdep curl
-checkdep gpg
+require curl gpg
 
 add_repository
 install_opensearch

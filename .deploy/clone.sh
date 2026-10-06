@@ -4,15 +4,11 @@
 # other host clones the result. It loads nothing into OpenSearch; .deploy/load.sh does that. Run it
 # with --help for the options.
 
-set -eo pipefail
-set -o errtrace
-
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# Sets the shell options and the traps every script here runs with: see lib/core.sh.
 # shellcheck source=lib.sh
 source "${HERE}/lib.sh"
-
-trap errorAndExit ERR
 
 # The settings only this script has. lib/ holds the ones it shares.
 
@@ -157,9 +153,7 @@ refuse_root
 
 [ -n "$OUTPUT_DIR" ] || die "--output-dir requires a value."
 
-checkdep ssh
-checkdep scp
-checkdep flock "util-linux"
+require ssh scp flock:util-linux
 # Before the copy rather than after it, which is hours in.
 opensearch_lock_usable \
     || die "cannot open the lock ${OPENSEARCH_LOCK} as $(id -un), which the copy is swapped in under. Make it writable, or set OPENSEARCH_LOCK."

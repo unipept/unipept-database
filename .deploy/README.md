@@ -351,7 +351,7 @@ it uses of the others.
 
 | Part | What it holds |
 | --- | --- |
-| `lib/core.sh` | `log`, `die`, `checkdep`, `need_value`, the error trap |
+| `lib/core.sh` | the shell options, `log`, `die`, `require`, `need_value`, the error trap |
 | `lib/config.sh` | the settings the parts share, the deploy user, reading `deploy.conf` |
 | `lib/locks.sh` | the OpenSearch lock and the lock per version |
 | `lib/versions.sh` | version names, `.version`, the `current` and `previous` links |

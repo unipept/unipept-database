@@ -4,15 +4,11 @@
 # API reads. It loads nothing into OpenSearch; .deploy/load.sh does that. Run it with --help for the
 # options.
 
-set -eo pipefail
-set -o errtrace
-
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# Sets the shell options and the traps every script here runs with: see lib/core.sh.
 # shellcheck source=lib.sh
 source "${HERE}/lib.sh"
-
-trap errorAndExit ERR
 
 # The settings only this script has. lib/ holds the ones it shares.
 
@@ -249,9 +245,7 @@ refuse_root
 
 # What this script runs itself. The pipeline checks its own tools in the seconds after it starts,
 # so they are not repeated here.
-checkdep git
-checkdep cargo "the Rust toolchain"
-checkdep cmake
+require git "cargo:the Rust toolchain" cmake
 
 # The checkout this script belongs to is what builds the database, so it is what build-info.txt
 # records. A deploy from an archive rather than a clone has no commit to name.
@@ -266,7 +260,7 @@ STAGING_DIR="${OUTPUT_DIR}/.build"
 check_host
 # The swap at the end is made under the lock that keeps loads and switches apart: found now, not
 # hours in.
-checkdep flock "util-linux"
+require flock:util-linux
 opensearch_lock_usable \
     || die "cannot open the lock ${OPENSEARCH_LOCK} as $(id -un), which the build is swapped in under. Make it writable, or set OPENSEARCH_LOCK."
 
