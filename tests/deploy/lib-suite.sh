@@ -138,6 +138,12 @@ both_ways check_db_present "check_db_present '${DB}'" "check_db_present '${TEMP_
 both_ways check_index_files "check_index_files '${DB}/suffix-array'" "check_index_files '${EMPTY}'" "sa.bin is missing"
 mkdir -p "${TEMP_DIR}/checks/other/uniprot-2026-04"
 cp -R "${DB}/suffix-array" "${TEMP_DIR}/checks/other/uniprot-2026-04/"
+output=$(in_lib "check_index_optional_files '${DB}/suffix-array'" 2>&1)
+check "check_index_optional_files passes with every optional file" "$?:${output}" "0:"
+mkdir -p "${TEMP_DIR}/checks/no-kmer"
+output=$(in_lib "check_index_optional_files '${TEMP_DIR}/checks/no-kmer'" 2>&1)
+check "and passes without one, a warning" "$?" "0"
+check_true "which it gives" grep -qF "WARN kmer_table.bin is missing" <<< "$output"
 both_ways check_index_version "check_index_version '${DB}/suffix-array'" "check_index_version '${TEMP_DIR}/checks/other/uniprot-2026-04/suffix-array'" \
     "the directory says 2026-04 and .version says 2026-03"
 both_ways check_db_whole "check_db_whole '${DB}'" "check_db_whole '${EMPTY}'" "${EMPTY} is not a database the API can serve"
@@ -147,18 +153,18 @@ both_ways check_lock_usable \
     "OPENSEARCH_LOCK='${TEMP_DIR}/checks/lock'; check_lock_usable" \
     "OPENSEARCH_LOCK='${TEMP_DIR}/checks/no/such/dir/lock'; check_lock_usable" \
     "Make ${TEMP_DIR}/checks/no/such/dir/lock readable by"
-both_ways check_build_disk \
-    "OUTPUT_DIR='${TEMP_DIR}' STAGING_DIR='${TEMP_DIR}/none'; check_build_disk '${DB}' 1" \
-    "OUTPUT_DIR='${TEMP_DIR}' STAGING_DIR='${TEMP_DIR}/none'; check_build_disk '${DB}' $((1024 * 1024 * 1024 * 1024))" \
+both_ways check_disk_room \
+    "OUTPUT_DIR='${TEMP_DIR}' STAGING_DIR='${TEMP_DIR}/none'; check_disk_room '${DB}' 1" \
+    "OUTPUT_DIR='${TEMP_DIR}' STAGING_DIR='${TEMP_DIR}/none'; check_disk_room '${DB}' $((1024 * 1024 * 1024 * 1024))" \
     "is free on disk"
 # Stand-ins for systemctl and sudo, on a PATH of their own.
 mkdir -p "${TEMP_DIR}/checks/bin"
 make_stub "${TEMP_DIR}/checks/bin/systemctl" "[ -e '${TEMP_DIR}/checks/opensearch-active' ]" > /dev/null
 make_stub "${TEMP_DIR}/checks/bin/sudo" "[ -e '${TEMP_DIR}/checks/sudo-allowed' ]" > /dev/null
 STAND_INS="PATH='${TEMP_DIR}/checks/bin':\$PATH"
-both_ways check_build_opensearch_stopped \
-    "${STAND_INS}; check_build_opensearch_stopped" \
-    "${STAND_INS}; touch '${TEMP_DIR}/checks/opensearch-active'; check_build_opensearch_stopped" \
+both_ways check_opensearch_stopped \
+    "${STAND_INS}; check_opensearch_stopped" \
+    "${STAND_INS}; touch '${TEMP_DIR}/checks/opensearch-active'; check_opensearch_stopped" \
     "OpenSearch is running"
 rm -f "${TEMP_DIR}/checks/opensearch-active"
 both_ways check_sudo_opensearch \
@@ -169,13 +175,13 @@ both_ways check_sudo_opensearch \
 # What the kernel says of memory and processes, where it says it: /proc is Linux's.
 if [ -r /proc/meminfo ]; then
     available=$(awk '/^MemAvailable:/ { print $2 }' /proc/meminfo)
-    both_ways check_build_memory "check_build_memory '${DB}' 1" "check_build_memory '${DB}' $((available * 2))" "of memory is available"
+    both_ways check_memory_free "check_memory_free '${DB}' 1" "check_memory_free '${DB}' $((available * 2))" "of memory is available"
     cp "$(command -v sleep)" "${TEMP_DIR}/checks/unipept-api"
-    in_lib "check_build_api_stopped" > /dev/null 2>&1
-    check "check_build_api_stopped passes" "$?" "0"
+    in_lib "check_api_stopped" > /dev/null 2>&1
+    check "check_api_stopped passes" "$?" "0"
     "${TEMP_DIR}/checks/unipept-api" 30 &
     running=$!
-    fails_saying check_build_api_stopped check_build_api_stopped "The Unipept API is running"
+    fails_saying check_api_stopped check_api_stopped "The Unipept API is running"
     kill "$running" 2> /dev/null
     wait "$running" 2> /dev/null
 fi

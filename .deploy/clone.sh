@@ -120,7 +120,7 @@ copy_database() {
 
 # The copy: what the API needs, and the table load.sh reads. A copy that stopped part way leaves files
 # that exist and are short, so the checks are on content. The k-mer table alone first: a copy that
-# lost it stops there, before check_index_files's warning that the table is optional says otherwise.
+# lost it stops there, before check_index_optional_files's warning that the table is optional says otherwise.
 preflight_copy() {
     local copy=$1 remote_dir=$2 problems=0
 

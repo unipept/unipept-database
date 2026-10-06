@@ -3,9 +3,9 @@
 # What has to be true before a script changes anything, one function per check, for the preflight
 # routines of build.sh, switch.sh, clone.sh, distribute.sh and load.sh, and for verify.sh. A check
 # prints nothing when all is well; otherwise it prints each thing that is wrong as `FAIL …` on
-# stderr, the form verify.sh reports in, and returns 1. None of them exits or changes anything.
-# check_index_files also warns, with `WARN …`, of an optional file that is missing; that changes
-# nothing about what it returns.
+# stderr, the form verify.sh reports in, and returns 1. A warning, as check_index_optional_files
+# gives, prints `WARN …` and returns 0: it changes nothing about what a script does. None of them
+# exits or changes anything.
 #
 # Uses the settings of config.sh, the lists of database.sh, the links of versions.sh,
 # opensearch_lock_usable and lock_refused from locks.sh, what api.sh knows of the API, and the
@@ -27,12 +27,12 @@ size_kib() {
 # and in memory sized by the newest database: 1.5 times it on disk, for the new database beside the
 # old one and the files the build works through, and 1.2 times it in memory.
 
-check_build_api_stopped() {
+check_api_stopped() {
     ! grep -qsx unipept-api /proc/[0-9]*/comm \
         || { echo "FAIL The Unipept API is running, and holds memory the suffix array needs." 1>&2; return 1; }
 }
 
-check_build_opensearch_stopped() {
+check_opensearch_stopped() {
     ! { command -v systemctl > /dev/null && systemctl is-active --quiet opensearch 2> /dev/null; } \
         || { echo "FAIL OpenSearch is running, and holds memory the suffix array needs." 1>&2; return 1; }
 }
@@ -40,7 +40,7 @@ check_build_opensearch_stopped() {
 # Given the newest database and its size in KiB. What the last build left in build.sh's
 # STAGING_DIR is removed before the next one starts, so it counts as free; left out when it cannot
 # be measured, which only makes the check stricter.
-check_build_disk() {
+check_disk_room() {
     local previous=$1 size=$2 staging=0 free
     [ ! -d "$STAGING_DIR" ] || staging=$(size_kib "$STAGING_DIR" 2> /dev/null) || staging=0
     free=$(($(df -Pk "$OUTPUT_DIR" | awk 'NR == 2 { print $4 }') + staging))
@@ -49,7 +49,7 @@ check_build_disk() {
 }
 
 # Passes where the kernel does not say what is available.
-check_build_memory() {
+check_memory_free() {
     local previous=$1 size=$2 available
     available=$(awk '/^MemAvailable:/ { print $2 }' /proc/meminfo)
     [ -z "$available" ] || [ "$available" -ge "$((size * 6 / 5))" ] \
@@ -107,13 +107,20 @@ check_index_files() {
             missing=1
         fi
     done
+    return "$missing"
+}
 
+# A warning: the files the API opens when they are there and runs without, slower. Only in a
+# directory it can look in: check_index_files reports one it cannot.
+check_index_optional_files() {
+    local index="$1" relative
+
+    { [ -d "$index" ] && [ -r "$index" ] && [ -x "$index" ]; } || return 0
     for relative in "${OPTIONAL_INDEX_FILES[@]}"; do
         [ -s "${index}/${relative}" ] \
             || echo "WARN ${relative} is missing; the API runs without it and searches are slower" 1>&2
     done
-
-    return "$missing"
+    return 0
 }
 
 # The directory a build writes is named after the version inside it. A pair that disagrees means one
@@ -130,11 +137,12 @@ check_index_version() {
     [ "$named" = "$version" ] || { echo "FAIL the directory says ${named} and .version says ${version}" 1>&2; return 1; }
 }
 
-# The whole contract a database is held to before the API is pointed at it: both checks of its
-# suffix-array, each reporting every failure.
+# The whole contract a database is held to before the API is pointed at it: the checks of its
+# suffix-array, each reporting every failure, and the warning of what it could do without.
 check_db_whole() {
     local status=0
     check_index_files "${1}/suffix-array" || status=1
+    check_index_optional_files "${1}/suffix-array"
     check_index_version "${1}/suffix-array" || status=1
     [ "$status" -eq 0 ] || { echo "FAIL ${1} is not a database the API can serve (above)." 1>&2; return 1; }
 }
@@ -248,7 +256,7 @@ check_remote_db_present() {
 check_remote_db_whole() {
     remote_sh bash -s << REMOTE || { echo "FAIL the database on ${REMOTE_ADDRESS} cannot be cloned (above)." 1>&2; return 1; }
 $(declare -p INDEX_FILES OPTIONAL_INDEX_FILES)
-$(declare -f check_db_whole check_db_table check_index_files check_index_version database_version_of read_version)
+$(declare -f check_db_whole check_db_table check_index_files check_index_optional_files check_index_version database_version_of read_version)
 status=0
 check_db_whole '${1}' || status=1
 check_db_table '${1}' || status=1

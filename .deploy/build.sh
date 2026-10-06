@@ -169,13 +169,13 @@ fill_datastore() {
 preflight() {
     local problems=0 previous size
 
-    check_build_api_stopped || problems=$((problems + 1))
-    check_build_opensearch_stopped || problems=$((problems + 1))
+    check_api_stopped || problems=$((problems + 1))
+    check_opensearch_stopped || problems=$((problems + 1))
     previous=$(newest_database)
     if [ -n "$previous" ]; then
         if size=$(size_kib "$previous"); then
-            check_build_disk "$previous" "$size" || problems=$((problems + 1))
-            check_build_memory "$previous" "$size" || problems=$((problems + 1))
+            check_disk_room "$previous" "$size" || problems=$((problems + 1))
+            check_memory_free "$previous" "$size" || problems=$((problems + 1))
         else
             echo "WARN the size of ${previous} cannot be measured, so disk and memory are not checked." 1>&2
         fi
