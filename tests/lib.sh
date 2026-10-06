@@ -2,7 +2,7 @@
 #
 # The setup the suites share, and the assertions they make. Sourced, never run.
 
-TESTS_DIR="$(cd "${BASH_SOURCE%/*}" && pwd)"
+TESTS_DIR="$(cd "${BASH_SOURCE[0]%/*}" && pwd)"
 
 # checkdep and the other helpers the pipelines use. Here rather than in each suite, so a suite's
 # dependency checks exist whether or not it remembers to source them.

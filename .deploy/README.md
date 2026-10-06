@@ -362,15 +362,7 @@ it uses of the others.
 root's like the scripts beside them.
 
 `lib/core.sh` is the same file in every repository that deploys Unipept, and CI checks that it
-stays so. So is what a script's exit status means:
-
-| Status | Meaning |
-| --- | --- |
-| 0 | done, or yes |
-| 1 | a check found a problem, or no |
-| 2 | an error, or a usage error |
-| 3 | what was asked about is not there |
-| 130 | interrupted |
+stays so. Its header lists what a script's exit status means, which is the same for every script.
 
 ## What a host needs
 
