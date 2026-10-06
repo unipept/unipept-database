@@ -129,6 +129,9 @@ readonly MARKER='# Written by unipept-database .deploy/opensearch/install.sh. Ed
 # Whether this run wrote a file the service reads, and so has to restart it.
 CHANGED=false
 
+SHARED_OPTIONS=(--output-dir)
+OPTION_HELP[--output-dir]="where the databases are, handed to that user"
+
 usage() {
     cat <<'USAGE'
 Prepares a host to build, clone and hold a Unipept database: the user that owns the databases, the
@@ -137,20 +140,21 @@ the proteins are loaded into. Run as root; it is the only step that needs it.
 
   .deploy/opensearch/install.sh [OPTIONS]
 
-  --heap SIZE              the heap OpenSearch takes, for example 8g; default what the host has,
-                           or 4g
-  --bind ADDRESS           the address it listens on
-  --port PORT              the port it listens on
-  --data-dir DIR           where it keeps its data; default what the configuration names
-  --log-dir DIR            where it writes its logs; default what the configuration names
-  --user USER              who builds, clones and owns the databases
-  --output-dir DIR         where the databases are, handed to that user
-  --prefix DIR             where the scripts a host runs are installed, default /opt/unipept-database
-  --help                   print this message
-
-A flag wins over deploy.conf, which wins over the defaults in this script. The deploy.conf read is the
-clone's own .deploy/deploy.conf where it has one, and otherwise the install's etc/deploy.conf,
-/opt/unipept-database/etc/deploy.conf or the one under --prefix.
+  --heap SIZE                the heap OpenSearch takes, for example 8g; default what the host has,
+                             or 4g
+  --bind ADDRESS             the address it listens on
+  --port PORT                the port it listens on
+  --data-dir DIR             where it keeps its data; default what the configuration names
+  --log-dir DIR              where it writes its logs; default what the configuration names
+  --user USER                who builds, clones and owns the databases
+  --prefix DIR               where the scripts a host runs are installed, default
+                             /opt/unipept-database
+USAGE
+    shared_usage
+    precedence_note
+    cat <<'USAGE'
+The deploy.conf read is the clone's own .deploy/deploy.conf where it has one, and otherwise the one
+under --prefix, which is /opt/unipept-database/etc/deploy.conf unless --prefix says otherwise.
 USAGE
 }
 
@@ -163,10 +167,8 @@ parse_arguments() {
             --data-dir) need_value "$1" "${2-}"; OPENSEARCH_DATA_DIR="$2"; shift 2 ;;
             --log-dir) need_value "$1" "${2-}"; OPENSEARCH_LOG_DIR="$2"; shift 2 ;;
             --user) need_value "$1" "${2-}"; DEPLOY_USER="$2"; shift 2 ;;
-            --output-dir) need_value "$1" "${2-}"; OUTPUT_DIR="$2"; shift 2 ;;
             --prefix) need_value "$1" "${2-}"; PREFIX="$2"; shift 2 ;;
-            --help) usage; exit 0 ;;
-            *) die "unknown option '$1'" ;;
+            *) shared_option "$@"; shift "$SHIFTED" ;;
         esac
     done
 

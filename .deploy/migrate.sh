@@ -31,27 +31,27 @@ read_conf
 # Seconds a clone has to be ready to serve.
 readonly READY_TIMEOUT=600
 
+SHARED_OPTIONS=(--output-dir --opensearch-url)
+
 usage() {
     cat <<'USAGE'
 Sets up a host that runs the API for switch.sh, once. Changes nothing the API serves.
 
   .deploy/migrate.sh [OPTIONS]
 
-  --output-dir DIR         where the databases are
-  --opensearch-url URL     the instance their indices are in
-  --help                   print this message
+USAGE
+    shared_usage
+    cat <<'USAGE'
 
 Run it as the user the API runs as.
 USAGE
+    precedence_note
 }
 
 parse_arguments() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            --output-dir) need_value "$1" "${2-}"; OUTPUT_DIR="$2"; shift 2 ;;
-            --opensearch-url) need_value "$1" "${2-}"; OPENSEARCH_URL="$2"; shift 2 ;;
-            --help) usage; exit 0 ;;
-            *) die "unknown option '$1'" ;;
+            *) shared_option "$@"; shift "$SHIFTED" ;;
         esac
     done
 }

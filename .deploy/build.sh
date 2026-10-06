@@ -70,6 +70,8 @@ sources: ${DATABASE_SOURCES:-none}
 INFO
 }
 
+SHARED_OPTIONS=(--output-dir)
+
 usage() {
     cat <<'USAGE'
 Builds a Unipept database on this host: the tables, the suffix array and the datastore layout the
@@ -77,27 +79,23 @@ API reads. .deploy/load.sh then loads its proteins into OpenSearch.
 
   .deploy/build.sh [OPTIONS]
 
-  --output-dir DIR         where the finished databases are written
-  --scratch-dir DIR        where the repositories are cloned and built
-  --database-sources LIST  swissprot, trembl, or both, comma separated
-  --replace                replace a database of the version this build turns out to be
-  --skip-checks            build without first checking the host has room for it
-  --help                   print this message
-
-A flag wins over .deploy/deploy.conf, which wins over the defaults in lib/ and in this script.
+  --scratch-dir DIR          where the repositories are cloned and built
+  --database-sources LIST    swissprot, trembl, or both, comma separated
+  --replace                  replace a database of the version this build turns out to be
+  --skip-checks              build without first checking the host has room for it
 USAGE
+    shared_usage
+    precedence_note
 }
 
 parse_arguments() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            --output-dir) need_value "$1" "${2-}"; OUTPUT_DIR="$2"; shift 2 ;;
             --scratch-dir) need_value "$1" "${2-}"; SCRATCH_DIR="$2"; shift 2 ;;
             --database-sources) need_value "$1" "${2-}"; DATABASE_SOURCES="$2"; shift 2 ;;
             --replace) REPLACE=true; shift ;;
             --skip-checks) SKIP_CHECKS=true; shift ;;
-            --help) usage; exit 0 ;;
-            *) die "unknown option '$1'" ;;
+            *) shared_option "$@"; shift "$SHIFTED" ;;
         esac
     done
 }

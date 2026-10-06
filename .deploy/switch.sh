@@ -49,6 +49,9 @@ CHECK_ONLY=false
 # drop-in install.sh writes gives OpenSearch itself.
 readonly OPENSEARCH_START_TIMEOUT=600
 
+SHARED_OPTIONS=(--uniprot-version --output-dir --opensearch-url)
+OPTION_HELP[--uniprot-version]="the version to switch to. Its files and its proteins must be here"
+
 usage() {
     cat <<'USAGE'
 Switches the API on this host to another version it holds, stopping it and OpenSearch to do so.
@@ -56,28 +59,24 @@ Switches the API on this host to another version it holds, stopping it and OpenS
   .deploy/switch.sh --uniprot-version YYYY-MM [OPTIONS]
   .deploy/switch.sh --back [OPTIONS]
 
-  --uniprot-version V      the version to switch to. Its files and its proteins must be here
-  --back                   switch to the version before, which `previous` points at
-  --check                  only check that the switch can be made, and change nothing
-  --output-dir DIR         where the databases are
-  --opensearch-url URL     the instance their indices are in
-  --help                   print this message
+  --back                     switch to the version before, which `previous` points at
+  --check                    only check that the switch can be made, and change nothing
+USAGE
+    shared_usage
+    cat <<'USAGE'
 
 Run it as the user the API runs as. OpenSearch is stopped and started through sudo, which
 install.sh allows that user for exactly those two commands.
 USAGE
+    precedence_note
 }
 
 parse_arguments() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            --uniprot-version) need_value "$1" "${2-}"; UNIPROT_VERSION="$2"; shift 2 ;;
             --back) BACK=true; shift ;;
             --check) CHECK_ONLY=true; shift ;;
-            --output-dir) need_value "$1" "${2-}"; OUTPUT_DIR="$2"; shift 2 ;;
-            --opensearch-url) need_value "$1" "${2-}"; OPENSEARCH_URL="$2"; shift 2 ;;
-            --help) usage; exit 0 ;;
-            *) die "unknown option '$1'" ;;
+            *) shared_option "$@"; shift "$SHIFTED" ;;
         esac
     done
 
@@ -85,7 +84,6 @@ parse_arguments() {
         [ -z "$UNIPROT_VERSION" ] || die "--back switches to the version before; it takes no --uniprot-version."
     else
         [ -n "$UNIPROT_VERSION" ] || die "--uniprot-version or --back is required."
-        valid_version "$UNIPROT_VERSION"
     fi
 }
 

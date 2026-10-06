@@ -27,33 +27,28 @@ SKIP_ROWS=
 # switch.sh ask a host before they rely on its index.
 CHECK=false
 
+SHARED_OPTIONS=(--uniprot-version --output-dir --opensearch-url)
+OPTION_HELP[--uniprot-version]="load this one under OUTPUT_DIR, default the newest there"
+
 usage() {
     cat <<'USAGE'
 Loads the proteins of a finished database into this host's OpenSearch.
 
   .deploy/load.sh [OPTIONS]
 
-  --uniprot-version YYYY-MM  load this one under OUTPUT_DIR, default the newest there
-  --output-dir DIR         where the databases are
-  --opensearch-url URL     the instance the proteins are loaded into
-  --skip ROWS              continue a load that stopped part way, passing over this many rows
-  --check                  load nothing: exit 0 if the version is loaded to the end, 1 if not
-  --help                   print this message
-
-A flag wins over .deploy/deploy.conf, which wins over the defaults in lib/ and in this script.
+  --skip ROWS                continue a load that stopped part way, passing over this many rows
+  --check                    load nothing: exit 0 if the version is loaded to the end, 1 if not
 USAGE
+    shared_usage
+    precedence_note
 }
 
 parse_arguments() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            --uniprot-version) need_value "$1" "${2-}"; valid_version "$2"; UNIPROT_VERSION="$2"; shift 2 ;;
-            --output-dir) need_value "$1" "${2-}"; OUTPUT_DIR="$2"; shift 2 ;;
-            --opensearch-url) need_value "$1" "${2-}"; OPENSEARCH_URL="$2"; shift 2 ;;
             --skip) need_value "$1" "${2-}"; SKIP_ROWS="$2"; shift 2 ;;
             --check) CHECK=true; shift ;;
-            --help) usage; exit 0 ;;
-            *) die "unknown option '$1'" ;;
+            *) shared_option "$@"; shift "$SHIFTED" ;;
         esac
     done
 

@@ -30,6 +30,9 @@ CHECK=false
 
 read_conf
 
+SHARED_OPTIONS=(--uniprot-version --output-dir)
+OPTION_HELP[--uniprot-version]="which database to copy, default the newest the other host has"
+
 usage() {
     cat <<'USAGE'
 Copies a finished database from another host. .deploy/load.sh then loads its proteins into this
@@ -37,19 +40,16 @@ host's OpenSearch.
 
   .deploy/clone.sh --remote-address HOST --local-ssh-key KEY [OPTIONS]
 
-  --remote-address HOST    the host to copy from, required
-  --local-ssh-key KEY      the private key to reach it with, required
-  --remote-port PORT       its SSH port
-  --remote-user USER       the user to connect as
-  --remote-output-dir DIR  where it keeps its databases
-  --uniprot-version YYYY-MM  which database to copy, default the newest it has
-  --output-dir DIR         where the copy is written
-  --replace                replace a database of that version already here
-  --check                  copy nothing: check that the copy could be made, and exit 0 if so
-  --help                   print this message
-
-A flag wins over .deploy/deploy.conf, which wins over the defaults in lib/ and in this script.
+  --remote-address HOST      the host to copy from, required
+  --local-ssh-key KEY        the private key to reach it with, required
+  --remote-port PORT         its SSH port
+  --remote-user USER         the user to connect as
+  --remote-output-dir DIR    where it keeps its databases
+  --replace                  replace a database of that version already here
+  --check                    copy nothing: check that the copy could be made, and exit 0 if so
 USAGE
+    shared_usage
+    precedence_note
 }
 
 parse_arguments() {
@@ -60,12 +60,9 @@ parse_arguments() {
             --remote-user) need_value "$1" "${2-}"; REMOTE_USER="$2"; shift 2 ;;
             --remote-output-dir) need_value "$1" "${2-}"; REMOTE_OUTPUT_DIR="$2"; shift 2 ;;
             --local-ssh-key) need_value "$1" "${2-}"; LOCAL_SSH_KEY="$2"; shift 2 ;;
-            --output-dir) need_value "$1" "${2-}"; OUTPUT_DIR="$2"; shift 2 ;;
-            --uniprot-version) need_value "$1" "${2-}"; UNIPROT_VERSION="$2"; shift 2 ;;
             --replace) REPLACE=true; shift ;;
             --check) CHECK=true; shift ;;
-            --help) usage; exit 0 ;;
-            *) die "unknown option '$1'" ;;
+            *) shared_option "$@"; shift "$SHIFTED" ;;
         esac
     done
 

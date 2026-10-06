@@ -21,31 +21,32 @@ UNIPROT_VERSION=
 # so the index files are directly inside it.
 INDEX_DIR=
 
+SHARED_OPTIONS=(--uniprot-version --output-dir)
+OPTION_HELP[--uniprot-version]="check this one under OUTPUT_DIR, default the newest there"
+
 usage() {
     cat <<'USAGE'
 Checks a finished database against the files the API needs, and reports everything that is wrong.
 
   .deploy/verify.sh [OPTIONS]
 
-  --index-dir DIR          the directory the API is pointed at, checked as it is
-  --uniprot-version YYYY-MM  check this one under OUTPUT_DIR, default the newest there
-  --output-dir DIR         where the databases are
-  --help                   print this message
+  --index-dir DIR            the directory the API is pointed at, checked as it is
+USAGE
+    shared_usage
+    cat <<'USAGE'
 
 Exits 0 when every required file is there and has content, 1 when any is missing, empty or
 unreadable, and 3 when the database is not there at all. A missing optional file is a warning and
 does not change the exit status.
 USAGE
+    precedence_note
 }
 
 parse_arguments() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --index-dir) need_value "$1" "${2-}"; INDEX_DIR="$2"; shift 2 ;;
-            --uniprot-version) need_value "$1" "${2-}"; UNIPROT_VERSION="$2"; shift 2 ;;
-            --output-dir) need_value "$1" "${2-}"; OUTPUT_DIR="$2"; shift 2 ;;
-            --help) usage; exit 0 ;;
-            *) die "unknown option '$1'" ;;
+            *) shared_option "$@"; shift "$SHIFTED" ;;
         esac
     done
 

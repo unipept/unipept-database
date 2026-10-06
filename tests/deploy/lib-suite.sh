@@ -116,4 +116,74 @@ is_served 2026-04 strict"
 check "an OpenSearch that does not answer at all leaves it to the links" "$?" "1"
 
 
+section "options.sh: shared_option"
+
+# A script that takes --output-dir and --uniprot-version and no other shared option, with its own
+# --flag, parsed the way the scripts parse.
+options_script() {
+    # shellcheck disable=SC2016 # expanded by the script it writes
+    core_script options.sh 'SHARED_OPTIONS=(--output-dir --uniprot-version)
+usage() { echo "the usage"; }
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --flag) FLAG=set; shift ;;
+        *) shared_option "$@"; shift "$SHIFTED" ;;
+    esac
+done
+echo "${OUTPUT_DIR} ${UNIPROT_VERSION-none} ${FLAG-unset}"'
+}
+script=$(options_script)
+
+check "a shared option the script takes sets its setting, and its own options still work" \
+    "$("$script" --output-dir /data --flag --uniprot-version 2026-03 2>&1)" "/data 2026-03 set"
+output=$("$script" --opensearch-url http://elsewhere:9200 2>&1)
+check "a shared option the script does not take is refused" "$?" "2"
+check "as an unknown option" "$output" "Error: unknown option '--opensearch-url'. Run with --help for the options."
+"$script" --no-such-option > /dev/null 2>&1
+check "as is any option no script takes" "$?" "2"
+output=$("$script" --output-dir 2>&1)
+check "a shared option with no value is refused" "$?" "2"
+check "and says so" "$output" "Error: --output-dir requires a value."
+"$script" --output-dir --flag > /dev/null 2>&1
+check "as is one followed by the next option" "$?" "2"
+output=$("$script" --uniprot-version 2026.03 2>&1)
+check "a version not written YYYY-MM is refused" "$?" "2"
+check "and says how to write it" "$output" "Error: a UniProtKB version is written YYYY-MM, not '2026.03'."
+check "--help prints the script's usage" "$("$script" --help --no-such-option 2>&1)" "the usage"
+"$script" --help > /dev/null 2>&1
+check "and exits 0" "$?" "0"
+
+
+section "options.sh: shared_usage"
+
+check "lists the shared options the script takes, and --help, in the column of every --help" \
+    "$(in_lib 'SHARED_OPTIONS=(--uniprot-version --opensearch-url); shared_usage')" \
+    "$(printf '%s\n' \
+        '  --uniprot-version YYYY-MM  which database, as YYYY-MM' \
+        '  --opensearch-url URL       the OpenSearch instance their proteins are loaded into' \
+        '  --help                     print this message')"
+check_true "with the text a script gives its own meaning of one" \
+    grep -qx '  --uniprot-version YYYY-MM  the version to switch to' \
+    <<< "$(in_lib 'SHARED_OPTIONS=(--uniprot-version); OPTION_HELP[--uniprot-version]="the version to switch to"; shared_usage')"
+
+
+section "every script's --help"
+
+# Each script's own options and the shared ones, in one column, and the same last line. Run as they
+# are, since --help exits before anything a script checks of the host.
+DEPLOY="${LIB%/lib.sh}"
+for script in build clone distribute load migrate prune switch verify opensearch/install; do
+    output=$("${DEPLOY}/${script}.sh" --help 2>&1)
+    check "${script}.sh --help exits 0" "$?" "0"
+    check "and every option line has its text in the thirtieth column" \
+        "$(awk '/^  --/ && (substr($0, 29, 1) != " " || substr($0, 30, 1) == " ")' <<< "$output" | wc -l | tr -d ' ')" "0"
+    check_true "and ends on which setting wins, or says where deploy.conf is" \
+        grep -q '^A flag wins over deploy.conf, which wins over the defaults in lib/ and in the script.$' <<< "$output"
+done
+
+output=$("${DEPLOY}/build.sh" --opensearch-url http://localhost:9200 2>&1)
+check "build.sh, which loads nothing into OpenSearch, refuses --opensearch-url" "$?" "2"
+check "as an unknown option" "$output" "Error: unknown option '--opensearch-url'. Run with --help for the options."
+
+
 summary

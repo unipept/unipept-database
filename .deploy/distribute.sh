@@ -55,6 +55,9 @@ SOURCE=
 # Whether a server whose copy of the version fails verification gets a new one.
 REPLACE=false
 
+SHARED_OPTIONS=(--uniprot-version)
+OPTION_HELP[--uniprot-version]="the version to distribute, required"
+
 usage() {
     cat <<'USAGE'
 Copies a database to every API server that lacks it and loads its proteins there, without changing
@@ -62,34 +65,33 @@ what any of them serves.
 
   .deploy/distribute.sh --uniprot-version YYYY-MM --from HOST [OPTIONS]
 
-  --uniprot-version YYYY-MM  the version to distribute, required
-  --from HOST              the host that has it, required. It is not built here
-  --servers FILE           the servers to put it on, default .deploy/servers.conf
-  --ssh-user USER          who to log in as on the source and the servers; the port and key are
-                           ~/.ssh/config's
-  --replace                copy again to a server whose copy fails verification
-  --help                   print this message
+  --from HOST                the host that has it, required. It is not built here
+  --servers FILE             the servers to put it on, default .deploy/servers.conf
+  --ssh-user USER            who to log in as on the source and the servers; the port and key are
+                             ~/.ssh/config's
+  --replace                  copy again to a server whose copy fails verification
+USAGE
+    shared_usage
+    cat <<'USAGE'
 
 Exits 0 when every server has the version and its proteins loaded, 1 when any does not, and 2 when
 it stopped before touching a server.
 USAGE
+    precedence_note
 }
 
 parse_arguments() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            --uniprot-version) need_value "$1" "${2-}"; UNIPROT_VERSION="$2"; shift 2 ;;
             --from) need_value "$1" "${2-}"; SOURCE="$2"; shift 2 ;;
             --servers) need_value "$1" "${2-}"; SERVERS_FILE="$2"; shift 2 ;;
             --ssh-user) need_value "$1" "${2-}"; SSH_USER="$2"; shift 2 ;;
             --replace) REPLACE=true; shift ;;
-            --help) usage; exit 0 ;;
-            *) die "unknown option '$1'" ;;
+            *) shared_option "$@"; shift "$SHIFTED" ;;
         esac
     done
 
     [ -n "$UNIPROT_VERSION" ] || die "--uniprot-version is required."
-    valid_version "$UNIPROT_VERSION"
     [ -n "$SOURCE" ] || die "--from is required: the host that has ${UNIPROT_VERSION}. This script does not build."
 }
 
