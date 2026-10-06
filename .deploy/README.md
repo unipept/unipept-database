@@ -357,6 +357,7 @@ it uses of the others.
 | `lib/versions.sh` | version names, `.version`, the `current` and `previous` links |
 | `lib/database.sh` | what a database holds, and how it is checked and put in place |
 | `lib/api.sh` | what this host serves, and which API release is installed |
+| `lib/checks.sh` | what has to be true before a script changes anything: one function per check, printing `FAIL …` |
 
 `install.sh` installs them as `/opt/unipept-database/bin/lib.sh` and `/opt/unipept-database/bin/lib/`,
 root's like the scripts beside them.
