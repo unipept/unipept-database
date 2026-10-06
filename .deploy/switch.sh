@@ -49,9 +49,6 @@ CHECK_ONLY=false
 # drop-in install.sh writes gives OpenSearch itself.
 readonly OPENSEARCH_START_TIMEOUT=600
 
-SHARED_OPTIONS=(--uniprot-version --output-dir --opensearch-url)
-OPTION_HELP[--uniprot-version]="the version to switch to. Its files and its proteins must be here"
-
 usage() {
     cat <<'USAGE'
 Switches the API on this host to another version it holds, stopping it and OpenSearch to do so.
@@ -59,16 +56,18 @@ Switches the API on this host to another version it holds, stopping it and OpenS
   .deploy/switch.sh --uniprot-version YYYY-MM [OPTIONS]
   .deploy/switch.sh --back [OPTIONS]
 
+  --uniprot-version YYYY-MM  the version to switch to. Its files and its proteins must be here
   --back                     switch to the version before, which `previous` points at
   --check                    only check that the switch can be made, and change nothing
-USAGE
-    shared_usage
-    cat <<'USAGE'
+  --output-dir DIR           where the databases are
+  --opensearch-url URL       the instance their indices are in
+  --help                     print this message
 
 Run it as the user the API runs as. OpenSearch is stopped and started through sudo, which
 install.sh allows that user for exactly those two commands.
+
+A flag wins over .deploy/deploy.conf, which wins over the defaults in lib/ and in this script.
 USAGE
-    precedence_note
 }
 
 parse_arguments() {
@@ -76,7 +75,9 @@ parse_arguments() {
         case "$1" in
             --back) BACK=true; shift ;;
             --check) CHECK_ONLY=true; shift ;;
-            *) shared_option "$@"; shift "$SHIFTED" ;;
+            --uniprot-version | --output-dir | --opensearch-url) shared_option "$1" "${2-}"; shift 2 ;;
+            --help) usage; exit 0 ;;
+            *) unknown_option "$1" ;;
         esac
     done
 

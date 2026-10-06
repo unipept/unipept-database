@@ -39,8 +39,6 @@ DRY_RUN=false
 
 read_conf
 
-SHARED_OPTIONS=(--output-dir --opensearch-url)
-
 usage() {
     cat <<'USAGE'
 Removes old databases from this host, each version's files and its OpenSearch index together.
@@ -50,16 +48,17 @@ Removes old databases from this host, each version's files and its OpenSearch in
   --keep N                   how many versions older than the one this host serves to keep, to go
                              back to. Required
   --dry-run                  say what would be removed, and remove nothing
-USAGE
-    shared_usage
-    cat <<'USAGE'
+  --output-dir DIR           where the databases are
+  --opensearch-url URL       the instance their indices are in
+  --help                     print this message
 
 Every version this host serves, the one before it, and every newer one, are always kept.
 uniprot_entries and uniprot_entries-legacy, from before versioned indices, only go once the API
 installed and the one deploy.sh would roll back to are 2.7.0 or newer, INDEX_LOCATION goes through
 current, and the index of the version it serves is loaded to the end.
+
+A flag wins over .deploy/deploy.conf, which wins over the defaults in lib/ and in this script.
 USAGE
-    precedence_note
 }
 
 parse_arguments() {
@@ -67,7 +66,9 @@ parse_arguments() {
         case "$1" in
             --keep) need_value "$1" "${2-}"; KEEP="$2"; shift 2 ;;
             --dry-run) DRY_RUN=true; shift ;;
-            *) shared_option "$@"; shift "$SHIFTED" ;;
+            --output-dir | --opensearch-url) shared_option "$1" "${2-}"; shift 2 ;;
+            --help) usage; exit 0 ;;
+            *) unknown_option "$1" ;;
         esac
     done
 

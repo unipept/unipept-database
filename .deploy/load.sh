@@ -27,20 +27,21 @@ SKIP_ROWS=
 # switch.sh ask a host before they rely on its index.
 CHECK=false
 
-SHARED_OPTIONS=(--uniprot-version --output-dir --opensearch-url)
-OPTION_HELP[--uniprot-version]="load this one under OUTPUT_DIR, default the newest there"
-
 usage() {
     cat <<'USAGE'
 Loads the proteins of a finished database into this host's OpenSearch.
 
   .deploy/load.sh [OPTIONS]
 
+  --uniprot-version YYYY-MM  load this one under OUTPUT_DIR, default the newest there
+  --output-dir DIR           where the databases are
+  --opensearch-url URL       the instance the proteins are loaded into
   --skip ROWS                continue a load that stopped part way, passing over this many rows
   --check                    load nothing: exit 0 if the version is loaded to the end, 1 if not
+  --help                     print this message
+
+A flag wins over .deploy/deploy.conf, which wins over the defaults in lib/ and in this script.
 USAGE
-    shared_usage
-    precedence_note
 }
 
 parse_arguments() {
@@ -48,7 +49,9 @@ parse_arguments() {
         case "$1" in
             --skip) need_value "$1" "${2-}"; SKIP_ROWS="$2"; shift 2 ;;
             --check) CHECK=true; shift ;;
-            *) shared_option "$@"; shift "$SHIFTED" ;;
+            --uniprot-version | --output-dir | --opensearch-url) shared_option "$1" "${2-}"; shift 2 ;;
+            --help) usage; exit 0 ;;
+            *) unknown_option "$1" ;;
         esac
     done
 

@@ -1,4 +1,1 @@
-# Where a `source` is looked for: beside the script, and in .deploy, so a script below it, as
-# opensearch/install.sh is, finds the parts lib.sh loads.
 source-path=SCRIPTDIR
-source-path=.deploy

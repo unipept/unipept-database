@@ -30,9 +30,6 @@ CHECK=false
 
 read_conf
 
-SHARED_OPTIONS=(--uniprot-version --output-dir)
-OPTION_HELP[--uniprot-version]="which database to copy, default the newest the other host has"
-
 usage() {
     cat <<'USAGE'
 Copies a finished database from another host. .deploy/load.sh then loads its proteins into this
@@ -45,11 +42,14 @@ host's OpenSearch.
   --remote-port PORT         its SSH port
   --remote-user USER         the user to connect as
   --remote-output-dir DIR    where it keeps its databases
+  --uniprot-version YYYY-MM  which database to copy, default the newest it has
+  --output-dir DIR           where the copy is written
   --replace                  replace a database of that version already here
   --check                    copy nothing: check that the copy could be made, and exit 0 if so
+  --help                     print this message
+
+A flag wins over .deploy/deploy.conf, which wins over the defaults in lib/ and in this script.
 USAGE
-    shared_usage
-    precedence_note
 }
 
 parse_arguments() {
@@ -62,7 +62,9 @@ parse_arguments() {
             --local-ssh-key) need_value "$1" "${2-}"; LOCAL_SSH_KEY="$2"; shift 2 ;;
             --replace) REPLACE=true; shift ;;
             --check) CHECK=true; shift ;;
-            *) shared_option "$@"; shift "$SHIFTED" ;;
+            --uniprot-version | --output-dir) shared_option "$1" "${2-}"; shift 2 ;;
+            --help) usage; exit 0 ;;
+            *) unknown_option "$1" ;;
         esac
     done
 
