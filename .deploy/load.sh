@@ -37,7 +37,8 @@ Loads the proteins of a finished database into this host's OpenSearch.
   --output-dir DIR           where the databases are
   --opensearch-url URL       the instance the proteins are loaded into
   --skip ROWS                continue a load that stopped part way, passing over this many rows
-  --check                    load nothing: exit 0 if the version is loaded to the end, 1 if not
+  --check                    load nothing: exit 0 if the version is loaded to the end, 1 if not,
+                             and 2 if OpenSearch does not say
   --help                     print this message
 
 A flag wins over .deploy/deploy.conf, which wins over the defaults in lib/ and in this script.

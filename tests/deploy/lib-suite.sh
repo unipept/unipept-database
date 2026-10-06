@@ -218,21 +218,27 @@ both_ways check_opensearch_answers \
     "opensearch_answers() { return 1; }; check_opensearch_answers uniprot_entries-2026-03" \
     "OpenSearch does not answer at"
 both_ways check_index_to_go_back_to \
-    "index_status() { echo open; }; is_complete() { return 0; }; check_index_to_go_back_to uniprot_entries-2026-01" \
-    "index_status() { echo close; }; is_complete() { return 0; }; check_index_to_go_back_to uniprot_entries-2026-01" \
+    "index_status() { echo open; }; load_state() { echo complete; }; check_index_to_go_back_to uniprot_entries-2026-01" \
+    "index_status() { echo close; }; load_state() { echo complete; }; check_index_to_go_back_to uniprot_entries-2026-01" \
     "uniprot_entries-2026-01, of the version this host serves, is not open and loaded to the end"
+output=$(in_lib "index_status() { echo open; }; load_state() { echo unknown; }; check_index_to_go_back_to uniprot_entries-2026-01" 2>&1)
+check "check_index_to_go_back_to fails where OpenSearch does not say" "$?" "1"
+check_true "and says that, not that it is not loaded" grep -qF "FAIL OpenSearch did not say whether uniprot_entries-2026-01" <<< "$output"
 both_ways check_index_present "check_index_present uniprot_entries-2026-03 2026-03 open" "check_index_present uniprot_entries-2026-03 2026-03 ''" \
     "uniprot_entries-2026-03 is not in OpenSearch. Load it with load.sh --uniprot-version 2026-03"
 both_ways check_index_complete \
-    "is_complete() { return 0; }; check_index_complete uniprot_entries-2026-03" \
-    "is_complete() { return 1; }; check_index_complete uniprot_entries-2026-03" \
+    "load_state() { echo complete; }; check_index_complete uniprot_entries-2026-03" \
+    "load_state() { echo incomplete; }; check_index_complete uniprot_entries-2026-03" \
     "uniprot_entries-2026-03 was not loaded to the end"
+output=$(in_lib "load_state() { echo unknown; }; check_index_complete uniprot_entries-2026-03" 2>&1)
+check "check_index_complete fails where OpenSearch does not say" "$?" "1"
+check_true "and says that, not that it is not loaded" grep -qF "FAIL OpenSearch did not say whether uniprot_entries-2026-03" <<< "$output"
 
 # Another host, reached through a stand-in that runs the command here, as clone.sh's remote_sh and
 # distribute.sh's on would run it there.
 REMOTE='remote_sh() { bash -c "$*"; }; REMOTE_ADDRESS=elsewhere'
 both_ways check_remote_db_present "${REMOTE}; check_remote_db_present '${DB}'" "${REMOTE}; check_remote_db_present '${EMPTY}/gone'" "the remote host has no ${EMPTY}/gone"
-both_ways check_remote_db_whole "${REMOTE}; check_remote_db_whole '${DB}'" "${REMOTE}; check_remote_db_whole '${EMPTY}'" "the database on elsewhere is missing files the API needs"
+both_ways check_remote_db_whole "${REMOTE}; check_remote_db_whole '${DB}'" "${REMOTE}; check_remote_db_whole '${EMPTY}'" "${EMPTY} has no tables/uniprot_entries.tsv.lz4"
 mkdir -p "${TEMP_DIR}/checks/lost/suffix-array"
 both_ways check_copy_kept_kmer_table \
     "${REMOTE}; check_copy_kept_kmer_table '${DB}' '${DB}'" \
@@ -241,15 +247,15 @@ both_ways check_copy_kept_kmer_table \
 output=$(in_lib "remote_sh() { return 255; }; REMOTE_ADDRESS=elsewhere; check_copy_kept_kmer_table '${DB}' '${DB}'" 2>&1)
 check "check_copy_kept_kmer_table fails where it cannot ask" "$?" "1"
 check_true "and says so" grep -qF "FAIL could not ask elsewhere whether it has a k-mer table" <<< "$output"
-SERVER="on() { local host=\$1 root=\$2; shift 2; (cd \"\$root\" && \"\$@\"); }; UNIPROT_VERSION=2026-03 SOURCE=source"
+SERVER="on() { local host=\$1 root=\$2; shift 2; (cd \"\$root\" && \"\$@\"); }"
 mkdir -p "${TEMP_DIR}/checks/server/bin" "${TEMP_DIR}/checks/bare"
 # The server's clone.sh cannot clone the version named never.
 for script in verify clone load; do printf '#!/bin/sh\ncase "$*" in *never*) exit 1 ;; esac\n' > "${TEMP_DIR}/checks/server/bin/${script}.sh"; done
 chmod +x "${TEMP_DIR}/checks/server/bin/"*
 both_ways check_server_scripts "${SERVER}; check_server_scripts a host '${TEMP_DIR}/checks/server'" "${SERVER}; check_server_scripts b host '${TEMP_DIR}/checks/bare'" \
     "b cannot be reached, or has no scripts installed in ${TEMP_DIR}/checks/bare"
-both_ways check_server_can_clone "${SERVER}; check_server_can_clone a host '${TEMP_DIR}/checks/server' --uniprot-version 2026-03" \
-    "${SERVER}; UNIPROT_VERSION=never; check_server_can_clone a host '${TEMP_DIR}/checks/server' --uniprot-version never" \
+both_ways check_server_can_clone "${SERVER}; check_server_can_clone a host '${TEMP_DIR}/checks/server' 2026-03 source --uniprot-version 2026-03" \
+    "${SERVER}; check_server_can_clone a host '${TEMP_DIR}/checks/server' never source --uniprot-version never" \
     "a cannot clone never from source"
 
 

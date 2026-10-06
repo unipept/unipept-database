@@ -138,7 +138,8 @@ it. .deploy/load.sh runs this, naming the index after the version.
   --index-name NAME          the index to drop, create and fill, default uniprot_entries
   --skip ROWS                continue a load that stopped part way, passing over this many rows;
                              the index is kept
-  --check-complete           load nothing: exit 0 if the index is loaded to the end, 1 if not
+  --check-complete           load nothing: exit 0 if the index is loaded to the end, 1 if not,
+                             and 2 if OpenSearch does not say
   --opensearch-url URL       the OpenSearch instance, default http://localhost:9200
   --help                     print this message
 USAGE

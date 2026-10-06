@@ -98,8 +98,11 @@ TARGET_STATUS=''
 # OpenSearch still run, so a host that cannot switch keeps serving exactly as it did. Every check
 # runs, and each problem is counted.
 preflight() {
-    check_db_present "$TARGET_DIR" || problems=$((problems + 1))
-    [ ! -d "$TARGET_DIR" ] || check_db_whole "$TARGET_DIR" || problems=$((problems + 1))
+    if check_db_present "$TARGET_DIR"; then
+        check_db_whole "$TARGET_DIR" || problems=$((problems + 1))
+    else
+        problems=$((problems + 1))
+    fi
     check_api_stop_start || problems=$((problems + 1))
     check_api_version || problems=$((problems + 1))
     check_api_rollback_version || problems=$((problems + 1))

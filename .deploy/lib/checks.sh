@@ -2,8 +2,9 @@
 #
 # What has to be true before a script changes anything, one function per check, for the routines in
 # build.sh, switch.sh, clone.sh, load.sh and distribute.sh that check first. A check prints nothing
-# when all is well; otherwise it prints what is wrong as `FAIL …` on stderr and returns 1. A check
-# either finds a problem or warns, never both. None of them exits or changes anything.
+# when all is well; otherwise it prints what is wrong as `FAIL …` on stderr and returns 1. None of
+# them exits or changes anything. A warning verify_database prints along the way, for a missing
+# k-mer table, changes nothing about what check_db_whole returns.
 #
 # Uses the settings of config.sh and api.sh, verify_database and verify_database_source from
 # database.sh, the links of versions.sh, lock_refused and opensearch_lock_usable from locks.sh, and
@@ -127,7 +128,11 @@ check_opensearch_answers() {
 
 # The index of the version a switch leaves, which going back after a failed start needs as it is.
 check_index_to_go_back_to() {
-    { [ "$(index_status "$1")" = open ] && is_complete "$1"; } \
+    local state
+    state=$(load_state "$1")
+    [ "$state" != unknown ] \
+        || { echo "FAIL OpenSearch did not say whether ${1}, of the version this host serves, is loaded to the end. Try again once it answers." 1>&2; return 1; }
+    { [ "$(index_status "$1")" = open ] && [ "$state" = complete ]; } \
         || { echo "FAIL ${1}, of the version this host serves, is not open and loaded to the end, so a switch that fails could not go back to it. Run migrate.sh, or load it again, first." 1>&2; return 1; }
 }
 
@@ -137,7 +142,11 @@ check_index_present() {
 }
 
 check_index_complete() {
-    is_complete "$1" || { echo "FAIL ${1} was not loaded to the end. Continue its load with --skip, or load it again." 1>&2; return 1; }
+    case $(load_state "$1") in
+        complete) ;;
+        unknown) echo "FAIL OpenSearch did not say whether ${1} is loaded to the end. Try again once it answers." 1>&2; return 1 ;;
+        *) echo "FAIL ${1} was not loaded to the end. Continue its load with --skip, or load it again." 1>&2; return 1 ;;
+    esac
 }
 
 # A database on another host, before anything is copied: its directory, then the same checks the
@@ -148,11 +157,12 @@ check_remote_db_present() {
 }
 
 check_remote_db_whole() {
-    remote_sh bash -s << REMOTE || { echo "FAIL the database on ${REMOTE_ADDRESS} is missing files the API needs, or is not the version it is named after." 1>&2; return 1; }
+    remote_sh bash -s << REMOTE || { echo "FAIL the database on ${REMOTE_ADDRESS} cannot be cloned (above)." 1>&2; return 1; }
 $(verify_database_source)
+$(declare -f check_db_whole check_db_table)
 status=0
-verify_database '${1}/suffix-array' || status=1
-[ -s '${1}/tables/uniprot_entries.tsv.lz4' ] || { echo "FAIL tables/uniprot_entries.tsv.lz4 is missing" 1>&2; status=1; }
+check_db_whole '${1}' || status=1
+check_db_table '${1}' || status=1
 exit "\$status"
 REMOTE
 }
@@ -175,13 +185,14 @@ check_copy_kept_kmer_table() {
 # has the scripts installed.
 check_server_scripts() {
     on "$2" "$3" test -x bin/verify.sh -a -x bin/clone.sh -a -x bin/load.sh 2> /dev/null \
-        || { echo "FAIL ${1} cannot be reached, or has no scripts installed in ${3}." 1>&2; return 1; }
+        || { echo "FAIL ${1} cannot be reached, or has no scripts installed in ${3}; .deploy/opensearch/install.sh installs them." 1>&2; return 1; }
 }
 
-# And can clone the version from the source, given the arguments clone.sh takes for it.
+# And can clone the version from the source, given its name, host and install root, the version and
+# the source, and the arguments clone.sh takes for them.
 check_server_can_clone() {
-    local name=$1 host=$2 root=$3
-    shift 3
+    local name=$1 host=$2 root=$3 version=$4 source=$5
+    shift 5
     on "$host" "$root" bin/clone.sh --check "$@" > /dev/null 2>&1 \
-        || { echo "FAIL ${name} cannot clone ${UNIPROT_VERSION} from ${SOURCE}; run clone.sh --check there to see why." 1>&2; return 1; }
+        || { echo "FAIL ${name} cannot clone ${version} from ${source}; run clone.sh --check there to see why." 1>&2; return 1; }
 }

@@ -131,7 +131,7 @@ refuse_root
 
 require ssh scp flock:util-linux
 # Before the copy rather than after it, which is hours in.
-check_lock_usable "the copy" || die "the copy could not be put in place at its end (above)."
+check_lock_usable "the copy" || die "nothing was copied (above)."
 
 [ -n "$UNIPROT_VERSION" ] || UNIPROT_VERSION=$(remote_latest_version)
 

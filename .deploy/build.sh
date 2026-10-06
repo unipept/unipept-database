@@ -239,7 +239,7 @@ preflight
 # The swap at the end is made under the lock that keeps loads and switches apart: found now, not
 # hours in.
 require flock:util-linux
-check_lock_usable "the build" || die "the build could not be put in place at its end (above)."
+check_lock_usable "the build" || die "nothing was built (above)."
 
 rm -rf "${STAGING_DIR:?}"
 mkdir -p "${STAGING_DIR}"/{suffix-array,tables,temp}

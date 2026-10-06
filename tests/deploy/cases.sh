@@ -480,7 +480,7 @@ printf '2025.11\n' > "${REMOTE}/uniprot-2025-11/suffix-array/.version"
 rm "${REMOTE}/uniprot-2025-11/tables/uniprot_entries.tsv.lz4"
 clone --remote-output-dir "$REMOTE" --output-dir "$LOCAL" --uniprot-version 2025-11 --replace
 check "a remote database without its entries table stops" "$?" "2"
-check_true "the table is named" grep -q 'tables/uniprot_entries.tsv.lz4 is missing' /work/last-output
+check_true "the table is named" grep -q 'has no tables/uniprot_entries.tsv.lz4' /work/last-output
 check_true "it stops before copying anything" test ! -e "${LOCAL}/.clone"
 
 
@@ -1203,7 +1203,7 @@ make_server() {
 #!/usr/bin/env bash
 printf '%s\n' "\$*" >> /work/${name}-loader-calls
 case "\$*" in
-    *--check-complete*) [ -e /work/${name}-loaded ] ;;
+    *--check-complete*) [ ! -e /work/${name}-silent ] || exit 2; [ -e /work/${name}-loaded ] ;;
     *) touch /work/${name}-loaded ;;
 esac
 LOADER
@@ -1256,6 +1256,16 @@ check_true "a already had both" row_says a had had ready
 check_true "b already had both" row_says b had had ready
 check_true "nothing is copied again" test -f /work/a-data/uniprot-2026-03/marker
 check "nothing is loaded again" "$(grep -c -- '--uniprot-entries' /work/a-loader-calls)" "0"
+
+# An OpenSearch that does not say whether a's proteins are loaded: a load would drop an index that
+# may be whole, so a is left as it is and reported.
+touch /work/a-silent
+: > /work/a-loader-calls
+distribute --uniprot-version 2026-03
+check "a server whose OpenSearch does not say fails the run" "$?" "1"
+check_true "and is reported" row_says a had failed "its OpenSearch did not say whether the proteins are loaded"
+check "and is not loaded again" "$(grep -c -- '--uniprot-entries' /work/a-loader-calls)" "0"
+rm /work/a-silent
 
 rm /work/a-loaded
 distribute --uniprot-version 2026-03
