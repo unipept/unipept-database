@@ -17,9 +17,9 @@ trap errorAndExit ERR
 
 read_conf
 
-# The settings only this script has. lib/ holds the ones it shares. After read_conf
-# rather than before, as in verify.sh: a UNIPROT_VERSION in deploy.conf is the release clone.sh
-# fetches, and which database to load is said here or is the newest.
+# The settings only this script has. lib/ holds the ones it shares. After read_conf rather than
+# before, as in verify.sh: a UNIPROT_VERSION in deploy.conf is the release clone.sh fetches, and
+# which database to load is said here or is the newest.
 
 # Which database to load. Empty means the newest one under OUTPUT_DIR.
 UNIPROT_VERSION=

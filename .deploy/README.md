@@ -335,9 +335,8 @@ as, and as root every file can.
 
 It reports every file that is missing, empty or unreadable rather than the first, and exits 1 if any
 of them is, or 3 when the database is not there at all. A missing `kmer_table.bin` is a warning: the
-API runs without it and searches are slower. The list it checks is the one
-`unipept-api/.deploy/server/deploy.sh` starts a service against, so a change on either side has to be
-made on both.
+API runs without it and searches are slower. The list it checks is the one the API checks before it
+starts, so a change has to be made on both sides.
 
 `build-info.txt` records the UniProtKB version, the commit of this checkout, the commit of the
 unipept-index clone the build used, and the sources it read. unipept-index is cloned at the tip of
@@ -348,8 +347,7 @@ are in OpenSearch is not something it records.
 ## The shared library
 
 Every script sources `lib.sh`, which loads its parts from `lib/`. Each part says in its header what
-it uses of the others. unipept-api's `.deploy/lib.sh` has the same layout, and the parts both
-repositories have carry the same names: `core.sh`, `config.sh` and `locks.sh`.
+it uses of the others.
 
 | Part | What it holds |
 | --- | --- |

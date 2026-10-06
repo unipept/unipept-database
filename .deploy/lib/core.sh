@@ -1,11 +1,11 @@
 # shellcheck shell=bash
 #
 # What every script in .deploy runs on: logging, stopping, the commands it needs, and the trap that
-# reports a command that failed. Nothing in it is particular to this repository: unipept-api's
-# .deploy/lib/core.sh does the same. Needs nothing else. Sourced through .deploy/lib.sh, never run. The
+# reports a command that failed. Needs nothing else. Sourced through .deploy/lib.sh, never run. The
 # pipelines have their own, in pipelines/lib/common.sh: these scripts build no tables, and do not
 # need what that carries.
 
+# Prints a line on standard output, stamped with the epoch second and the local date and time.
 log() { echo "$(date +'[%s (%F %T)]')" "$@"; }
 
 # Stops, saying what to install, where a command a script needs is not there.

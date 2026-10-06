@@ -15,7 +15,7 @@ valid_version() {
 }
 
 # The version a .version file holds, as YYYY-MM. The file holds YYYY.MM, which is the form the API
-# reads; the directory name has always used dashes. Prints nothing for an empty file.
+# reads; the directory name uses dashes. Prints nothing for an empty file.
 read_version() {
     tr -d '[:space:]' < "$1" | tr '.' '-'
 }

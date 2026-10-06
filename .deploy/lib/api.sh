@@ -6,16 +6,16 @@
 # version_of_index, opensearch_answers and ALIAS from opensearch/lib.sh. Sourced through
 # .deploy/lib.sh.
 
-# The API on this host, which unipept-api's install puts there: its settings, of which INDEX_LOCATION
-# is read here, and the script that stops and starts it. A host without them runs no API.
+# The API on this host, where its own install puts it: its settings, of which INDEX_LOCATION is read
+# here, and the script that stops and starts it. A host without them runs no API.
 API_ENV_FILE=${API_ENV_FILE:-/opt/unipept-api/etc/unipept-api.env}
 # shellcheck disable=SC2034 # read by the scripts that source this file
 API_DEPLOY=${API_DEPLOY:-/opt/unipept-api/lib/deploy.sh}
 API_BINARY=${API_BINARY:-/opt/unipept-api/bin/unipept-api}
 
 # The first unipept-api release that queries uniprot_entries-<version>, the index of the version its
-# files are from (unipept-api#286). An older one queries uniprot_entries itself, or the alias of that
-# name, and needs what a host loaded before versioned indices kept.
+# files are from. An older one queries uniprot_entries itself, or the alias of that name, and needs
+# what a host loaded before versioned indices kept.
 readonly API_VERSIONED_INDEX_SINCE=2.7.0
 
 # INDEX_LOCATION in the API's settings on this host, or nothing where there are none.
@@ -99,7 +99,7 @@ api_state() {
     queries_versioned_index "$version" || return 1
 }
 
-# The binary unipept-api's deploy.sh keeps beside the one installed, for deploy.sh rollback.
+# The binary the API keeps beside the installed one, for its rollback.
 api_rollback_binary() { echo "${API_BINARY}.previous"; }
 
 # Whether nothing installed still needs what a host loaded before versioned indices kept: the API

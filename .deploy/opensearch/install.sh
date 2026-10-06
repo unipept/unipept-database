@@ -282,9 +282,9 @@ install_scripts() {
     # A load, a switch, a prune or migrate.sh running from these files while they are replaced
     # could pair a new lib.sh with an old script, or start opensearch/load.sh from the new release
     # halfway through a run of the old one. Each holds OPENSEARCH_LOCK, so this holds it
-    # exclusively until it is done, and refuses while one runs. /run/lock is emptied at boot, and a
-    # lock file root made here could not be opened by the deploy user, so it is made the deploy
-    # user's, as the first script to take it would have made it.
+    # exclusively until it is done, and refuses while one runs. /run/lock is emptied at boot, so the
+    # file may not be there yet: it is made the deploy user's, as the first script to take it would
+    # have made it.
     [ -e "$OPENSEARCH_LOCK" ] || install -m 0644 -o "$DEPLOY_USER" -g "$DEPLOY_USER" /dev/null "$OPENSEARCH_LOCK"
     take_opensearch_lock -x || die "$(lock_refused $?) Install once it has finished."
 

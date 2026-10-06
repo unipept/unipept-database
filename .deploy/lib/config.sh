@@ -1,8 +1,9 @@
 # shellcheck shell=bash
 #
 # Where a host's own values come from, the settings more than one part reads, and the user they all
-# run as. Needs DEPLOY_DIR, which .deploy/lib.sh sets, and die from core.sh. The other parts each hold the settings only they read, and
-# each script adds the ones only it uses, then calls read_conf once all of them have a default.
+# run as. Needs DEPLOY_DIR, which .deploy/lib.sh sets, and die from core.sh. The other parts each
+# hold the settings only they read, and each script adds the ones only it uses, then calls read_conf
+# once all of them have a default.
 
 # Where the finished databases are written, one directory per UniProtKB version.
 # shellcheck disable=SC2034 # read by the scripts that source this file
@@ -45,6 +46,7 @@ if [ ! -f "$DEPLOY_CONF" ]; then
     fi
 fi
 
+# Sources DEPLOY_CONF over the defaults, where there is one.
 read_conf() {
     if [ -f "$DEPLOY_CONF" ]; then
         # shellcheck source=/dev/null
