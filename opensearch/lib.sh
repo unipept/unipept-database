@@ -79,12 +79,13 @@ index_status() {
 
 # Whether an index carries the mark, open or closed: a closed index still answers for its mapping.
 is_complete() {
-    [ "$(index_state "$1")" = complete ]
+    [ "$(load_state "$1")" = complete ]
 }
 
-# What OpenSearch says of an index, where telling "not whole" from "did not answer" matters: complete,
-# incomplete (there, and not marked), missing, or unknown, for an error or no answer at all.
-index_state() {
+# How far a load into an index got, where telling "not whole" from "did not answer" matters:
+# complete, incomplete (there, and not marked), missing, or unknown, for an error or no answer at
+# all. Not index_status, which says whether an index is open or closed.
+load_state() {
     local answer code
     answer=$(curl -s --max-time 30 -w '\n%{http_code}' "${OPENSEARCH_URL}/$1/_mapping" 2> /dev/null) || { echo unknown; return 0; }
     code="${answer##*$'\n'}"
