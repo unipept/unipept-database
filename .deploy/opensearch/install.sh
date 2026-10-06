@@ -46,7 +46,6 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${HERE}/../lib.sh"
 
 trap errorAndExit ERR
-trap 'exit 2' USR1
 
 # The settings only this script has.
 
@@ -84,8 +83,8 @@ OPENSEARCH_READY_TIMEOUT=180
 PREFIX="$INSTALL_ROOT"
 
 # The configuration of the install this run makes or updates, so --prefix reads its own and not
-# /opt/unipept-database's; a checkout's own deploy.conf still comes first, as lib.sh has it. Found
-# before the arguments are parsed, since read_conf comes first for a flag to win over it.
+# /opt/unipept-database's; a checkout's own deploy.conf still comes first, as lib/config.sh has
+# it. Found before the arguments are parsed, since read_conf comes first for a flag to win over it.
 for ((argument = 1; argument < $#; argument++)); do
     [ "${!argument}" != --prefix ] || { next=$((argument + 1)); PREFIX="${!next}"; }
 done
@@ -280,15 +279,28 @@ prepare_output_dir() {
 install_scripts() {
     local repository="${HERE}/../.." commit
 
-    install -d -m 0755 "$PREFIX" "${PREFIX}/bin" "${PREFIX}/opensearch/mappings" "${PREFIX}/pipelines/lib"
-    install -m 0755 "${repository}/.deploy/"{lib.sh,clone.sh,load.sh,verify.sh,prune.sh,switch.sh,migrate.sh} "${PREFIX}/bin/"
+    # A load, a switch, a prune or migrate.sh running from these files while they are replaced
+    # could pair a new lib.sh with an old script, or start opensearch/load.sh from the new release
+    # halfway through a run of the old one. Each holds OPENSEARCH_LOCK, so this holds it
+    # exclusively until it is done, and refuses while one runs. /run/lock is emptied at boot, so the
+    # file may not be there yet: it is made the deploy user's, as the first script to take it would
+    # have made it.
+    [ -e "$OPENSEARCH_LOCK" ] || install -m 0644 -o "$DEPLOY_USER" -g "$DEPLOY_USER" /dev/null "$OPENSEARCH_LOCK"
+    take_opensearch_lock -x || die "$(lock_refused $?) Install once it has finished."
+
+    install -d -m 0755 "$PREFIX" "${PREFIX}/bin" "${PREFIX}/bin/lib" "${PREFIX}/opensearch/mappings" "${PREFIX}/pipelines/lib"
+    # What is loaded before what loads it, so a script started meanwhile finds the files its own
+    # release has: the libraries first, then the loader, then the scripts.
+    install -m 0644 "${repository}/pipelines/lib/common.sh" "${PREFIX}/pipelines/lib/"
+    install -m 0644 "${repository}/opensearch/"{lib.sh,bulk_load.py} "${PREFIX}/opensearch/"
+    install -m 0644 "${repository}/opensearch/mappings/uniprot_entries.json" "${PREFIX}/opensearch/mappings/"
+    install -m 0644 "${repository}/.deploy/lib/"*.sh "${PREFIX}/bin/lib/"
     install -m 0755 "${repository}/opensearch/load.sh" "${PREFIX}/opensearch/"
+    install -m 0644 "${repository}/.deploy/lib.sh" "${PREFIX}/bin/"
+    install -m 0755 "${repository}/.deploy/"{clone.sh,load.sh,verify.sh,prune.sh,switch.sh,migrate.sh} "${PREFIX}/bin/"
     # What an earlier release installed: it moved an alias the API no longer queries, and closed the
     # index the API did.
     rm -f "${PREFIX}/opensearch/activate.sh"
-    install -m 0644 "${repository}/opensearch/"{lib.sh,bulk_load.py} "${PREFIX}/opensearch/"
-    install -m 0644 "${repository}/opensearch/mappings/uniprot_entries.json" "${PREFIX}/opensearch/mappings/"
-    install -m 0644 "${repository}/pipelines/lib/common.sh" "${PREFIX}/pipelines/lib/"
 
     install -d -m 0755 -o root -g root "${PREFIX}/etc"
     if [ ! -f "${PREFIX}/etc/deploy.conf" ]; then

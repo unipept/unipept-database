@@ -13,9 +13,8 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${HERE}/lib.sh"
 
 trap errorAndExit ERR
-trap 'exit 2' USR1
 
-# The settings only this script has. lib.sh holds the ones it shares.
+# The settings only this script has. lib/ holds the ones it shares.
 
 # The host a finished database is copied from.
 REMOTE_ADDRESS=
@@ -54,7 +53,7 @@ host's OpenSearch.
   --check                  copy nothing: check that the copy could be made, and exit 0 if so
   --help                   print this message
 
-A flag wins over .deploy/deploy.conf, which wins over the defaults in lib.sh and in this script.
+A flag wins over .deploy/deploy.conf, which wins over the defaults in lib/ and in this script.
 USAGE
 }
 
@@ -105,8 +104,7 @@ check_remote_database() {
     remote_sh "[ -d '${remote_dir}' ]" || die "the remote host has no ${remote_dir}"
 
     remote_sh bash -s <<REMOTE || die "the database on ${REMOTE_ADDRESS} is missing files the API needs, or is not the version it is named after."
-$(declare -p INDEX_FILES OPTIONAL_INDEX_FILES)
-$(declare -f verify_database check_index check_index_version database_version_of read_version)
+$(verify_database_source)
 status=0
 verify_database '${remote_dir}/suffix-array' || status=1
 [ -s '${remote_dir}/tables/uniprot_entries.tsv.lz4' ] || { echo "FAIL tables/uniprot_entries.tsv.lz4 is missing" 1>&2; status=1; }

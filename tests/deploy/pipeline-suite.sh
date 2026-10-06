@@ -46,8 +46,8 @@ readonly OUT="${WORK}/data"
 # where the real one would be. cargo resolves the manifest to the repository, so the build reuses
 # whatever is already compiled there.
 setup_tree() {
-    mkdir -p "${TREE}/opensearch" "${REPO}/target"
-    cp -R "${REPO}/.deploy" "${TREE}/.deploy"
+    mkdir -p "${TREE}" "${REPO}/target"
+    copy_deploy_scripts "$REPO" "$TREE"
 
     local path
     for path in Cargo.toml Cargo.lock rust-toolchain.toml crates pipelines assets target; do
@@ -55,8 +55,6 @@ setup_tree() {
     done
 
     make_loader "${TREE}/opensearch/load.sh" "${WORK}/loader-calls"
-    # The OpenSearch helpers .deploy/lib.sh loads, the real ones beside the stand-in loader.
-    ln -s "${REPO}/opensearch/lib.sh" "${TREE}/opensearch/lib.sh"
 
     printf 'INDEX_REPO=%s\n' "$INDEX_REPO" > "${TREE}/.deploy/deploy.conf"
 }

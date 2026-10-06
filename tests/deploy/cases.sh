@@ -31,13 +31,12 @@ export PATH="${STUBS}:${PATH}"
 # real repository is read-only, and the point is to replace the expensive parts.
 setup_checkout() {
     rm -rf "${CHECKOUT:?}"
-    mkdir -p "${CHECKOUT}"/{.deploy/opensearch,pipelines/lib,pipelines/suffix-array,opensearch/mappings,assets}
+    mkdir -p "${CHECKOUT}"/{pipelines/lib,pipelines/suffix-array,opensearch/mappings,assets}
 
-    cp /repo/.deploy/*.sh /repo/.deploy/deploy.conf.example "${CHECKOUT}/.deploy/"
-    cp /repo/.deploy/opensearch/*.sh "${CHECKOUT}/.deploy/opensearch/"
+    copy_deploy_scripts /repo "$CHECKOUT"
     cp /repo/pipelines/lib/common.sh "${CHECKOUT}/pipelines/lib/"
     # What install.sh installs beside the loader, which is a stand-in below.
-    cp /repo/opensearch/lib.sh /repo/opensearch/bulk_load.py "${CHECKOUT}/opensearch/"
+    cp /repo/opensearch/bulk_load.py "${CHECKOUT}/opensearch/"
     cp /repo/opensearch/mappings/uniprot_entries.json "${CHECKOUT}/opensearch/mappings/"
     printf '{"sample":true}\n' > "${CHECKOUT}/assets/sampledata.json"
 
@@ -369,7 +368,7 @@ check_true "it stops before copying anything" test ! -e "${LOCAL}/.clone"
 # The lock it swaps the copy in under, which it cannot open: found before the copy, hours earlier.
 mv /run/lock/unipept-opensearch.lock /run/lock/unipept-opensearch.lock.away 2> /dev/null
 touch /run/lock/unipept-opensearch.lock
-chmod 644 /run/lock/unipept-opensearch.lock
+chmod 600 /run/lock/unipept-opensearch.lock
 clone --remote-output-dir "$REMOTE" --output-dir "$LOCAL" --replace
 check "a lock it cannot open stops it" "$?" "2"
 check_true "before copying anything" test ! -e "${LOCAL}/.clone"
@@ -538,7 +537,7 @@ check "once it is done, it loads" "$?" "0"
 # A lock of its own it cannot open is said to be that, not taken for another load.
 mv /run/lock/unipept-load-2025-11.lock /run/lock/unipept-load-2025-11.lock.away
 touch /run/lock/unipept-load-2025-11.lock
-chmod 644 /run/lock/unipept-load-2025-11.lock
+chmod 600 /run/lock/unipept-load-2025-11.lock
 load_proteins --output-dir "$OUT" --uniprot-version 2025-11
 check "a lock of its version it cannot open stops it" "$?" "2"
 check_true "and says so" grep -q 'without its lock, two loads of 2025-11' /work/last-output
@@ -638,7 +637,7 @@ wait "$switcher" 2> /dev/null
 # A lock it cannot open is said to be that, not taken for a switch.
 mv "$LOCK" "${LOCK}.away"
 touch "$LOCK"
-chmod 644 "$LOCK"
+chmod 600 "$LOCK"
 load_proteins --output-dir "$OUT"
 check "a lock it cannot open stops it" "$?" "2"
 check_true "and says so" grep -q "cannot open the lock ${LOCK} as ${DEPLOY}" /work/last-output
@@ -1054,6 +1053,9 @@ check_true "the scripts a host runs are there" \
 check_true "and what they call" \
     test -x "${PREFIX_A}/opensearch/load.sh" -a -f "${PREFIX_A}/opensearch/lib.sh" \
         -a -f "${PREFIX_A}/opensearch/mappings/uniprot_entries.json" -a -f "${PREFIX_A}/pipelines/lib/common.sh"
+check "and every part of lib.sh" "$(ls "${PREFIX_A}/bin/lib")" "$(ls /repo/.deploy/lib)"
+check "all of them root's, as the scripts that load them are" \
+    "$(stat -c '%U' "${PREFIX_A}/bin/lib" "${PREFIX_A}/bin/lib.sh" "${PREFIX_A}/bin/lib/"*.sh | sort -u)" "root"
 check_true "but not build.sh, which needs the whole repository" test ! -e "${PREFIX_A}/bin/build.sh"
 check "the scripts belong to root, which alone changes them" "$(stat -c %U "${PREFIX_A}/bin/load.sh")" "root"
 # install.sh reads it as root, so a file the deploy user could write would hand that user root.
@@ -1064,6 +1066,24 @@ check "INSTALLED names the commit" "$(sed -n 's/^commit: //p' "${PREFIX_A}/INSTA
 as_deployer "${PREFIX_A}/bin/verify.sh" > /work/last-output 2>&1
 check "the installed verify.sh runs, reading the installed deploy.conf" "$?" "0"
 check_true "and checks the newest database there" grep -qF "Checking ${OUT}/uniprot-2026-03/suffix-array" /work/last-output
+
+
+section "install.sh replaces no script a load, switch or prune is running from"
+
+# A load holds the lock shared for as long as it runs.
+as_deployer flock -s /run/lock/unipept-opensearch.lock sleep 10 &
+holder=$!
+for _ in $(seq 50); do flock -n -x /run/lock/unipept-opensearch.lock true 2> /dev/null || break; sleep 0.1; done
+touch -d '2000-01-01' "${PREFIX_A}/bin/load.sh"
+install_opensearch --user "$DEPLOY" --output-dir "$OUT" --prefix "$PREFIX_A"
+check "it refuses while one runs" "$?" "2"
+check_true "and says what to wait for" grep -q "running on this host; wait for it to finish. Install once it has finished." /work/last-output
+check "and replaced nothing" "$(stat -c %Y "${PREFIX_A}/bin/load.sh")" "$(date -d '2000-01-01' +%s)"
+wait "$holder"
+install_opensearch --user "$DEPLOY" --output-dir "$OUT" --prefix "$PREFIX_A"
+check "once it is done, the install runs" "$?" "0"
+check_true "and replaces them" test "$(stat -c %Y "${PREFIX_A}/bin/load.sh")" -gt "$(date -d '2000-01-01' +%s)"
+check "leaving the lock the deploy user's" "$(stat -c %U /run/lock/unipept-opensearch.lock)" "$DEPLOY"
 
 
 section "install.sh lets the deploy user stop and start OpenSearch, and nothing more"

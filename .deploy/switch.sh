@@ -35,7 +35,6 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${HERE}/lib.sh"
 
 trap errorAndExit ERR
-trap 'exit 2' USR1
 
 read_conf
 
@@ -190,7 +189,7 @@ check_api() {
     "$API_DEPLOY" check --index "${TARGET_DIR}/suffix-array" > /dev/null \
         || problem "the API's own check refuses ${TARGET_DIR}/suffix-array (above)."
 
-    warn_opensearch_disk "$OPENSEARCH_URL"
+    warn_opensearch_disk
 }
 
 wait_for_opensearch() {

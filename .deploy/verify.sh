@@ -12,13 +12,12 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${HERE}/lib.sh"
 
 trap errorAndExit ERR
-trap 'exit 2' USR1
 
 read_conf
 
-# The settings only this script has. lib.sh holds the ones it shares. After read_conf rather than
-# before: a UNIPROT_VERSION in deploy.conf is the release clone.sh fetches, not the one to check,
-# so it takes no part here.
+# The settings only this script has. lib/ holds the ones it shares. After read_conf rather than
+# before: a UNIPROT_VERSION in deploy.conf is the release clone.sh fetches, not the one to check, so
+# it takes no part here.
 
 # Which database to check. Empty means the newest one under OUTPUT_DIR.
 UNIPROT_VERSION=

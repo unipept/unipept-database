@@ -13,8 +13,8 @@ orchestrate; the pipeline itself lives in `pipelines/` and the loader in `opense
   proteins together, stopping the API and OpenSearch to do so. See
   [Switching the API to another version](#switching-the-api-to-another-version).
 - `verify.sh` checks a finished database against the files the API needs. The others make the same
-  checks, through the same `verify_database` in `lib.sh`: `build.sh` before it puts a build in
-  place, `clone.sh` on the remote host before it copies and again on the copy, and `load.sh`
+  checks, through the same `verify_database` in `lib/database.sh`: `build.sh` before it puts a
+  build in place, `clone.sh` on the remote host before it copies and again on the copy, and `load.sh`
   before it loads. Run it by hand to check a database that is already there.
 
 A new database on a host is therefore two steps, `build.sh` or `clone.sh` and then `load.sh`, and
@@ -91,8 +91,8 @@ index is off.
 ## Configuration
 
 A host's settings are in `/opt/unipept-database/etc/deploy.conf`, which `install.sh` writes from
-`deploy.conf.example`. A flag wins over that file, and the file wins over the defaults in `lib.sh`
-for the settings the scripts share, and in each script for the settings only it has.
+`deploy.conf.example`. A flag wins over that file, and the file wins over the defaults in
+`lib/` for the settings the scripts share, and in each script for the settings only it has.
 
 The installed scripts and `build.sh` in a clone read that same file, so a build host has one set of
 settings. A clone with a `.deploy/deploy.conf` of its own reads that one instead, which is how a
@@ -335,15 +335,31 @@ as, and as root every file can.
 
 It reports every file that is missing, empty or unreadable rather than the first, and exits 1 if any
 of them is, or 3 when the database is not there at all. A missing `kmer_table.bin` is a warning: the
-API runs without it and searches are slower. The list it checks is the one
-`unipept-api/.deploy/lib.sh` starts a service against, so a change on either side has to be made on
-both.
+API runs without it and searches are slower. The list it checks is the one the API checks before it
+starts, so a change has to be made on both sides.
 
 `build-info.txt` records the UniProtKB version, the commit of this checkout, the commit of the
 unipept-index clone the build used, and the sources it read. unipept-index is cloned at the tip of
 its default branch, so two builds of the same UniProtKB release can differ; this file is how you
 tell. It is written last, so a directory that has one is a finished build. Whether its proteins
 are in OpenSearch is not something it records.
+
+## The shared library
+
+Every script sources `lib.sh`, which loads its parts from `lib/`. Each part says in its header what
+it uses of the others.
+
+| Part | What it holds |
+| --- | --- |
+| `lib/core.sh` | `log`, `die`, `checkdep`, `need_value`, the error trap |
+| `lib/config.sh` | the settings the parts share, the deploy user, reading `deploy.conf` |
+| `lib/locks.sh` | the OpenSearch lock and the lock per version |
+| `lib/versions.sh` | version names, `.version`, the `current` and `previous` links |
+| `lib/database.sh` | what a database holds, and how it is checked and put in place |
+| `lib/api.sh` | what this host serves, and which API release is installed |
+
+`install.sh` installs them as `/opt/unipept-database/bin/lib.sh` and `/opt/unipept-database/bin/lib/`,
+root's like the scripts beside them.
 
 ## What a host needs
 

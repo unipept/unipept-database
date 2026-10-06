@@ -8,6 +8,7 @@
 #   run-tests.sh build      pipelines/suffix-array/build.sh end to end, offline
 #   run-tests.sh opensearch opensearch/load.sh, against a real OpenSearch
 #   run-tests.sh verify     .deploy/verify.sh against a fixture index
+#   run-tests.sh lib        the parts of .deploy/lib.sh, function by function
 #   run-tests.sh deploy     the .deploy scripts, in a container
 #   run-tests.sh seam       .deploy/build.sh over the real pipeline, offline
 
@@ -47,6 +48,11 @@ suite_verify() {
     "${HERE}/deploy/verify-suite.sh" || status=1
 }
 
+suite_lib() {
+    heading "deploy library suite"
+    "${HERE}/deploy/lib-suite.sh" || status=1
+}
+
 suite_deploy() {
     "${HERE}/deploy/build-suite.sh" || status=1
 }
@@ -59,8 +65,8 @@ suite_seam() {
 status=0
 
 case ${1:-all} in
-    all) suite_lz; suite_shell; suite_verify; suite_build; suite_seam; suite_deploy; suite_opensearch ;;
-    lz | shell | verify | build | seam | deploy | opensearch) "suite_${1}" ;;
+    all) suite_lz; suite_shell; suite_verify; suite_lib; suite_build; suite_seam; suite_deploy; suite_opensearch ;;
+    lz | shell | verify | lib | build | seam | deploy | opensearch) "suite_${1}" ;;
     *) echo "unknown suite '${1}'" >&2; exit 1 ;;
 esac
 

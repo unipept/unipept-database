@@ -14,11 +14,10 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${HERE}/lib.sh"
 
 trap errorAndExit ERR
-trap 'exit 2' USR1
 
 read_conf
 
-# The settings only this script has. lib.sh holds the ones it shares. After read_conf rather than
+# The settings only this script has. lib/ holds the ones it shares. After read_conf rather than
 # before, as in verify.sh: a UNIPROT_VERSION in deploy.conf is the release clone.sh fetches, and
 # which database to load is said here or is the newest.
 
@@ -46,7 +45,7 @@ Loads the proteins of a finished database into this host's OpenSearch.
   --check                  load nothing: exit 0 if the version is loaded to the end, 1 if not
   --help                   print this message
 
-A flag wins over .deploy/deploy.conf, which wins over the defaults in lib.sh and in this script.
+A flag wins over .deploy/deploy.conf, which wins over the defaults in lib/ and in this script.
 USAGE
 }
 
@@ -98,7 +97,7 @@ take_opensearch_lock -s || die "$(lock_refused $?)"
 # And a lock of this version's own, since two loads of one version would drop each other's index.
 take_load_lock "$UNIPROT_VERSION" || case $? in
     1) die "another load of ${UNIPROT_VERSION}, or a build or a clone replacing it, is running on this host. Let it finish, or stop it, first." ;;
-    *) die "without its lock, two loads of ${UNIPROT_VERSION} could drop each other's index. Make it writable for $(id -un)." ;;
+    *) die "without its lock, two loads of ${UNIPROT_VERSION} could drop each other's index. Make it readable by $(id -un)." ;;
 esac
 
 # The version the API serves is queried while it runs, and a load into its index, from the start or
@@ -113,7 +112,7 @@ if is_served "$UNIPROT_VERSION" strict; then
     esac
 fi
 
-warn_opensearch_disk "$OPENSEARCH_URL"
+warn_opensearch_disk
 
 log "Started loading UniProtKB ${UNIPROT_VERSION} into ${INDEX_NAME} at ${OPENSEARCH_URL}."
 loader_arguments=(--opensearch-url "$OPENSEARCH_URL" --uniprot-entries "$ENTRIES" --index-name "$INDEX_NAME")

@@ -13,9 +13,8 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${HERE}/lib.sh"
 
 trap errorAndExit ERR
-trap 'exit 2' USR1
 
-# The settings only this script has. lib.sh holds the ones it shares.
+# The settings only this script has. lib/ holds the ones it shares.
 
 # Where the repositories are cloned and built. The tables are not built here: they go to a staging
 # directory under OUTPUT_DIR, which is the volume that has to hold the whole build.
@@ -44,6 +43,38 @@ SA_ALGORITHM=lib-sais
 # size.
 SA_KMER_SIZE=5
 
+# The UniProtKB version the pipeline wrote beside the tables, as YYYY-MM.
+uniprot_version_from() {
+    local version_file="$1" version
+
+    [ -s "$version_file" ] || die "the pipeline wrote no version in ${version_file}"
+    version=$(read_version "$version_file")
+    [ -n "$version" ] || die "the version in ${version_file} is empty"
+    echo "$version"
+}
+
+# Clones a repository at the tip of its default branch and prints the commit it got.
+clone_repo() {
+    local url="$1" target="$2"
+
+    rm -rf "${target:?}"
+    git clone --quiet "$url" "$target" || die "could not clone $url"
+    git -C "$target" rev-parse HEAD
+}
+
+# What this build was made of, next to the index it belongs to.
+write_build_info() {
+    local target="$1" uniprot_version="$2" database_commit="$3" index_commit="${4:-none}"
+
+    cat > "$target/build-info.txt" <<INFO
+built: $(date -u +'%F %T UTC')
+uniprot: ${uniprot_version}
+unipept-database: ${database_commit}
+unipept-index: ${index_commit}
+sources: ${DATABASE_SOURCES:-none}
+INFO
+}
+
 usage() {
     cat <<'USAGE'
 Builds a Unipept database on this host: the tables, the suffix array and the datastore layout the
@@ -58,7 +89,7 @@ API reads. .deploy/load.sh then loads its proteins into OpenSearch.
   --skip-checks            build without first checking the host has room for it
   --help                   print this message
 
-A flag wins over .deploy/deploy.conf, which wins over the defaults in lib.sh and in this script.
+A flag wins over .deploy/deploy.conf, which wins over the defaults in lib/ and in this script.
 USAGE
 }
 
