@@ -16,6 +16,8 @@ readonly LEGACY="${ALIAS}-legacy"
 # way has documents too, so this is how switch.sh and the API's check tell a whole one from it.
 readonly COMPLETE_MARK='"unipept_load":"complete"'
 
+# Stops with an error, exit 2. Not die: this file needs nothing else, and opensearch/load.sh loads
+# it without core.sh. In a subshell it ends only that subshell, which keep_as relies on.
 opensearch_fail() {
     echo "Error: $*" 1>&2
     exit 2
