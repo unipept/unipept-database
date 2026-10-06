@@ -630,7 +630,7 @@ check "is opened" "$(status_of uniprot_entries-2027-01)" "open"
 curl -s -X PUT "${OPENSEARCH_URL}/uniprot_entries-2027-05" -H 'Content-Type: application/json' \
     -d @"${REPO}/opensearch/mappings/uniprot_entries.json" > /dev/null
 ensure 2027-05
-check "one that was not loaded to the end fails it" "$rc" "1"
+check "one that was not loaded to the end fails it" "$rc" "2"
 check_true "and says to load it again" grep -q 'uniprot_entries-2027-05 is there and was not loaded to the end' "${WORK}/ensure.log"
 curl -s -X DELETE "${OPENSEARCH_URL}/uniprot_entries-2027-05" > /dev/null
 
@@ -670,7 +670,7 @@ check "and the index they were in is still there" "$(documents_in uniprot_entrie
 
 curl -s -X DELETE "${OPENSEARCH_URL}/uniprot_entries" > /dev/null
 ensure 2025-02
-check "no index holding them fails it" "$rc" "1"
+check "no index holding them fails it" "$rc" "2"
 check_true "and says to load them" grep -q 'no index holds the proteins of 2025-02' "${WORK}/ensure.log"
 
 section ".deploy/migrate.sh"
@@ -750,7 +750,7 @@ wait "$holder" 2> /dev/null
 
 # A clone OpenSearch refuses leaves no write block on what it would have been made from.
 ensure 2099-ZZ
-check "a clone that is refused fails it" "$rc" "1"
+check "a clone that is refused fails it" "$rc" "2"
 check "and uniprot_entries takes writes again" \
     "$(curl -s -o /dev/null -w '%{http_code}' -X PUT "${OPENSEARCH_URL}/uniprot_entries/_doc/P00097" -H 'Content-Type: application/json' -d '{"uniprot_accession_number":"P00097"}')" "201"
 
