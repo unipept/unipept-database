@@ -37,16 +37,16 @@ host's OpenSearch.
 
   .deploy/clone.sh --remote-address HOST --local-ssh-key KEY [OPTIONS]
 
-  --remote-address HOST    the host to copy from, required
-  --local-ssh-key KEY      the private key to reach it with, required
-  --remote-port PORT       its SSH port
-  --remote-user USER       the user to connect as
-  --remote-output-dir DIR  where it keeps its databases
+  --remote-address HOST      the host to copy from, required
+  --local-ssh-key KEY        the private key to reach it with, required
+  --remote-port PORT         its SSH port
+  --remote-user USER         the user to connect as
+  --remote-output-dir DIR    where it keeps its databases
   --uniprot-version YYYY-MM  which database to copy, default the newest it has
-  --output-dir DIR         where the copy is written
-  --replace                replace a database of that version already here
-  --check                  copy nothing: check that the copy could be made, and exit 0 if so
-  --help                   print this message
+  --output-dir DIR           where the copy is written
+  --replace                  replace a database of that version already here
+  --check                    copy nothing: check that the copy could be made, and exit 0 if so
+  --help                     print this message
 
 A flag wins over .deploy/deploy.conf, which wins over the defaults in lib/ and in this script.
 USAGE
@@ -61,16 +61,18 @@ parse_arguments() {
             --remote-output-dir) need_value "$1" "${2-}"; REMOTE_OUTPUT_DIR="$2"; shift 2 ;;
             --local-ssh-key) need_value "$1" "${2-}"; LOCAL_SSH_KEY="$2"; shift 2 ;;
             --output-dir) need_value "$1" "${2-}"; OUTPUT_DIR="$2"; shift 2 ;;
-            --uniprot-version) need_value "$1" "${2-}"; UNIPROT_VERSION="$2"; shift 2 ;;
+            --uniprot-version) need_value "$1" "${2-}"; valid_version "$2"; UNIPROT_VERSION="$2"; shift 2 ;;
             --replace) REPLACE=true; shift ;;
             --check) CHECK=true; shift ;;
             --help) usage; exit 0 ;;
-            *) die "unknown option '$1'" ;;
+            *) unknown_option "$1" ;;
         esac
     done
 
     [ -n "$REMOTE_ADDRESS" ] || die "--remote-address is required."
     [ -n "$LOCAL_SSH_KEY" ] || die "--local-ssh-key is required."
+    # After the options rather than with them: deploy.conf can name the version this host clones.
+    [ -z "$UNIPROT_VERSION" ] || valid_version "$UNIPROT_VERSION"
 }
 
 remote_sh() {

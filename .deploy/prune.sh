@@ -45,17 +45,19 @@ Removes old databases from this host, each version's files and its OpenSearch in
 
   .deploy/prune.sh --keep N [OPTIONS]
 
-  --keep N                 how many versions older than the one this host serves to keep, to go
-                           back to. Required
-  --dry-run                say what would be removed, and remove nothing
-  --output-dir DIR         where the databases are
-  --opensearch-url URL     the instance their indices are in
-  --help                   print this message
+  --keep N                   how many versions older than the one this host serves to keep, to go
+                             back to. Required
+  --dry-run                  say what would be removed, and remove nothing
+  --output-dir DIR           where the databases are
+  --opensearch-url URL       the instance their indices are in
+  --help                     print this message
 
 Every version this host serves, the one before it, and every newer one, are always kept.
 uniprot_entries and uniprot_entries-legacy, from before versioned indices, only go once the API
 installed and the one deploy.sh would roll back to are 2.7.0 or newer, INDEX_LOCATION goes through
 current, and the index of the version it serves is loaded to the end.
+
+A flag wins over .deploy/deploy.conf, which wins over the defaults in lib/ and in this script.
 USAGE
 }
 
@@ -67,7 +69,7 @@ parse_arguments() {
             --output-dir) need_value "$1" "${2-}"; OUTPUT_DIR="$2"; shift 2 ;;
             --opensearch-url) need_value "$1" "${2-}"; OPENSEARCH_URL="$2"; shift 2 ;;
             --help) usage; exit 0 ;;
-            *) die "unknown option '$1'" ;;
+            *) unknown_option "$1" ;;
         esac
     done
 

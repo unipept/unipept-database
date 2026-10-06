@@ -63,33 +63,34 @@ what any of them serves.
   .deploy/distribute.sh --uniprot-version YYYY-MM --from HOST [OPTIONS]
 
   --uniprot-version YYYY-MM  the version to distribute, required
-  --from HOST              the host that has it, required. It is not built here
-  --servers FILE           the servers to put it on, default .deploy/servers.conf
-  --ssh-user USER          who to log in as on the source and the servers; the port and key are
-                           ~/.ssh/config's
-  --replace                copy again to a server whose copy fails verification
-  --help                   print this message
+  --from HOST                the host that has it, required. It is not built here
+  --servers FILE             the servers to put it on, default .deploy/servers.conf
+  --ssh-user USER            who to log in as on the source and the servers; the port and key are
+                             ~/.ssh/config's
+  --replace                  copy again to a server whose copy fails verification
+  --help                     print this message
 
 Exits 0 when every server has the version and its proteins loaded, 1 when any does not, and 2 when
 it stopped before touching a server.
+
+A flag wins over .deploy/deploy.conf, which wins over the defaults in lib/ and in this script.
 USAGE
 }
 
 parse_arguments() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            --uniprot-version) need_value "$1" "${2-}"; UNIPROT_VERSION="$2"; shift 2 ;;
+            --uniprot-version) need_value "$1" "${2-}"; valid_version "$2"; UNIPROT_VERSION="$2"; shift 2 ;;
             --from) need_value "$1" "${2-}"; SOURCE="$2"; shift 2 ;;
             --servers) need_value "$1" "${2-}"; SERVERS_FILE="$2"; shift 2 ;;
             --ssh-user) need_value "$1" "${2-}"; SSH_USER="$2"; shift 2 ;;
             --replace) REPLACE=true; shift ;;
             --help) usage; exit 0 ;;
-            *) die "unknown option '$1'" ;;
+            *) unknown_option "$1" ;;
         esac
     done
 
     [ -n "$UNIPROT_VERSION" ] || die "--uniprot-version is required."
-    valid_version "$UNIPROT_VERSION"
     [ -n "$SOURCE" ] || die "--from is required: the host that has ${UNIPROT_VERSION}. This script does not build."
 }
 

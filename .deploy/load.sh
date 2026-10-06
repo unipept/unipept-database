@@ -34,11 +34,11 @@ Loads the proteins of a finished database into this host's OpenSearch.
   .deploy/load.sh [OPTIONS]
 
   --uniprot-version YYYY-MM  load this one under OUTPUT_DIR, default the newest there
-  --output-dir DIR         where the databases are
-  --opensearch-url URL     the instance the proteins are loaded into
-  --skip ROWS              continue a load that stopped part way, passing over this many rows
-  --check                  load nothing: exit 0 if the version is loaded to the end, 1 if not
-  --help                   print this message
+  --output-dir DIR           where the databases are
+  --opensearch-url URL       the instance the proteins are loaded into
+  --skip ROWS                continue a load that stopped part way, passing over this many rows
+  --check                    load nothing: exit 0 if the version is loaded to the end, 1 if not
+  --help                     print this message
 
 A flag wins over .deploy/deploy.conf, which wins over the defaults in lib/ and in this script.
 USAGE
@@ -53,7 +53,7 @@ parse_arguments() {
             --skip) need_value "$1" "${2-}"; SKIP_ROWS="$2"; shift 2 ;;
             --check) CHECK=true; shift ;;
             --help) usage; exit 0 ;;
-            *) die "unknown option '$1'" ;;
+            *) unknown_option "$1" ;;
         esac
     done
 

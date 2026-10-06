@@ -37,11 +37,13 @@ Sets up a host that runs the API for switch.sh, once. Changes nothing the API se
 
   .deploy/migrate.sh [OPTIONS]
 
-  --output-dir DIR         where the databases are
-  --opensearch-url URL     the instance their indices are in
-  --help                   print this message
+  --output-dir DIR           where the databases are
+  --opensearch-url URL       the instance their indices are in
+  --help                     print this message
 
 Run it as the user the API runs as.
+
+A flag wins over .deploy/deploy.conf, which wins over the defaults in lib/ and in this script.
 USAGE
 }
 
@@ -51,7 +53,7 @@ parse_arguments() {
             --output-dir) need_value "$1" "${2-}"; OUTPUT_DIR="$2"; shift 2 ;;
             --opensearch-url) need_value "$1" "${2-}"; OPENSEARCH_URL="$2"; shift 2 ;;
             --help) usage; exit 0 ;;
-            *) die "unknown option '$1'" ;;
+            *) unknown_option "$1" ;;
         esac
     done
 }

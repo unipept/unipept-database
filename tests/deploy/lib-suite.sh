@@ -116,4 +116,43 @@ is_served 2026-04 strict"
 check "an OpenSearch that does not answer at all leaves it to the links" "$?" "1"
 
 
+section "every script's --help"
+
+# Every option in one column, and which setting wins said the same way. From a copy with an empty
+# deploy.conf of its own, which a script reads before any other, and install.sh with a --prefix of
+# its own, so no deploy.conf on this machine is read or checked first.
+copy_deploy_scripts "${HERE}/../.." "${TEMP_DIR}/checkout"
+DEPLOY="${TEMP_DIR}/checkout/.deploy"
+: > "${DEPLOY}/deploy.conf"
+for script in build clone distribute load migrate prune switch verify opensearch/install; do
+    arguments=(--help)
+    [ "$script" != opensearch/install ] || arguments=(--prefix "${TEMP_DIR}/prefix" --help)
+    output=$("${DEPLOY}/${script}.sh" "${arguments[@]}" 2>&1)
+    check "${script}.sh --help exits 0" "$?" "0"
+    check_true "and lists its options" grep -q '^  --' <<< "$output"
+    check "and every option line has its text in the thirtieth column" \
+        "$(awk '/^  --/ && (substr($0, 29, 1) != " " || substr($0, 30, 1) == " ")' <<< "$output" | wc -l | tr -d ' ')" "0"
+    check_true "and says that a flag wins over deploy.conf" \
+        grep -q '^A flag wins over .*deploy.conf, which wins over the defaults' <<< "$output"
+done
+
+# The version clone.sh copies can come from deploy.conf, so it is checked there too.
+printf 'UNIPROT_VERSION=2026.03\n' > "${DEPLOY}/deploy.conf"
+output=$("${DEPLOY}/clone.sh" --remote-address host --local-ssh-key key 2>&1)
+check "clone.sh refuses a version in deploy.conf not written YYYY-MM" "$?" "2"
+check "and says how to write it" "$output" "Error: a UniProtKB version is written YYYY-MM, not '2026.03'."
+: > "${DEPLOY}/deploy.conf"
+
+# Every script that takes --uniprot-version checks it is written YYYY-MM, before anything else.
+for script in clone distribute load switch verify; do
+    output=$("${DEPLOY}/${script}.sh" --uniprot-version 2026.03 2>&1)
+    check "${script}.sh refuses --uniprot-version 2026.03" "$?" "2"
+    check "and says how to write it" "$output" "Error: a UniProtKB version is written YYYY-MM, not '2026.03'."
+done
+
+output=$("${DEPLOY}/build.sh" --opensearch-url http://localhost:9200 2>&1)
+check "build.sh, which loads nothing into OpenSearch, refuses --opensearch-url" "$?" "2"
+check "as an unknown option" "$output" "Error: unknown option '--opensearch-url'. Run with --help for the options."
+
+
 summary

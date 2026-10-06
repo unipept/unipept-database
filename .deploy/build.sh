@@ -77,12 +77,12 @@ API reads. .deploy/load.sh then loads its proteins into OpenSearch.
 
   .deploy/build.sh [OPTIONS]
 
-  --output-dir DIR         where the finished databases are written
-  --scratch-dir DIR        where the repositories are cloned and built
-  --database-sources LIST  swissprot, trembl, or both, comma separated
-  --replace                replace a database of the version this build turns out to be
-  --skip-checks            build without first checking the host has room for it
-  --help                   print this message
+  --output-dir DIR           where the finished databases are written
+  --scratch-dir DIR          where the repositories are cloned and built
+  --database-sources LIST    swissprot, trembl, or both, comma separated
+  --replace                  replace a database of the version this build turns out to be
+  --skip-checks              build without first checking the host has room for it
+  --help                     print this message
 
 A flag wins over .deploy/deploy.conf, which wins over the defaults in lib/ and in this script.
 USAGE
@@ -97,7 +97,7 @@ parse_arguments() {
             --replace) REPLACE=true; shift ;;
             --skip-checks) SKIP_CHECKS=true; shift ;;
             --help) usage; exit 0 ;;
-            *) die "unknown option '$1'" ;;
+            *) unknown_option "$1" ;;
         esac
     done
 }
