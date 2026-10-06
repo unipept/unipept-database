@@ -176,11 +176,14 @@ both_ways check_sudo_opensearch \
 if [ -r /proc/meminfo ]; then
     available=$(awk '/^MemAvailable:/ { print $2 }' /proc/meminfo)
     both_ways check_memory_free "check_memory_free '${DB}' 1" "check_memory_free '${DB}' $((available * 2))" "of memory is available"
-    cp "$(command -v sleep)" "${TEMP_DIR}/checks/unipept-api"
+    # A script named unipept-api, which the kernel names the process after while it waits on its
+    # sleep, waited for until it does.
+    make_stub "${TEMP_DIR}/checks/unipept-api" 'sleep 30' > /dev/null
     in_lib "check_api_stopped" > /dev/null 2>&1
     check "check_api_stopped passes" "$?" "0"
-    "${TEMP_DIR}/checks/unipept-api" 30 &
+    "${TEMP_DIR}/checks/unipept-api" &
     running=$!
+    for _ in $(seq 50); do grep -qsx unipept-api "/proc/${running}/comm" && break; sleep 0.1; done
     fails_saying check_api_stopped check_api_stopped "The Unipept API is running"
     kill "$running" 2> /dev/null
     wait "$running" 2> /dev/null
@@ -232,9 +235,12 @@ fails_saying "check_opensearch_index_complete, where OpenSearch does not say," \
     "load_state() { echo unknown; }; check_opensearch_index_complete uniprot_entries-2026-03" \
     "OpenSearch did not say whether uniprot_entries-2026-03"
 both_ways check_opensearch_index_open \
-    "index_status() { echo open; }; check_opensearch_index_open uniprot_entries-2026-01" \
-    "index_status() { echo close; }; check_opensearch_index_open uniprot_entries-2026-01" \
+    "index_status() { echo open; }; check_opensearch_index_open uniprot_entries-2026-01 2026-01" \
+    "index_status() { echo close; }; check_opensearch_index_open uniprot_entries-2026-01 2026-01" \
     "uniprot_entries-2026-01, of the version this host serves, is not open"
+fails_saying "check_opensearch_index_open, of an index not there," \
+    "index_status() { echo; }; check_opensearch_index_open uniprot_entries-2026-01 2026-01" \
+    "is not in OpenSearch, so a switch that fails could not go back to it. Load it with load.sh --uniprot-version 2026-01"
 
 # Another host, reached through a stand-in that runs the command here, as clone.sh's remote_sh and
 # distribute.sh's on would run it there.

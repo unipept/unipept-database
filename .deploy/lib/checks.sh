@@ -5,7 +5,8 @@
 # prints nothing when all is well; otherwise it prints each thing that is wrong as `FAIL …` on
 # stderr, the form verify.sh reports in, and returns 1. A warning, as check_index_optional_files
 # gives, prints `WARN …` and returns 0: it changes nothing about what a script does. None of them
-# exits or changes anything.
+# exits, and none changes anything but check_lock_usable, which makes the lock file where there is
+# none, as every script that takes the lock does.
 #
 # Uses the settings of config.sh, the lists of database.sh, the links of versions.sh,
 # opensearch_lock_usable and lock_refused from locks.sh, what api.sh knows of the API, and the
@@ -157,7 +158,7 @@ check_db_whole() {
 
 # The table load.sh feeds to OpenSearch. Outside the index, so not one check_index_files checks.
 check_db_table() {
-    [ -s "${1}/tables/uniprot_entries.tsv.lz4" ] || { echo "FAIL ${1} has no tables/uniprot_entries.tsv.lz4" 1>&2; return 1; }
+    [ -s "${1}/${ENTRIES_TABLE}" ] || { echo "FAIL ${1} has no ${ENTRIES_TABLE}" 1>&2; return 1; }
 }
 
 # The API on this host, as its install lays it out.
@@ -246,10 +247,14 @@ check_opensearch_index_complete() {
     esac
 }
 
-# The index of the version a switch leaves is open, as going back after a failed start needs it.
+# The index of the version a switch leaves is there and open, as going back after a failed start
+# needs it. Given the index and its version.
 check_opensearch_index_open() {
-    [ "$(index_status "$1")" = open ] \
-        || { echo "FAIL ${1}, of the version this host serves, is not open, so a switch that fails could not go back to it. Run migrate.sh first." 1>&2; return 1; }
+    case $(index_status "$1") in
+        open) ;;
+        '') echo "FAIL ${1}, of the version this host serves, is not in OpenSearch, so a switch that fails could not go back to it. Load it with load.sh --uniprot-version ${2} first." 1>&2; return 1 ;;
+        *) echo "FAIL ${1}, of the version this host serves, is not open, so a switch that fails could not go back to it. Run migrate.sh first." 1>&2; return 1 ;;
+    esac
 }
 
 # A database on another host, before anything is copied from it. Run from clone.sh, through its
@@ -263,7 +268,7 @@ check_remote_db_present() {
 # along, so both sides check against this checkout's contract.
 check_remote_db_whole() {
     remote_sh bash -s << REMOTE || { echo "FAIL the database on ${REMOTE_ADDRESS} cannot be cloned (above)." 1>&2; return 1; }
-$(declare -p INDEX_FILES OPTIONAL_INDEX_FILES)
+$(declare -p INDEX_FILES OPTIONAL_INDEX_FILES ENTRIES_TABLE)
 $(declare -f check_db_whole check_db_table check_index_whole check_index_files check_index_optional_files check_index_version database_version_of read_version)
 status=0
 check_db_whole '${1}' || status=1

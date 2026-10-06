@@ -126,7 +126,7 @@ build_suffix_array() {
     cargo build --release --quiet --manifest-path "${index_dir}/Cargo.toml"
 
     # The four columns sa-builder reads: accession, taxon, sequence, annotations.
-    lz4cat "${build_dir}/tables/uniprot_entries.tsv.lz4" | cut -f2,4,7,8 > "${build_dir}/suffix-array/proteins.tsv"
+    lz4cat "${build_dir}/${ENTRIES_TABLE}" | cut -f2,4,7,8 > "${build_dir}/suffix-array/proteins.tsv"
 
     log "Started building the suffix array."
     "${index_dir}/target/release/sa-builder" \
@@ -217,7 +217,9 @@ DATABASE_COMMIT=$(git -C "${HERE}/.." rev-parse HEAD 2>/dev/null || echo unknown
 STAGING_DIR="${OUTPUT_DIR}/.build"
 
 # Before the staging directory is removed, so a build refused here keeps what an earlier one left.
-[ "$SKIP_CHECKS" = true ] || preflight
+if [ "$SKIP_CHECKS" != true ]; then
+    preflight
+fi
 # The swap at the end is made under the lock that keeps loads and switches apart: found now, not
 # hours in.
 require flock:util-linux

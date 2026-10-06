@@ -13,9 +13,10 @@ orchestrate; the pipeline itself lives in `pipelines/` and the loader in `opense
   proteins together, stopping the API and OpenSearch to do so. See
   [Switching the API to another version](#switching-the-api-to-another-version).
 - `verify.sh` checks a finished database against the files the API needs. The others make the same
-  checks, through the same `check_db_whole` in `lib/checks.sh`: `build.sh` before it puts a
-  build in place, `clone.sh` on the remote host before it copies and again on the copy, and `load.sh`
-  before it loads. Run it by hand to check a database that is already there.
+  checks, through `check_index_whole` in `lib/checks.sh`, which `check_db_whole` makes of a
+  database's directory: `build.sh` before it puts a build in place, `clone.sh` on the remote host
+  before it copies and again on the copy, `load.sh` before it loads, and `switch.sh` before it
+  switches. Run it by hand to check a database that is already there.
 
 A new database on a host is therefore two steps, `build.sh` or `clone.sh` and then `load.sh`, and
 serving it a third, `switch.sh`. A load that fails is rerun on its own, without building or

@@ -85,7 +85,7 @@ refuse_root
 
 [ -n "$UNIPROT_VERSION" ] || UNIPROT_VERSION=$(latest_version)
 DATABASE_DIR="${OUTPUT_DIR}/uniprot-${UNIPROT_VERSION}"
-ENTRIES="${DATABASE_DIR}/tables/uniprot_entries.tsv.lz4"
+ENTRIES="${DATABASE_DIR}/${ENTRIES_TABLE}"
 INDEX_NAME="uniprot_entries-${UNIPROT_VERSION}"
 
 # The loader's answer, passed on: 0 loaded to the end, 1 not, and 2 where OpenSearch did not say,

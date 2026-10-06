@@ -119,7 +119,7 @@ preflight() {
     # The indices of the version left, which going back after a failed start needs as they are, and of
     # the version switched to, which only an OpenSearch that answers can say anything of.
     if check_opensearch_answers "$TARGET_INDEX"; then
-        if check_opensearch_index_open "$FROM_INDEX"; then
+        if check_opensearch_index_open "$FROM_INDEX" "$FROM"; then
             check_opensearch_index_complete "$FROM_INDEX" || problems=$((problems + 1))
         else
             problems=$((problems + 1))

@@ -9,6 +9,10 @@ DATASTORE_TABLES=(taxons lineages interpro_entries go_terms ec_numbers proteomes
 # shellcheck disable=SC2034 # read by the scripts that source this file
 PIPELINE_TABLES=(uniprot_entries "${DATASTORE_TABLES[@]}")
 
+# The table load.sh feeds to OpenSearch, relative to a database's directory.
+# shellcheck disable=SC2034 # read by the scripts that source this file
+readonly ENTRIES_TABLE=tables/uniprot_entries.tsv.lz4
+
 # What the API needs under the directory it is pointed at, relative to it. The API checks for
 # exactly these before it starts, so adding or removing one needs the same change on the API side.
 # The tables come from DATASTORE_TABLES, so one fill_datastore writes is one check_index_files
