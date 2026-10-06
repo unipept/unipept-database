@@ -23,9 +23,24 @@ UNIPROT_VERSION=
 # then keeps the index as it is rather than recreating it.
 SKIP_ROWS=
 
-# Whether to only say if the version is loaded to the end, and load nothing. What distribute.sh and
-# switch.sh ask a host before they rely on its index.
+# Whether to only say if the version is loaded to the end, and load nothing. What distribute.sh asks
+# a server before it relies on its index.
 CHECK=false
+
+# The database before it is loaded, and so before anything can switch to it: proteins loaded from a
+# database the API cannot serve would pair with files that are not there. Every check runs, and each
+# problem is counted.
+preflight() {
+    local problems=0
+
+    if check_db_present "$DATABASE_DIR"; then
+        check_db_whole "$DATABASE_DIR" || problems=$((problems + 1))
+        check_db_table "$DATABASE_DIR" || problems=$((problems + 1))
+    else
+        problems=$((problems + 1))
+    fi
+    [ "$problems" -eq 0 ] || die "${problems} problem(s), so nothing was loaded."
+}
 
 usage() {
     cat <<'USAGE'
@@ -37,7 +52,8 @@ Loads the proteins of a finished database into this host's OpenSearch.
   --output-dir DIR           where the databases are
   --opensearch-url URL       the instance the proteins are loaded into
   --skip ROWS                continue a load that stopped part way, passing over this many rows
-  --check                    load nothing: exit 0 if the version is loaded to the end, 1 if not
+  --check                    load nothing: exit 0 if the version is loaded to the end, 1 if not,
+                             and 2 if OpenSearch does not say
   --help                     print this message
 
 A flag wins over .deploy/deploy.conf, which wins over the defaults in lib/ and in this script.
@@ -57,6 +73,8 @@ parse_arguments() {
         esac
     done
 
+    # As the loader checks it too, but before the locks and the checks of what is served, rather
+    # than after them.
     [ -z "$SKIP_ROWS" ] || [[ "$SKIP_ROWS" =~ ^[0-9]+$ ]] || die "--skip takes a number of rows, not '${SKIP_ROWS}'."
 }
 
@@ -67,23 +85,22 @@ refuse_root
 
 [ -n "$UNIPROT_VERSION" ] || UNIPROT_VERSION=$(latest_version)
 DATABASE_DIR="${OUTPUT_DIR}/uniprot-${UNIPROT_VERSION}"
-ENTRIES="${DATABASE_DIR}/tables/uniprot_entries.tsv.lz4"
+ENTRIES="${DATABASE_DIR}/${ENTRIES_TABLE}"
 INDEX_NAME="uniprot_entries-${UNIPROT_VERSION}"
 
+# The loader's answer, passed on: 0 loaded to the end, 1 not, and 2 where OpenSearch did not say,
+# which the loader has already reported.
 if [ "$CHECK" = true ]; then
-    if "${HERE}/../opensearch/load.sh" --opensearch-url "$OPENSEARCH_URL" --index-name "$INDEX_NAME" --check-complete; then
-        echo "${INDEX_NAME} is loaded to the end."
-        exit 0
-    fi
-    echo "${INDEX_NAME} is not loaded, or its load did not finish." 1>&2
-    exit 1
+    status=0
+    "${HERE}/../opensearch/load.sh" --opensearch-url "$OPENSEARCH_URL" --index-name "$INDEX_NAME" --check-complete || status=$?
+    case $status in
+        0) echo "${INDEX_NAME} is loaded to the end." ;;
+        1) echo "${INDEX_NAME} is not loaded, or its load did not finish." 1>&2 ;;
+    esac
+    exit "$status"
 fi
 
-# Before the load, and so before anything can switch to it: proteins loaded from a database the API
-# cannot serve would pair with files that are not there.
-verify_database "${DATABASE_DIR}/suffix-array" \
-    || die "${DATABASE_DIR} is missing files the API needs, or is not the version it is named after."
-[ -s "$ENTRIES" ] || die "${DATABASE_DIR} has no tables/uniprot_entries.tsv.lz4 to load."
+preflight
 
 # Held until the load ends, so switch.sh does not stop OpenSearch under it. Before what is served is
 # read, so no switch moves it between the reading and the load.
@@ -101,7 +118,7 @@ esac
 # already, and loading it is how the host gets it back.
 # An error from OpenSearch is not an index that is not whole, and loading on it would drop a whole one.
 if is_served "$UNIPROT_VERSION" strict; then
-    case $(index_state "$INDEX_NAME") in
+    case $(load_state "$INDEX_NAME") in
         complete) die "${UNIPROT_VERSION} is the version this host serves, and ${INDEX_NAME} is loaded to the end. Loading into it would change what the running API answers. Switch this host to another version with switch.sh first, then load it again." ;;
         unknown) die "${UNIPROT_VERSION} is the version this host serves, and OpenSearch did not say whether ${INDEX_NAME} is whole, so loading into it is not risked. Try again once it answers." ;;
     esac

@@ -30,16 +30,22 @@ database_version_of() {
     case "$name" in uniprot-*) echo "${name#uniprot-}" ;; *) return 1 ;; esac
 }
 
-# The newest database under OUTPUT_DIR, as YYYY-MM. The glob expands in order, so the last one
-# that is a directory is the newest.
-latest_version() {
+# The directory of the newest database under OUTPUT_DIR, or nothing where there is none. The glob
+# expands in order, so the last one that is a directory is the newest.
+newest_database() {
     local newest='' candidate
 
     # shellcheck disable=SC2231 # DATABASE_GLOB is a glob, and has to expand
     for candidate in "${OUTPUT_DIR}"/${DATABASE_GLOB}; do
         [ -d "$candidate" ] && newest="$candidate"
     done
+    printf '%s\n' "$newest"
+}
 
+# The newest database under OUTPUT_DIR, as YYYY-MM.
+latest_version() {
+    local newest
+    newest=$(newest_database)
     [ -n "$newest" ] || die "found no database in ${OUTPUT_DIR}."
     database_version_of "$newest"
 }

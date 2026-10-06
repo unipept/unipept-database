@@ -13,9 +13,10 @@ orchestrate; the pipeline itself lives in `pipelines/` and the loader in `opense
   proteins together, stopping the API and OpenSearch to do so. See
   [Switching the API to another version](#switching-the-api-to-another-version).
 - `verify.sh` checks a finished database against the files the API needs. The others make the same
-  checks, through the same `verify_database` in `lib/database.sh`: `build.sh` before it puts a
-  build in place, `clone.sh` on the remote host before it copies and again on the copy, and `load.sh`
-  before it loads. Run it by hand to check a database that is already there.
+  checks, through `check_index_whole` in `lib/checks.sh`, which `check_db_whole` makes of a
+  database's directory: `build.sh` before it puts a build in place, `clone.sh` on the remote host
+  before it copies and again on the copy, `load.sh` before it loads, and `switch.sh` before it
+  switches. Run it by hand to check a database that is already there.
 
 A new database on a host is therefore two steps, `build.sh` or `clone.sh` and then `load.sh`, and
 serving it a third, `switch.sh`. A load that fails is rerun on its own, without building or
@@ -168,7 +169,7 @@ It checks the database as `verify.sh` does, and refuses one that fails, before i
 version this host serves, so a load of another one changes nothing the API answers, and a load that
 fails can be rerun at any time. `--skip` passes over the rows a load that stopped already wrote,
 and keeps the index as it is. The loader marks an index once its last row is in, and
-`load.sh --check` asks for that mark.
+`load.sh --check` asks for that mark, and exits 2 when OpenSearch does not say, which is not a "no".
 
 `opensearch/load.sh`, which this calls, is the loader alone: it drops and fills the index it is
 named, with none of these checks and no lock. Load through `bin/load.sh`.
@@ -290,6 +291,8 @@ it.
   so a run that stopped part way is finished by running it again.
 - **A server whose copy fails verification is left alone**, since someone may be looking into it.
   `--replace` copies it again.
+- **A server whose OpenSearch does not say whether the proteins are loaded is not loaded**, since
+  a load could drop a whole index. The table marks it failed.
 - **A server that fails does not stop the others.** The table says which failed, and the exit
   status is 1.
 
@@ -355,8 +358,9 @@ it uses of the others.
 | `lib/config.sh` | the settings the parts share, the deploy user, reading `deploy.conf` |
 | `lib/locks.sh` | the OpenSearch lock and the lock per version |
 | `lib/versions.sh` | version names, `.version`, the `current` and `previous` links |
-| `lib/database.sh` | what a database holds, and how it is checked and put in place |
+| `lib/database.sh` | what a database holds, and how it is put in place |
 | `lib/api.sh` | what this host serves, and which API release is installed |
+| `lib/checks.sh` | what has to be true before a script changes anything: one function per check, printing `FAIL …` |
 
 `install.sh` installs them as `/opt/unipept-database/bin/lib.sh` and `/opt/unipept-database/bin/lib/`,
 root's like the scripts beside them.

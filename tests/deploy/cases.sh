@@ -284,6 +284,16 @@ rm -r "${CHECK_OUT}/uniprot-2026-03/unreadable"
 build --output-dir "$CHECK_OUT" --scratch-dir /work/scratch --replace --skip-checks
 check "--skip-checks builds anyway" "$?" "0"
 
+# The lock the build is swapped in under, which it cannot open: found before the build, hours earlier.
+mv /run/lock/unipept-opensearch.lock /run/lock/unipept-opensearch.lock.away 2> /dev/null
+touch /run/lock/unipept-opensearch.lock
+chmod 600 /run/lock/unipept-opensearch.lock
+build --output-dir "$CHECK_OUT" --scratch-dir /work/scratch --replace --skip-checks
+check "a lock it cannot open stops it" "$?" "2"
+check_true "and that the build is swapped in under it" grep -q 'FAIL the build is swapped in under .* at its end' /work/last-output
+rm -f /run/lock/unipept-opensearch.lock
+mv /run/lock/unipept-opensearch.lock.away /run/lock/unipept-opensearch.lock 2> /dev/null
+
 
 section "a build whose tables are empty"
 
@@ -356,6 +366,7 @@ section "a clone that cannot be made"
 clone --remote-output-dir "$REMOTE" --output-dir "$LOCAL" --uniprot-version 2030-01
 check "a release the remote does not have stops" "$?" "2"
 check_true "the release is named" grep -q 'uniprot-2030-01' /work/last-output
+check_true "as not there" grep -q 'FAIL the remote host has no .*uniprot-2030-01' /work/last-output
 
 clone --remote-output-dir /work/nothing-here --output-dir "$LOCAL"
 check "a remote with no database stops" "$?" "2"
@@ -371,6 +382,7 @@ touch /run/lock/unipept-opensearch.lock
 chmod 600 /run/lock/unipept-opensearch.lock
 clone --remote-output-dir "$REMOTE" --output-dir "$LOCAL" --replace
 check "a lock it cannot open stops it" "$?" "2"
+check_true "and that the copy is swapped in under it" grep -q 'FAIL the copy is swapped in under .* at its end' /work/last-output
 check_true "before copying anything" test ! -e "${LOCAL}/.clone"
 rm -f /run/lock/unipept-opensearch.lock
 mv /run/lock/unipept-opensearch.lock.away /run/lock/unipept-opensearch.lock 2> /dev/null
@@ -414,6 +426,24 @@ check_true "it does not first call the table optional" not grep -q 'WARN kmer_ta
 check_true "the database that was there is kept" test -s "${LOCAL}/uniprot-2026-03/suffix-array/kmer_table.bin"
 rm "${STUBS}/scp"
 
+# An scp that loses a file the API needs on the way, and one that loses the table load.sh reads.
+for lost in suffix-array/mapping.bin tables/uniprot_entries.tsv.lz4; do
+    cat > "${STUBS}/scp" <<SCP
+#!/usr/bin/env bash
+/usr/bin/scp "\$@" || exit
+rm -f ${LOCAL}/.clone/*/${lost}
+SCP
+    chmod +x "${STUBS}/scp"
+    clone --remote-output-dir "$REMOTE" --output-dir "$LOCAL" --replace
+    check "a copy that lost ${lost} stops" "$?" "2"
+    case $lost in
+        suffix-array/*) check_true "it says the copy cannot be served" grep -q 'FAIL .*/.clone/uniprot-2026-03 is not a database the API can serve' /work/last-output ;;
+        tables/*) check_true "it says the copy has no table" grep -q 'FAIL .*/.clone/uniprot-2026-03 has no tables/uniprot_entries.tsv.lz4' /work/last-output ;;
+    esac
+    check_true "the database that was there is kept" test -s "${LOCAL}/uniprot-2026-03/suffix-array/mapping.bin"
+done
+rm "${STUBS}/scp"
+
 # An ssh that fails when asked about the k-mer table, after the copy. That says nothing about the
 # table, so it must not read as a remote without one.
 cat > "${STUBS}/ssh" <<'SSH'
@@ -450,7 +480,7 @@ printf '2025.11\n' > "${REMOTE}/uniprot-2025-11/suffix-array/.version"
 rm "${REMOTE}/uniprot-2025-11/tables/uniprot_entries.tsv.lz4"
 clone --remote-output-dir "$REMOTE" --output-dir "$LOCAL" --uniprot-version 2025-11 --replace
 check "a remote database without its entries table stops" "$?" "2"
-check_true "the table is named" grep -q 'tables/uniprot_entries.tsv.lz4 is missing' /work/last-output
+check_true "the table is named" grep -q 'has no tables/uniprot_entries.tsv.lz4' /work/last-output
 check_true "it stops before copying anything" test ! -e "${LOCAL}/.clone"
 
 
@@ -652,6 +682,8 @@ rm -f /work/loader-calls
 load_proteins --output-dir "$OUT" --uniprot-version 2030-01
 check "a version that is not there stops it" "$?" "2"
 check_true "the directory is named" grep -q 'uniprot-2030-01' /work/last-output
+check_true "as not there, and that alone" grep -q 'FAIL there is no .*uniprot-2030-01. Copy it with clone.sh, or build it' /work/last-output
+check "one problem" "$(grep -c '^FAIL' /work/last-output)" "1"
 
 load_proteins --output-dir /work/nothing-here
 check "no database at all stops it" "$?" "2"
@@ -1173,7 +1205,7 @@ make_server() {
 #!/usr/bin/env bash
 printf '%s\n' "\$*" >> /work/${name}-loader-calls
 case "\$*" in
-    *--check-complete*) [ -e /work/${name}-loaded ] ;;
+    *--check-complete*) [ ! -e /work/${name}-silent ] || exit 2; [ -e /work/${name}-loaded ] ;;
     *) touch /work/${name}-loaded ;;
 esac
 LOADER
@@ -1227,6 +1259,16 @@ check_true "b already had both" row_says b had had ready
 check_true "nothing is copied again" test -f /work/a-data/uniprot-2026-03/marker
 check "nothing is loaded again" "$(grep -c -- '--uniprot-entries' /work/a-loader-calls)" "0"
 
+# An OpenSearch that does not say whether a's proteins are loaded: a load would drop an index that
+# may be whole, so a is left as it is and reported.
+touch /work/a-silent
+: > /work/a-loader-calls
+distribute --uniprot-version 2026-03
+check "a server whose OpenSearch does not say fails the run" "$?" "1"
+check_true "and is reported" row_says a had failed "could not tell whether the proteins are loaded; load.sh --check there says why"
+check "and is not loaded again" "$(grep -c -- '--uniprot-entries' /work/a-loader-calls)" "0"
+rm /work/a-silent
+
 rm /work/a-loaded
 distribute --uniprot-version 2026-03
 check "a server whose load did not finish is loaded" "$?" "0"
@@ -1254,7 +1296,7 @@ printf 'a localhost /work/server-a\nc localhost /work/server-c\n' > /work/server
 rm -f /work/a-loaded
 distribute --uniprot-version 2026-03
 check "a server that could not clone stops it" "$?" "2"
-check_true "it is named" grep -q "cannot clone 2026-03 from localhost: c" /work/last-output
+check_true "it is named" grep -q "FAIL c cannot clone 2026-03 from localhost" /work/last-output
 check_true "before the server before it is touched" test ! -e /work/a-loaded
 touch /work/a-loaded
 
@@ -1288,7 +1330,7 @@ check_true "no server is touched" not grep -q . /work/a-loader-calls
 printf 'a localhost /work/server-a\nnowhere localhost /work/no-install\n' > /work/servers.conf
 distribute --uniprot-version 2026-03
 check "a server without the scripts installed stops it" "$?" "2"
-check_true "it is named" grep -q 'on: nowhere' /work/last-output
+check_true "it is named" grep -q 'FAIL nowhere cannot be reached, or has no scripts installed' /work/last-output
 check_true "before the servers that are fine are touched" not grep -q . /work/a-loader-calls
 
 printf 'a localhost /work/server-a\na localhost /work/server-a\n' > /work/servers.conf

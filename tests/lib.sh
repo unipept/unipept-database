@@ -26,6 +26,36 @@ copy_deploy_scripts() {
     cp "${repo}/opensearch/lib.sh" "${dest}/opensearch/"
 }
 
+# A whole database of a version, in ROOT/uniprot-VERSION, made afresh: every file the API needs with
+# content, its .version, build-info.txt and the table load.sh reads. Prints its suffix-array, the
+# directory the API is pointed at.
+make_database() {
+    local root=$1 version=$2 relative
+    local index="${root}/uniprot-${version}/suffix-array"
+
+    chmod -R u+rwx "$root" 2> /dev/null
+    rm -rf "${root:?}"
+    # The lists from a bash of its own: a suite that has sourced database.sh holds them read-only.
+    # shellcheck disable=SC2016 # expanded by that bash
+    while read -r relative; do
+        mkdir -p "$(dirname "${index}/${relative}")"
+        printf 'content\n' > "${index}/${relative}"
+    done < <(bash -c 'source "$1"; printf "%s\n" "${INDEX_FILES[@]}" "${OPTIONAL_INDEX_FILES[@]}"' _ \
+        "${TESTS_DIR}/../.deploy/lib/database.sh")
+    printf '%s\n' "${version//-/.}" > "${index}/.version"
+    printf 'uniprot: %s\n' "$version" > "${index}/build-info.txt"
+    mkdir -p "${root}/uniprot-${version}/tables"
+    printf 'rows\n' > "${root}/uniprot-${version}/tables/uniprot_entries.tsv.lz4"
+    echo "$index"
+}
+
+# A stand-in command: a shell script at PATH that runs BODY. Prints PATH.
+make_stub() {
+    printf '#!/bin/sh\n%s\n' "$2" > "$1"
+    chmod +x "$1"
+    echo "$1"
+}
+
 # A heading between suites, or between the steps of one.
 heading() { printf '\n\033[1m%s\033[0m\n' "$*"; }
 

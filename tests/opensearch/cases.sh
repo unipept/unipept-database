@@ -135,6 +135,9 @@ check "the stopped load left a row" "$(documents_in uniprot_entries-2026-07)" "1
 check "the index is not marked as loaded to the end" "$?" "1"
 "${REPO}/opensearch/load.sh" --opensearch-url "$OPENSEARCH_URL" --index-name uniprot_entries-2030-01 --check-complete
 check "nor is an index that is not there" "$?" "1"
+"${REPO}/opensearch/load.sh" --opensearch-url http://localhost:1 --index-name uniprot_entries-2026-07 --check-complete 2> "${WORK}/check-silent.log"
+check "an OpenSearch that does not answer is an error, not a no" "$?" "2"
+check_true "and says so" grep -q 'did not say whether uniprot_entries-2026-07 is loaded to the end' "${WORK}/check-silent.log"
 
 write_fixture "${WORK}/rest.tsv.lz4" "$(row 1 P70001 'First protein')" "$(row 2 P70002 'Second protein')"
 load /dev/null --uniprot-entries "${WORK}/rest.tsv.lz4" --index-name uniprot_entries-2026-07 --skip 1
@@ -413,11 +416,46 @@ curl -s -X POST "${OPENSEARCH_URL}/uniprot_entries-2027-01/_close" > /dev/null
 switch "${WORK}/switch-fromclosed.log" --uniprot-version 2027-02
 check "a version it could not go back to stops it" "$rc" "2"
 check_true "and says so" grep -q 'uniprot_entries-2027-01, of the version this host serves, is not open' "${WORK}/switch-fromclosed.log"
+check_true "once, not also as not loaded to the end" not_in 'uniprot_entries-2027-01 was not loaded' "${WORK}/switch-fromclosed.log"
 curl -s -X POST "${OPENSEARCH_URL}/uniprot_entries-2027-01/_open" > /dev/null
+
+# The index of the version it leaves, open but without the mark of a whole load: going back to it
+# would serve half the proteins.
+curl -s -X PUT "${OPENSEARCH_URL}/uniprot_entries-2027-01/_mapping" -H 'Content-Type: application/json' \
+    -d '{"_meta":{"unipept_load":"partial"}}' > /dev/null
+switch "${WORK}/switch-frompartial.log" --uniprot-version 2027-02
+check "a version it could only go back to half loaded stops it" "$rc" "2"
+check_true "and says so" grep -q 'FAIL uniprot_entries-2027-01 was not loaded to the end' "${WORK}/switch-frompartial.log"
+curl -s -X PUT "${OPENSEARCH_URL}/uniprot_entries-2027-01/_mapping" -H 'Content-Type: application/json' \
+    -d '{"_meta":{"unipept_load":"complete"}}' > /dev/null
 
 switch "${WORK}/switch-nodir.log" --uniprot-version 2027-05
 check "a version it does not hold stops it" "$rc" "2"
 check_true "and says to copy or build it" grep -q "there is no ${SW_DATA}/uniprot-2027-05. Copy it with clone.sh, or build it" "${WORK}/switch-nodir.log"
+
+mv "${SW_DATA}/uniprot-2027-02/suffix-array/mapping.bin" "${WORK}/mapping.bin.away"
+switch "${WORK}/switch-notwhole.log" --uniprot-version 2027-02
+check "a version whose files are not whole stops it" "$rc" "2"
+check_true "and says it cannot be served" grep -q "FAIL ${SW_DATA}/uniprot-2027-02 is not a database the API can serve" "${WORK}/switch-notwhole.log"
+mv "${WORK}/mapping.bin.away" "${SW_DATA}/uniprot-2027-02/suffix-array/mapping.bin"
+
+runuser -u unipept -- "${REPO}/.deploy/load.sh" --output-dir "$SW_DATA" --uniprot-version 2027-02 \
+    --opensearch-url http://localhost:1 --check > "${WORK}/load-check-silent.log" 2>&1
+check "load.sh --check answers 2 for an OpenSearch that does not say" "$?" "2"
+check_true "without calling it not loaded" not_in 'is not loaded' "${WORK}/load-check-silent.log"
+
+switch "${WORK}/switch-noopensearch.log" --uniprot-version 2027-02 --opensearch-url http://localhost:1
+check "an OpenSearch that does not answer stops it" "$rc" "2"
+check_true "and says so" grep -q 'FAIL OpenSearch does not answer at http://localhost:1, so whether uniprot_entries-2027-02 is there is unknown' "${WORK}/switch-noopensearch.log"
+
+# A load of the version that did not finish: its index there, without the mark of a whole one.
+curl -s -X PUT "${OPENSEARCH_URL}/uniprot_entries-2027-02/_mapping" -H 'Content-Type: application/json' \
+    -d '{"_meta":{"unipept_load":"partial"}}' > /dev/null
+switch "${WORK}/switch-partial.log" --uniprot-version 2027-02
+check "a version whose load did not finish stops it" "$rc" "2"
+check_true "and says to continue or redo it" grep -q 'FAIL uniprot_entries-2027-02 was not loaded to the end' "${WORK}/switch-partial.log"
+curl -s -X PUT "${OPENSEARCH_URL}/uniprot_entries-2027-02/_mapping" -H 'Content-Type: application/json' \
+    -d '{"_meta":{"unipept_load":"complete"}}' > /dev/null
 
 touch "${SW_STATE}/check-fails"
 switch "${WORK}/switch-apicheck.log" --uniprot-version 2027-02

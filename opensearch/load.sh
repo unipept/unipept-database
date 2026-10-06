@@ -138,7 +138,8 @@ it. .deploy/load.sh runs this, naming the index after the version.
   --index-name NAME          the index to drop, create and fill, default uniprot_entries
   --skip ROWS                continue a load that stopped part way, passing over this many rows;
                              the index is kept
-  --check-complete           load nothing: exit 0 if the index is loaded to the end, 1 if not
+  --check-complete           load nothing: exit 0 if the index is loaded to the end, 1 if not,
+                             and 2 if OpenSearch does not say
   --opensearch-url URL       the OpenSearch instance, default http://localhost:9200
   --help                     print this message
 USAGE
@@ -175,10 +176,14 @@ parse_arguments() {
 parse_arguments "$@"
 
 # Only curl, so before the loader's own dependencies, which a host that only asks need not have.
+# 0 loaded to the end, 1 not, and 2 when OpenSearch does not say, which is not a "no".
 if [[ "$CHECK_COMPLETE" == true ]]
 then
-    is_complete "$INDEX_NAME" && exit 0
-    exit 1
+    case $(load_state "$INDEX_NAME") in
+        complete) exit 0 ;;
+        unknown) opensearch_fail "OpenSearch at ${OPENSEARCH_URL} did not say whether ${INDEX_NAME} is loaded to the end." ;;
+        *) exit 1 ;;
+    esac
 fi
 
 # Check if all required dependencies are installed
