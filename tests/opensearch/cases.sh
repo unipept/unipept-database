@@ -418,6 +418,16 @@ check "a version it could not go back to stops it" "$rc" "2"
 check_true "and says so" grep -q 'uniprot_entries-2027-01, of the version this host serves, is not open' "${WORK}/switch-fromclosed.log"
 curl -s -X POST "${OPENSEARCH_URL}/uniprot_entries-2027-01/_open" > /dev/null
 
+# The index of the version it leaves, open but without the mark of a whole load: going back to it
+# would serve half the proteins.
+curl -s -X PUT "${OPENSEARCH_URL}/uniprot_entries-2027-01/_mapping" -H 'Content-Type: application/json' \
+    -d '{"_meta":{"unipept_load":"partial"}}' > /dev/null
+switch "${WORK}/switch-frompartial.log" --uniprot-version 2027-02
+check "a version it could only go back to half loaded stops it" "$rc" "2"
+check_true "and says so" grep -q 'FAIL uniprot_entries-2027-01 was not loaded to the end' "${WORK}/switch-frompartial.log"
+curl -s -X PUT "${OPENSEARCH_URL}/uniprot_entries-2027-01/_mapping" -H 'Content-Type: application/json' \
+    -d '{"_meta":{"unipept_load":"complete"}}' > /dev/null
+
 switch "${WORK}/switch-nodir.log" --uniprot-version 2027-05
 check "a version it does not hold stops it" "$rc" "2"
 check_true "and says to copy or build it" grep -q "there is no ${SW_DATA}/uniprot-2027-05. Copy it with clone.sh, or build it" "${WORK}/switch-nodir.log"
