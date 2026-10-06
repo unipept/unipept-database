@@ -127,108 +127,48 @@ upload_uniprot_entries() {
     log "Finished uploading UniProt entries."
 }
 
-################################################################################
-# parse_arguments                                                              #
-#                                                                              #
-# Parses command-line arguments provided to the script and sets options and    #
-# variables accordingly. Ensures required parameters are set and prints the    #
-# help message if invalid or missing arguments are provided.                   #
-#                                                                              #
-# Arguments:                                                                   #
-#   --opensearch-url      (optional) URL of the OpenSearch instance. Defaults  #
-#                         to 'http://localhost:9200'.                         #
-#   --uniprot-entries     (required) Path to the UniProt TSV file for upload.  #
-#   --index-name          (optional) The index to fill. Defaults to            #
-#                         'uniprot_entries'.                                   #
-#   --skip                Rows to pass over, keeping the index.                #
-#   --check-complete      Loads nothing; exits 0 if --index-name was loaded    #
-#                         to the end, 1 otherwise.                             #
-#   --help                Prints the help message and exits.                   #
-#                                                                              #
-# Returns:                                                                     #
-#   None                                                                       #
-################################################################################
+usage() {
+    cat <<'USAGE'
+Drops and recreates one index on a running OpenSearch, then loads the proteins of a database into
+it. .deploy/load.sh runs this, naming the index after the version.
+
+  opensearch/load.sh --uniprot-entries FILE [OPTIONS]
+
+  --uniprot-entries FILE     the uniprot_entries.tsv.lz4 to load, required unless --check-complete
+  --index-name NAME          the index to drop, create and fill, default uniprot_entries
+  --skip ROWS                continue a load that stopped part way, passing over this many rows;
+                             the index is kept
+  --check-complete           load nothing: exit 0 if the index is loaded to the end, 1 if not
+  --opensearch-url URL       the OpenSearch instance, default http://localhost:9200
+  --help                     print this message
+USAGE
+}
+
+# The value after an option, refused when it is missing or is the next option.
+option_value() {
+    { [ -n "${2-}" ] && [[ "$2" != --* ]]; } || opensearch_fail "$1 requires a value."
+}
+
+# Sets the options above from the arguments. Not .deploy/lib/options.sh: this script loads the
+# pipelines' library, not .deploy/lib.sh, but its --help and its errors read the same way.
 parse_arguments() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            --opensearch-url)
-                OPENSEARCH_URL="$2"
-                shift 2
-                ;;
-            --uniprot-entries)
-                UNIPROT_ENTRIES_FILE="$2"
-                shift 2
-                ;;
-            --index-name)
-                INDEX_NAME="$2"
-                if ! [[ "$INDEX_NAME" =~ ^[a-z0-9][a-z0-9_.-]*$ ]]; then
-                    echo "Error: --index-name takes a lowercase OpenSearch index name."
-                    print_help
-                    exit 1
-                fi
-                shift 2
-                ;;
-            --check-complete)
-                CHECK_COMPLETE=true
-                shift
-                ;;
-            --skip)
-                SKIP_ROWS="$2"
-                if ! [[ "$SKIP_ROWS" =~ ^[0-9]+$ ]]; then
-                    echo "Error: --skip takes a number of rows."
-                    print_help
-                    exit 1
-                fi
-                shift 2
-                ;;
-            --help)
-                print_help
-                exit 0
-                ;;
-            *)
-                echo "Unknown parameter: $1"
-                print_help
-                exit 1
-                ;;
+            --uniprot-entries) option_value "$1" "${2-}"; UNIPROT_ENTRIES_FILE="$2"; shift 2 ;;
+            --index-name) option_value "$1" "${2-}"; INDEX_NAME="$2"; shift 2 ;;
+            --skip) option_value "$1" "${2-}"; SKIP_ROWS="$2"; shift 2 ;;
+            --check-complete) CHECK_COMPLETE=true; shift ;;
+            --opensearch-url) option_value "$1" "${2-}"; OPENSEARCH_URL="$2"; shift 2 ;;
+            --help) usage; exit 0 ;;
+            *) opensearch_fail "unknown option '$1'. Run with --help for the options." ;;
         esac
     done
 
-    # Ensure the required parameter --uniprot-entries is set
-    if [[ -z $UNIPROT_ENTRIES_FILE && "$CHECK_COMPLETE" != true ]]; then
-        echo "Error: --uniprot-entries is required."
-        print_help
-        exit 1
-    fi
-}
-
-################################################################################
-# print_help                                                                   #
-#                                                                              #
-# Displays a help message that describes the script usage, parameters, and     #
-# examples of how to execute it. This message is printed when the '--help'     #
-# flag is passed or when invalid arguments are provided to the script.         #
-#                                                                              #
-# Arguments:                                                                   #
-#   None                                                                       #
-#                                                                              #
-# Returns:                                                                     #
-#   None                                                                       #
-################################################################################
-print_help() {
-    echo "Usage: $0 [OPTIONS]"
-    echo ""
-    echo "Options:"
-    echo "  --uniprot-entries   Path to the 'uniprot_entries.tsv.lz4' file to be uploaded (required)."
-    echo "  --opensearch-url    URL to communicate with the running OpenSearch instance (optional, default: 'http://localhost:9200')."
-    echo "  --index-name        The index to drop, create and fill (optional, default: 'uniprot_entries')."
-    echo "  --skip              Rows to pass over, to continue an upload that stopped part way. The index is kept."
-    echo "  --check-complete    Load nothing: exit 0 if the index was loaded to the end, 1 if not."
-    echo "  --help              Prints this help message."
-    echo ""
-    echo "Examples:"
-    echo "  $0 --uniprot-entries /path/to/uniprot_entries.tsv.lz4"
-    echo "  $0 --opensearch-url http://localhost:9200 --uniprot-entries /path/to/uniprot_entries.tsv.lz4"
-    echo ""
+    [[ "$INDEX_NAME" =~ ^[a-z0-9][a-z0-9_.-]*$ ]] \
+        || opensearch_fail "--index-name takes a lowercase OpenSearch index name, not '${INDEX_NAME}'."
+    [[ "$SKIP_ROWS" =~ ^[0-9]+$ ]] || opensearch_fail "--skip takes a number of rows, not '${SKIP_ROWS}'."
+    [ -n "$UNIPROT_ENTRIES_FILE" ] || [ "$CHECK_COMPLETE" = true ] \
+        || opensearch_fail "--uniprot-entries is required."
 }
 
 parse_arguments "$@"
