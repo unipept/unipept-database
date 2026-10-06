@@ -416,6 +416,7 @@ curl -s -X POST "${OPENSEARCH_URL}/uniprot_entries-2027-01/_close" > /dev/null
 switch "${WORK}/switch-fromclosed.log" --uniprot-version 2027-02
 check "a version it could not go back to stops it" "$rc" "2"
 check_true "and says so" grep -q 'uniprot_entries-2027-01, of the version this host serves, is not open' "${WORK}/switch-fromclosed.log"
+check_true "once, not also as not loaded to the end" not_in 'uniprot_entries-2027-01 was not loaded' "${WORK}/switch-fromclosed.log"
 curl -s -X POST "${OPENSEARCH_URL}/uniprot_entries-2027-01/_open" > /dev/null
 
 # The index of the version it leaves, open but without the mark of a whole load: going back to it

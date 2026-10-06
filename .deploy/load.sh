@@ -33,8 +33,12 @@ CHECK=false
 preflight() {
     local problems=0
 
-    check_db_whole "$DATABASE_DIR" || problems=$((problems + 1))
-    check_db_table "$DATABASE_DIR" || problems=$((problems + 1))
+    if check_db_present "$DATABASE_DIR"; then
+        check_db_whole "$DATABASE_DIR" || problems=$((problems + 1))
+        check_db_table "$DATABASE_DIR" || problems=$((problems + 1))
+    else
+        problems=$((problems + 1))
+    fi
     [ "$problems" -eq 0 ] || die "${problems} problem(s), so nothing was loaded."
 }
 

@@ -210,11 +210,12 @@ distribute_to() {
 
     status=0
     on "$host" "$root" bin/load.sh --uniprot-version "$UNIPROT_VERSION" --check > /dev/null 2>&1 || status=$?
-    # 1 is a load that is not whole, which loading again mends. 2 is an error, such as an OpenSearch
-    # that did not say, where a load would drop an index that may be whole.
+    # 1 is a load that is not whole, which loading again mends. 2 is an error, most often an
+    # OpenSearch that did not say, where a load would drop an index that may be whole; which one,
+    # load.sh --check on that server says.
     case "$status" in
         0) proteins=had ;;
-        2) echo "${files}|failed|could not tell whether the proteins are loaded"; return ;;
+        2) echo "${files}|failed|could not tell whether the proteins are loaded; load.sh --check there says why"; return ;;
         255) echo "${files}|failed|could not reach it to load"; return ;;
         *)
             log "${name}: loading the proteins of ${UNIPROT_VERSION}." 1>&2

@@ -37,13 +37,15 @@ check_opensearch_stopped() {
         || { echo "FAIL OpenSearch is running, and holds memory the suffix array needs." 1>&2; return 1; }
 }
 
-# Given the newest database and its size in KiB. What the last build left in build.sh's
-# STAGING_DIR is removed before the next one starts, so it counts as free; left out when it cannot
-# be measured, which only makes the check stricter.
+# Given the newest database, its size in KiB, and the staging directory a build works in. What the
+# last build left there is removed before the next one starts, so it counts as free; left out when
+# it cannot be measured, which only makes the check stricter.
 check_disk_room() {
-    local previous=$1 size=$2 staging=0 free
-    [ ! -d "$STAGING_DIR" ] || staging=$(size_kib "$STAGING_DIR" 2> /dev/null) || staging=0
-    free=$(($(df -Pk "$OUTPUT_DIR" | awk 'NR == 2 { print $4 }') + staging))
+    local previous=$1 size=$2 staging_dir=$3 staging=0 available free
+    [ ! -d "$staging_dir" ] || staging=$(size_kib "$staging_dir" 2> /dev/null) || staging=0
+    available=$(df -Pk "$OUTPUT_DIR" | awk 'NR == 2 { print $4 }')
+    [ -n "$available" ] || { echo "FAIL cannot tell how much is free on disk in ${OUTPUT_DIR}: df says nothing of it." 1>&2; return 1; }
+    free=$((available + staging))
     [ "$free" -ge "$((size * 3 / 2))" ] \
         || { echo "FAIL $(gib "$free") is free on disk in ${OUTPUT_DIR}, and a build needs 1.5 times the $(gib "$size") of ${previous##*/}: $(gib $((size * 3 / 2)))." 1>&2; return 1; }
 }
@@ -56,10 +58,11 @@ check_memory_free() {
         || { echo "FAIL $(gib "$available") of memory is available, and a build needs 1.2 times the $(gib "$size") of ${previous##*/}: $(gib $((size * 6 / 5)))." 1>&2; return 1; }
 }
 
-# The lock the work of a build or a clone is swapped in under at its end, which can be opened at
-# all: found before the work, hours earlier.
+# The lock a build or a clone is swapped in under at its end, which can be opened at all: found
+# before the work, hours earlier. Given what the work is, for the message.
 check_lock_usable() {
-    opensearch_lock_usable || { echo "FAIL $(lock_refused 2)" 1>&2; return 1; }
+    opensearch_lock_usable \
+        || { echo "FAIL ${1} is swapped in under ${OPENSEARCH_LOCK} at its end, which $(id -un) cannot open: $(lock_refused 2)" 1>&2; return 1; }
 }
 
 # A database: its directory, given it, and in it the files the API needs, with the right .version,
@@ -137,14 +140,19 @@ check_index_version() {
     [ "$named" = "$version" ] || { echo "FAIL the directory says ${named} and .version says ${version}" 1>&2; return 1; }
 }
 
-# The whole contract a database is held to before the API is pointed at it: the checks of its
-# suffix-array, each reporting every failure, and the warning of what it could do without.
-check_db_whole() {
+# The whole contract the directory the API is pointed at is held to: its files, with the warning of
+# what it could do without, and its version, each reporting every failure. verify.sh's check.
+check_index_whole() {
     local status=0
-    check_index_files "${1}/suffix-array" || status=1
-    check_index_optional_files "${1}/suffix-array"
-    check_index_version "${1}/suffix-array" || status=1
-    [ "$status" -eq 0 ] || { echo "FAIL ${1} is not a database the API can serve (above)." 1>&2; return 1; }
+    check_index_files "$1" || status=1
+    check_index_optional_files "$1"
+    check_index_version "$1" || status=1
+    return "$status"
+}
+
+# The same of a database, given its directory, before the API is pointed at it.
+check_db_whole() {
+    check_index_whole "${1}/suffix-array" || { echo "FAIL ${1} is not a database the API can serve (above)." 1>&2; return 1; }
 }
 
 # The table load.sh feeds to OpenSearch. Outside the index, so not one check_index_files checks.
@@ -256,7 +264,7 @@ check_remote_db_present() {
 check_remote_db_whole() {
     remote_sh bash -s << REMOTE || { echo "FAIL the database on ${REMOTE_ADDRESS} cannot be cloned (above)." 1>&2; return 1; }
 $(declare -p INDEX_FILES OPTIONAL_INDEX_FILES)
-$(declare -f check_db_whole check_db_table check_index_files check_index_optional_files check_index_version database_version_of read_version)
+$(declare -f check_db_whole check_db_table check_index_whole check_index_files check_index_optional_files check_index_version database_version_of read_version)
 status=0
 check_db_whole '${1}' || status=1
 check_db_table '${1}' || status=1

@@ -119,8 +119,11 @@ preflight() {
     # The indices of the version left, which going back after a failed start needs as they are, and of
     # the version switched to, which only an OpenSearch that answers can say anything of.
     if check_opensearch_answers "$TARGET_INDEX"; then
-        check_opensearch_index_open "$FROM_INDEX" || problems=$((problems + 1))
-        check_opensearch_index_complete "$FROM_INDEX" || problems=$((problems + 1))
+        if check_opensearch_index_open "$FROM_INDEX"; then
+            check_opensearch_index_complete "$FROM_INDEX" || problems=$((problems + 1))
+        else
+            problems=$((problems + 1))
+        fi
         TARGET_STATUS=$(index_status "$TARGET_INDEX")
         if check_opensearch_index_present "$TARGET_INDEX" "$TARGET" "$TARGET_STATUS"; then
             check_opensearch_index_complete "$TARGET_INDEX" || problems=$((problems + 1))
@@ -284,14 +287,12 @@ preflight
 # A --check on a closed index has stopped above, so what is left can be checked.
 open_target_index
 # What the API itself needs of the new version, its files, the memory for them and the index of its
-# proteins, which its own check decides.
-if ! check_api_accepts "$TARGET_DIR"; then
-    if [ "$TARGET_STATUS" = close ]; then
-        die "1 problem(s), so nothing was changed but opening ${TARGET_INDEX}, which serves nothing new."
-    fi
-    die "1 problem(s), so nothing was changed."
-fi
+# proteins, which its own check decides. The disk OpenSearch has first, which can be why it refuses.
 warn_opensearch_disk
+if ! check_api_accepts "$TARGET_DIR"; then
+    [ "$TARGET_STATUS" != close ] || die "nothing was changed but opening ${TARGET_INDEX}, which serves nothing new (above)."
+    die "nothing was changed (above)."
+fi
 if [ "$CHECK_ONLY" = true ]; then
     log "This host can switch from ${FROM} to ${TARGET}."
     exit 0

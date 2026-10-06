@@ -150,12 +150,12 @@ both_ways check_db_whole "check_db_whole '${DB}'" "check_db_whole '${EMPTY}'" "$
 both_ways check_db_table "check_db_table '${DB}'" "check_db_table '${EMPTY}'" "${EMPTY} has no tables/uniprot_entries.tsv.lz4"
 
 both_ways check_lock_usable \
-    "OPENSEARCH_LOCK='${TEMP_DIR}/checks/lock'; check_lock_usable" \
-    "OPENSEARCH_LOCK='${TEMP_DIR}/checks/no/such/dir/lock'; check_lock_usable" \
-    "Make ${TEMP_DIR}/checks/no/such/dir/lock readable by"
+    "OPENSEARCH_LOCK='${TEMP_DIR}/checks/lock'; check_lock_usable 'the work'" \
+    "OPENSEARCH_LOCK='${TEMP_DIR}/checks/no/such/dir/lock'; check_lock_usable 'the work'" \
+    "the work is swapped in under ${TEMP_DIR}/checks/no/such/dir/lock at its end"
 both_ways check_disk_room \
-    "OUTPUT_DIR='${TEMP_DIR}' STAGING_DIR='${TEMP_DIR}/none'; check_disk_room '${DB}' 1" \
-    "OUTPUT_DIR='${TEMP_DIR}' STAGING_DIR='${TEMP_DIR}/none'; check_disk_room '${DB}' $((1024 * 1024 * 1024 * 1024))" \
+    "OUTPUT_DIR='${TEMP_DIR}'; check_disk_room '${DB}' 1 '${TEMP_DIR}/none'" \
+    "OUTPUT_DIR='${TEMP_DIR}'; check_disk_room '${DB}' $((1024 * 1024 * 1024 * 1024)) '${TEMP_DIR}/none'" \
     "is free on disk"
 # Stand-ins for systemctl and sudo, on a PATH of their own.
 mkdir -p "${TEMP_DIR}/checks/bin"

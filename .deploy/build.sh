@@ -174,7 +174,7 @@ preflight() {
     previous=$(newest_database)
     if [ -n "$previous" ]; then
         if size=$(size_kib "$previous"); then
-            check_disk_room "$previous" "$size" || problems=$((problems + 1))
+            check_disk_room "$previous" "$size" "$STAGING_DIR" || problems=$((problems + 1))
             check_memory_free "$previous" "$size" || problems=$((problems + 1))
         else
             echo "WARN the size of ${previous} cannot be measured, so disk and memory are not checked." 1>&2
@@ -221,7 +221,7 @@ STAGING_DIR="${OUTPUT_DIR}/.build"
 # The swap at the end is made under the lock that keeps loads and switches apart: found now, not
 # hours in.
 require flock:util-linux
-check_lock_usable || die "nothing was built (above)."
+check_lock_usable "the build" || die "nothing was built (above)."
 
 rm -rf "${STAGING_DIR:?}"
 mkdir -p "${STAGING_DIR}"/{suffix-array,tables,temp}

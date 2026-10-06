@@ -78,11 +78,9 @@ if [ ! -e "$DATABASE_DIR" ]; then
 fi
 
 status=0
-check_index_files "$INDEX_DIR" || status=1
-check_index_optional_files "$INDEX_DIR"
-check_index_version "$INDEX_DIR" || status=1
+check_index_whole "$INDEX_DIR" || status=1
 
-# Only in a directory it could look in: check_index_files has already said why it could not.
+# Only in a directory it could look in: check_index_whole has already said why it could not.
 if [ -s "${INDEX_DIR}/build-info.txt" ]; then
     sed 's/^/  /' "${INDEX_DIR}/build-info.txt"
 elif [ -d "$INDEX_DIR" ] && [ -x "$INDEX_DIR" ]; then
