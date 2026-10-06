@@ -97,7 +97,7 @@ take_opensearch_lock -s || die "$(lock_refused $?)"
 # And a lock of this version's own, since two loads of one version would drop each other's index.
 take_load_lock "$UNIPROT_VERSION" || case $? in
     1) die "another load of ${UNIPROT_VERSION}, or a build or a clone replacing it, is running on this host. Let it finish, or stop it, first." ;;
-    *) die "without its lock, two loads of ${UNIPROT_VERSION} could drop each other's index. Make it writable for $(id -un)." ;;
+    *) die "without its lock, two loads of ${UNIPROT_VERSION} could drop each other's index. Make it readable by $(id -un)." ;;
 esac
 
 # The version the API serves is queried while it runs, and a load into its index, from the start or

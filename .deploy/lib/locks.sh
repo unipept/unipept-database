@@ -71,6 +71,6 @@ take_load_lock() {
 lock_refused() {
     case $1 in
         1) echo "a load, a switch, a prune or migrate.sh is running on this host; wait for it to finish." ;;
-        *) echo "without the lock, a load, a switch or a prune could run at the same time. Make ${OPENSEARCH_LOCK} writable for $(id -un), or set OPENSEARCH_LOCK." ;;
+        *) echo "without the lock, a load, a switch or a prune could run at the same time. Make ${OPENSEARCH_LOCK} readable by $(id -un), or set OPENSEARCH_LOCK." ;;
     esac
 }
