@@ -149,8 +149,9 @@ option_value() {
     { [ -n "${2-}" ] && [[ "$2" != --* ]]; } || opensearch_fail "$1 requires a value."
 }
 
-# Sets the options above from the arguments. Not .deploy/lib/options.sh: this script loads the
-# pipelines' library, not .deploy/lib.sh, but its --help and its errors read the same way.
+# Sets the options above from the arguments. Not with need_value and unknown_option from
+# .deploy/lib/core.sh: this script loads the pipelines' library, not .deploy/lib.sh, but its --help
+# and its errors read the same way.
 parse_arguments() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
