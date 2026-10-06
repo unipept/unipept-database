@@ -72,13 +72,16 @@ DATABASE_DIR="${OUTPUT_DIR}/uniprot-${UNIPROT_VERSION}"
 ENTRIES="${DATABASE_DIR}/tables/uniprot_entries.tsv.lz4"
 INDEX_NAME="uniprot_entries-${UNIPROT_VERSION}"
 
+# The loader's answer, passed on: 0 loaded to the end, 1 not, and 2 for an OpenSearch that did not
+# say, which the loader has said why.
 if [ "$CHECK" = true ]; then
-    if "${HERE}/../opensearch/load.sh" --opensearch-url "$OPENSEARCH_URL" --index-name "$INDEX_NAME" --check-complete; then
-        echo "${INDEX_NAME} is loaded to the end."
-        exit 0
-    fi
-    echo "${INDEX_NAME} is not loaded, or its load did not finish." 1>&2
-    exit 1
+    status=0
+    "${HERE}/../opensearch/load.sh" --opensearch-url "$OPENSEARCH_URL" --index-name "$INDEX_NAME" --check-complete || status=$?
+    case $status in
+        0) echo "${INDEX_NAME} is loaded to the end." ;;
+        1) echo "${INDEX_NAME} is not loaded, or its load did not finish." 1>&2 ;;
+    esac
+    exit "$status"
 fi
 
 # Before the load, and so before anything can switch to it: proteins loaded from a database the API

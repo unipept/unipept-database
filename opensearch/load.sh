@@ -175,10 +175,14 @@ parse_arguments() {
 parse_arguments "$@"
 
 # Only curl, so before the loader's own dependencies, which a host that only asks need not have.
+# 0 loaded to the end, 1 not, and 2 when OpenSearch does not say, which is not a "no".
 if [[ "$CHECK_COMPLETE" == true ]]
 then
-    is_complete "$INDEX_NAME" && exit 0
-    exit 1
+    case $(load_state "$INDEX_NAME") in
+        complete) exit 0 ;;
+        unknown) opensearch_fail "OpenSearch at ${OPENSEARCH_URL} did not say whether ${INDEX_NAME} is loaded to the end." ;;
+        *) exit 1 ;;
+    esac
 fi
 
 # Check if all required dependencies are installed
