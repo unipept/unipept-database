@@ -419,6 +419,25 @@ switch "${WORK}/switch-nodir.log" --uniprot-version 2027-05
 check "a version it does not hold stops it" "$rc" "2"
 check_true "and says to copy or build it" grep -q "there is no ${SW_DATA}/uniprot-2027-05. Copy it with clone.sh, or build it" "${WORK}/switch-nodir.log"
 
+mv "${SW_DATA}/uniprot-2027-02/suffix-array/mapping.bin" "${WORK}/mapping.bin.away"
+switch "${WORK}/switch-notwhole.log" --uniprot-version 2027-02
+check "a version whose files are not whole stops it" "$rc" "2"
+check_true "and says it cannot be served" grep -q "FAIL ${SW_DATA}/uniprot-2027-02 is not a database the API can serve" "${WORK}/switch-notwhole.log"
+mv "${WORK}/mapping.bin.away" "${SW_DATA}/uniprot-2027-02/suffix-array/mapping.bin"
+
+switch "${WORK}/switch-noopensearch.log" --uniprot-version 2027-02 --opensearch-url http://localhost:1
+check "an OpenSearch that does not answer stops it" "$rc" "2"
+check_true "and says so" grep -q 'FAIL OpenSearch does not answer at http://localhost:1, so whether uniprot_entries-2027-02 is there is unknown' "${WORK}/switch-noopensearch.log"
+
+# A load of the version that did not finish: its index there, without the mark of a whole one.
+curl -s -X PUT "${OPENSEARCH_URL}/uniprot_entries-2027-02/_mapping" -H 'Content-Type: application/json' \
+    -d '{"_meta":{"unipept_load":"partial"}}' > /dev/null
+switch "${WORK}/switch-partial.log" --uniprot-version 2027-02
+check "a version whose load did not finish stops it" "$rc" "2"
+check_true "and says to continue or redo it" grep -q 'FAIL uniprot_entries-2027-02 was not loaded to the end' "${WORK}/switch-partial.log"
+curl -s -X PUT "${OPENSEARCH_URL}/uniprot_entries-2027-02/_mapping" -H 'Content-Type: application/json' \
+    -d '{"_meta":{"unipept_load":"complete"}}' > /dev/null
+
 touch "${SW_STATE}/check-fails"
 switch "${WORK}/switch-apicheck.log" --uniprot-version 2027-02
 check "the API's own check refusing stops it" "$rc" "2"

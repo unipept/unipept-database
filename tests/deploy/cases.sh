@@ -284,6 +284,16 @@ rm -r "${CHECK_OUT}/uniprot-2026-03/unreadable"
 build --output-dir "$CHECK_OUT" --scratch-dir /work/scratch --replace --skip-checks
 check "--skip-checks builds anyway" "$?" "0"
 
+# The lock the build is swapped in under, which it cannot open: found before the build, hours earlier.
+mv /run/lock/unipept-opensearch.lock /run/lock/unipept-opensearch.lock.away 2> /dev/null
+touch /run/lock/unipept-opensearch.lock
+chmod 600 /run/lock/unipept-opensearch.lock
+build --output-dir "$CHECK_OUT" --scratch-dir /work/scratch --replace --skip-checks
+check "a lock it cannot open stops it" "$?" "2"
+check_true "and says it is the lock the build is swapped in under" grep -q 'which the build is swapped in under' /work/last-output
+rm -f /run/lock/unipept-opensearch.lock
+mv /run/lock/unipept-opensearch.lock.away /run/lock/unipept-opensearch.lock 2> /dev/null
+
 
 section "a build whose tables are empty"
 
@@ -356,6 +366,7 @@ section "a clone that cannot be made"
 clone --remote-output-dir "$REMOTE" --output-dir "$LOCAL" --uniprot-version 2030-01
 check "a release the remote does not have stops" "$?" "2"
 check_true "the release is named" grep -q 'uniprot-2030-01' /work/last-output
+check_true "as not there" grep -q 'FAIL the remote host has no .*uniprot-2030-01' /work/last-output
 
 clone --remote-output-dir /work/nothing-here --output-dir "$LOCAL"
 check "a remote with no database stops" "$?" "2"
@@ -371,6 +382,7 @@ touch /run/lock/unipept-opensearch.lock
 chmod 600 /run/lock/unipept-opensearch.lock
 clone --remote-output-dir "$REMOTE" --output-dir "$LOCAL" --replace
 check "a lock it cannot open stops it" "$?" "2"
+check_true "and says it is the lock the copy is swapped in under" grep -q 'which the copy is swapped in under' /work/last-output
 check_true "before copying anything" test ! -e "${LOCAL}/.clone"
 rm -f /run/lock/unipept-opensearch.lock
 mv /run/lock/unipept-opensearch.lock.away /run/lock/unipept-opensearch.lock 2> /dev/null
@@ -412,6 +424,24 @@ check "a copy that lost the k-mer table stops" "$?" "2"
 check_true "it says the copy lost it" grep -q 'the remote has a k-mer table and the copy does not' /work/last-output
 check_true "it does not first call the table optional" not grep -q 'WARN kmer_table.bin' /work/last-output
 check_true "the database that was there is kept" test -s "${LOCAL}/uniprot-2026-03/suffix-array/kmer_table.bin"
+rm "${STUBS}/scp"
+
+# An scp that loses a file the API needs on the way, and one that loses the table load.sh reads.
+for lost in suffix-array/mapping.bin tables/uniprot_entries.tsv.lz4; do
+    cat > "${STUBS}/scp" <<SCP
+#!/usr/bin/env bash
+/usr/bin/scp "\$@" || exit
+rm -f ${LOCAL}/.clone/*/${lost}
+SCP
+    chmod +x "${STUBS}/scp"
+    clone --remote-output-dir "$REMOTE" --output-dir "$LOCAL" --replace
+    check "a copy that lost ${lost} stops" "$?" "2"
+    case $lost in
+        suffix-array/*) check_true "it says the copy cannot be served" grep -q 'FAIL .*/.clone/uniprot-2026-03 is not a database the API can serve' /work/last-output ;;
+        tables/*) check_true "it says the copy has no table" grep -q 'FAIL .*/.clone/uniprot-2026-03 has no tables/uniprot_entries.tsv.lz4' /work/last-output ;;
+    esac
+    check_true "the database that was there is kept" test -s "${LOCAL}/uniprot-2026-03/suffix-array/mapping.bin"
+done
 rm "${STUBS}/scp"
 
 # An ssh that fails when asked about the k-mer table, after the copy. That says nothing about the
