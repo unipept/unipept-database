@@ -150,8 +150,7 @@ check "and says how to write it" "$output" "Error: a UniProtKB version is writte
 
 section "every script's --help"
 
-# Every option in one column, and, where deploy.conf can set the script's own settings, which of
-# the two wins said the same way. From a copy with no deploy.conf of its own, and install.sh with a
+# Every option in one column, and which setting wins said the same way. From a copy with no deploy.conf of its own, and install.sh with a
 # --prefix of its own, so no deploy.conf on this machine is read or checked first.
 copy_deploy_scripts "${HERE}/../.." "${TEMP_DIR}/checkout"
 DEPLOY="${TEMP_DIR}/checkout/.deploy"
@@ -162,11 +161,8 @@ for script in build clone distribute load migrate prune switch verify opensearch
     check "${script}.sh --help exits 0" "$?" "0"
     check "and every option line has its text in the thirtieth column" \
         "$(awk '/^  --/ && (substr($0, 29, 1) != " " || substr($0, 30, 1) == " ")' <<< "$output" | wc -l | tr -d ' ')" "0"
-    case $script in
-        distribute | switch | verify) ;;
-        *) check_true "and says that a flag wins over deploy.conf" \
-            grep -q '^A flag wins over .*deploy.conf, which wins over the defaults' <<< "$output" ;;
-    esac
+    check_true "and says that a flag wins over deploy.conf" \
+        grep -q '^A flag wins over .*deploy.conf, which wins over the defaults' <<< "$output"
 done
 
 # The version clone.sh copies can come from deploy.conf, so it is checked there too.
