@@ -150,16 +150,31 @@ check "and says how to write it" "$output" "Error: a UniProtKB version is writte
 
 section "every script's --help"
 
-# Every option in one column, and which setting wins said the same way. Run as they are, since
-# --help exits before anything a script checks of the host.
-DEPLOY="${LIB%/lib.sh}"
+# Every option in one column, and, where deploy.conf can set the script's own settings, which of
+# the two wins said the same way. From a copy with no deploy.conf of its own, and install.sh with a
+# --prefix of its own, so no deploy.conf on this machine is read or checked first.
+copy_deploy_scripts "${HERE}/../.." "${TEMP_DIR}/checkout"
+DEPLOY="${TEMP_DIR}/checkout/.deploy"
 for script in build clone distribute load migrate prune switch verify opensearch/install; do
-    output=$("${DEPLOY}/${script}.sh" --help 2>&1)
+    arguments=(--help)
+    [ "$script" != opensearch/install ] || arguments=(--prefix "${TEMP_DIR}/prefix" --help)
+    output=$("${DEPLOY}/${script}.sh" "${arguments[@]}" 2>&1)
     check "${script}.sh --help exits 0" "$?" "0"
     check "and every option line has its text in the thirtieth column" \
         "$(awk '/^  --/ && (substr($0, 29, 1) != " " || substr($0, 30, 1) == " ")' <<< "$output" | wc -l | tr -d ' ')" "0"
-    check_true "and says that a flag wins over deploy.conf" grep -q '^A flag wins over .*deploy.conf, which wins over the defaults' <<< "$output"
+    case $script in
+        distribute | switch | verify) ;;
+        *) check_true "and says that a flag wins over deploy.conf" \
+            grep -q '^A flag wins over .*deploy.conf, which wins over the defaults' <<< "$output" ;;
+    esac
 done
+
+# The version clone.sh copies can come from deploy.conf, so it is checked there too.
+printf 'UNIPROT_VERSION=2026.03\n' > "${DEPLOY}/deploy.conf"
+output=$("${DEPLOY}/clone.sh" --remote-address host --local-ssh-key key 2>&1)
+check "clone.sh refuses a version in deploy.conf not written YYYY-MM" "$?" "2"
+check "and says how to write it" "$output" "Error: a UniProtKB version is written YYYY-MM, not '2026.03'."
+rm "${DEPLOY}/deploy.conf"
 
 output=$("${DEPLOY}/build.sh" --opensearch-url http://localhost:9200 2>&1)
 check "build.sh, which loads nothing into OpenSearch, refuses --opensearch-url" "$?" "2"

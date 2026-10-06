@@ -70,6 +70,8 @@ parse_arguments() {
 
     [ -n "$REMOTE_ADDRESS" ] || die "--remote-address is required."
     [ -n "$LOCAL_SSH_KEY" ] || die "--local-ssh-key is required."
+    # Checked here as well as in shared_option: deploy.conf can name the version this host clones.
+    [ -z "$UNIPROT_VERSION" ] || valid_version "$UNIPROT_VERSION"
 }
 
 remote_sh() {
