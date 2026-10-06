@@ -60,9 +60,10 @@ parse_arguments() {
             --remote-user) need_value "$1" "${2-}"; REMOTE_USER="$2"; shift 2 ;;
             --remote-output-dir) need_value "$1" "${2-}"; REMOTE_OUTPUT_DIR="$2"; shift 2 ;;
             --local-ssh-key) need_value "$1" "${2-}"; LOCAL_SSH_KEY="$2"; shift 2 ;;
+            --output-dir) need_value "$1" "${2-}"; OUTPUT_DIR="$2"; shift 2 ;;
+            --uniprot-version) need_value "$1" "${2-}"; valid_version "$2"; UNIPROT_VERSION="$2"; shift 2 ;;
             --replace) REPLACE=true; shift ;;
             --check) CHECK=true; shift ;;
-            --uniprot-version | --output-dir) shared_option "$1" "${2-}"; shift 2 ;;
             --help) usage; exit 0 ;;
             *) unknown_option "$1" ;;
         esac
@@ -70,7 +71,7 @@ parse_arguments() {
 
     [ -n "$REMOTE_ADDRESS" ] || die "--remote-address is required."
     [ -n "$LOCAL_SSH_KEY" ] || die "--local-ssh-key is required."
-    # Checked here as well as in shared_option: deploy.conf can name the version this host clones.
+    # After the options rather than with them: deploy.conf can name the version this host clones.
     [ -z "$UNIPROT_VERSION" ] || valid_version "$UNIPROT_VERSION"
 }
 

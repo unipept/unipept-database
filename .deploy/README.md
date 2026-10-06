@@ -354,7 +354,6 @@ it uses of the others.
 | `lib/core.sh` | the shell options, `log`, `die`, `require`, `need_value`, the error trap |
 | `lib/config.sh` | the settings the parts share, the deploy user, reading `deploy.conf` |
 | `lib/locks.sh` | the OpenSearch lock and the lock per version |
-| `lib/options.sh` | checking and setting `--output-dir`, `--opensearch-url` and `--uniprot-version`, for every script that takes them |
 | `lib/versions.sh` | version names, `.version`, the `current` and `previous` links |
 | `lib/database.sh` | what a database holds, and how it is checked and put in place |
 | `lib/api.sh` | what this host serves, and which API release is installed |

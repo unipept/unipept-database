@@ -91,11 +91,11 @@ USAGE
 parse_arguments() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
+            --output-dir) need_value "$1" "${2-}"; OUTPUT_DIR="$2"; shift 2 ;;
             --scratch-dir) need_value "$1" "${2-}"; SCRATCH_DIR="$2"; shift 2 ;;
             --database-sources) need_value "$1" "${2-}"; DATABASE_SOURCES="$2"; shift 2 ;;
             --replace) REPLACE=true; shift ;;
             --skip-checks) SKIP_CHECKS=true; shift ;;
-            --output-dir) shared_option "$1" "${2-}"; shift 2 ;;
             --help) usage; exit 0 ;;
             *) unknown_option "$1" ;;
         esac

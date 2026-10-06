@@ -44,7 +44,8 @@ parse_arguments() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --index-dir) need_value "$1" "${2-}"; INDEX_DIR="$2"; shift 2 ;;
-            --uniprot-version | --output-dir) shared_option "$1" "${2-}"; shift 2 ;;
+            --uniprot-version) need_value "$1" "${2-}"; valid_version "$2"; UNIPROT_VERSION="$2"; shift 2 ;;
+            --output-dir) need_value "$1" "${2-}"; OUTPUT_DIR="$2"; shift 2 ;;
             --help) usage; exit 0 ;;
             *) unknown_option "$1" ;;
         esac

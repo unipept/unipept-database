@@ -50,7 +50,8 @@ USAGE
 parse_arguments() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            --output-dir | --opensearch-url) shared_option "$1" "${2-}"; shift 2 ;;
+            --output-dir) need_value "$1" "${2-}"; OUTPUT_DIR="$2"; shift 2 ;;
+            --opensearch-url) need_value "$1" "${2-}"; OPENSEARCH_URL="$2"; shift 2 ;;
             --help) usage; exit 0 ;;
             *) unknown_option "$1" ;;
         esac

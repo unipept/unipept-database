@@ -80,11 +80,11 @@ USAGE
 parse_arguments() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
+            --uniprot-version) need_value "$1" "${2-}"; valid_version "$2"; UNIPROT_VERSION="$2"; shift 2 ;;
             --from) need_value "$1" "${2-}"; SOURCE="$2"; shift 2 ;;
             --servers) need_value "$1" "${2-}"; SERVERS_FILE="$2"; shift 2 ;;
             --ssh-user) need_value "$1" "${2-}"; SSH_USER="$2"; shift 2 ;;
             --replace) REPLACE=true; shift ;;
-            --uniprot-version) shared_option "$1" "${2-}"; shift 2 ;;
             --help) usage; exit 0 ;;
             *) unknown_option "$1" ;;
         esac

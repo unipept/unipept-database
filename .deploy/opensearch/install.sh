@@ -164,8 +164,8 @@ parse_arguments() {
             --data-dir) need_value "$1" "${2-}"; OPENSEARCH_DATA_DIR="$2"; shift 2 ;;
             --log-dir) need_value "$1" "${2-}"; OPENSEARCH_LOG_DIR="$2"; shift 2 ;;
             --user) need_value "$1" "${2-}"; DEPLOY_USER="$2"; shift 2 ;;
+            --output-dir) need_value "$1" "${2-}"; OUTPUT_DIR="$2"; shift 2 ;;
             --prefix) need_value "$1" "${2-}"; PREFIX="$2"; shift 2 ;;
-            --output-dir) shared_option "$1" "${2-}"; shift 2 ;;
             --help) usage; exit 0 ;;
             *) unknown_option "$1" ;;
         esac
