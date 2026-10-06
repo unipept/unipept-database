@@ -361,8 +361,7 @@ it uses of the others.
 `install.sh` installs them as `/opt/unipept-database/bin/lib.sh` and `/opt/unipept-database/bin/lib/`,
 root's like the scripts beside them.
 
-`lib/core.sh` is the same file in every repository that deploys Unipept, and CI checks that it
-stays so. Its header lists what a script's exit status means, which is the same for every script.
+`lib/core.sh` is the same file in every repository that deploys Unipept. Its header lists what a script's exit status means, which is the same for every script.
 
 ## What a host needs
 

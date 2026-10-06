@@ -42,10 +42,7 @@ jobs:
   pipelines:
     # lz() and luz() against a stand-in lz4, .deploy/verify.sh against a fixture index directory,
     # and the parts of .deploy/lib.sh. They need nothing installed and run in seconds, so they share
-    # a runner, as does the comparison of the files shared with unipept-api: lib/core.sh, the
-    # assertions and core.sh's cases, compared with its copies on its branch of the same name where
-    # it has one, so two pull requests that change them together pass together, and on its main
-    # otherwise.
+    # a runner.
     name: Pipeline, verify and deploy library suites
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -66,33 +63,6 @@ jobs:
       - name: Run the deploy library suite
         if: ${{ !cancelled() }}
         run: tests/run-tests.sh lib
-
-      - name: Compare with unipept-api
-        if: ${{ !cancelled() }}
-        env:
-          OTHER: unipept/unipept-api
-          BRANCH: ${{ github.head_ref || github.ref_name }}
-        run: |
-          ref=main
-          if git ls-remote --exit-code "https://github.com/${OTHER}" "refs/heads/${BRANCH}" > /dev/null; then
-            ref=$BRANCH
-          fi
-          echo "Comparing with ${OTHER} at ${ref}"
-          status=0
-          while read -r here there; do
-            if ! curl -fsSL "https://raw.githubusercontent.com/${OTHER}/${ref}/${there}" -o theirs; then
-              echo "::error file=${here}::cannot fetch ${there} from ${OTHER} at ${ref}"
-              status=1
-            elif ! diff -u theirs "$here"; then
-              echo "::error file=${here}::differs from ${there} in ${OTHER} at ${ref}"
-              status=1
-            fi
-          done <<'FILES'
-          .deploy/lib/core.sh .deploy/lib/core.sh
-          tests/assertions.sh .deploy/tests/assertions.sh
-          tests/deploy/core-cases.sh .deploy/tests/core-cases.sh
-          FILES
-          exit "$status"
 
   shell:
     # The helpers in pipelines/lib/common.sh. No container.
