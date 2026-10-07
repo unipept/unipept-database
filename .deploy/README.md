@@ -5,8 +5,9 @@ orchestrate; the pipeline itself lives in `pipelines/` and the loader in `opense
 
 They are grouped by where they run, as unipept-api's are. `server/` holds what runs on every
 server: `clone.sh`, `load.sh`, `verify.sh`, `switch.sh`, `prune.sh`, and `install.sh` and
-`opensearch/install.sh`, which prepare one. `build.sh`, which runs on the build host, and `distribute.sh`, which works on
-the whole fleet, are at the top, beside `lib.sh` and the configuration examples.
+`opensearch/install.sh`, which prepare one. `build.sh`, which runs on the build host, and
+`distribute.sh`, which works on the whole fleet, are at the top, beside `lib.sh` and the
+configuration examples.
 
 - `build.sh` builds a database on this host: the tables, the suffix array and the `datastore/`
   layout the API reads.
@@ -50,7 +51,7 @@ the other scripts need, so they run without sudo:
 
 - the `unipept` user (`DEPLOY_USER`), who builds, clones and owns the databases. The API on this
   host runs as the same user, and its own install creates it the same way, in either order;
-- the tools `build.sh` and `clone.sh` run, installed through apt when they are missing;
+- the tools `build.sh`, `clone.sh` and `load.sh` run, installed through apt when they are missing;
 - `OUTPUT_DIR`, owned by that user. Databases, staging directories and interrupted swaps an
   earlier run as root left there are handed over too; nothing else in the directory changes owner;
 - the scripts a host runs, in `/opt/unipept-database` as above, `etc/deploy.conf`, written once from
@@ -127,7 +128,7 @@ sudo -iu unipept
 /opt/unipept-database/deploy/server/clone.sh --remote-address selma.ugent.be --local-ssh-key ~/.ssh/id_unipept
 ```
 
-Every script but `install.sh` refuses to run as root. A database written by root is one the
+Every script but the two installs refuses to run as root. A database written by root is one the
 next run as `unipept` cannot replace, and one whose check that the API can read it passes only
 because root reads everything.
 
@@ -361,7 +362,8 @@ it uses of the others.
 
 ## What a host needs
 
-`install.sh` installs all of it but Rust. For reference, or for a host prepared another way:
+`server/opensearch/install.sh` installs all of it but Rust, and `server/install.sh` on its own all
+but Rust and OpenSearch. For reference, or for a host prepared another way:
 
 - `build.sh` needs `git`, `cmake` and a Rust toolchain, and the pipeline needs `curl`, `uuidgen`,
   `pigz`, `gawk`, `lz4`, `pv`, `unzip` and `xmllint`.

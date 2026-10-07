@@ -282,9 +282,9 @@ section "every script's --help"
 copy_deploy_scripts "${HERE}/../.." "${TEMP_DIR}/checkout"
 DEPLOY="${TEMP_DIR}/checkout/.deploy"
 : > "${DEPLOY}/deploy.conf"
-for script in build distribute server/clone server/load server/prune server/switch server/verify server/opensearch/install; do
+for script in build distribute server/clone server/load server/prune server/switch server/verify server/install server/opensearch/install; do
     arguments=(--help)
-    [ "$script" != server/opensearch/install ] || arguments=(--prefix "${TEMP_DIR}/prefix" --help)
+    [[ "$script" != server/*install ]] || arguments=(--prefix "${TEMP_DIR}/prefix" --help)
     output=$("${DEPLOY}/${script}.sh" "${arguments[@]}" 2>&1)
     check "${script}.sh --help exits 0" "$?" "0"
     check_true "and lists its options" grep -q '^  --' <<< "$output"

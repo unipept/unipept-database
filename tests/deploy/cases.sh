@@ -3,10 +3,10 @@
 # The deploy cases. Runs inside the container build-suite.sh starts, with the repository at /repo
 # read-only and everything this writes under /work.
 #
-# What is real here: build.sh, clone.sh, load.sh, verify.sh, distribute.sh and install.sh
+# What is real here: build.sh, clone.sh, load.sh, verify.sh, distribute.sh and both installs
 # themselves, git, ssh and scp. What is stood in for: the pipeline, sa-builder and the OpenSearch
-# loader, each of which has a suite of its own, and the apt, dpkg, systemd and instance install.sh
-# drives.
+# loader, each of which has a suite of its own, and the apt, dpkg, systemd and instance the installs
+# drive.
 #
 # The cases run as root, which setting up sshd and install.sh need. build.sh, clone.sh, load.sh and
 # verify.sh run as DEPLOY, as on a host, and refuse root.
