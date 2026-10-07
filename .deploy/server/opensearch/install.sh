@@ -294,7 +294,7 @@ install_scripts() {
     install -m 0644 "${repository}/.deploy/lib/"*.sh "${PREFIX}/bin/lib/"
     install -m 0755 "${repository}/opensearch/load.sh" "${PREFIX}/opensearch/"
     install -m 0644 "${repository}/.deploy/lib.sh" "${PREFIX}/bin/"
-    install -m 0755 "${repository}/.deploy/server/"*.sh "${PREFIX}/bin/"
+    install -m 0755 "${repository}/.deploy/server/"{clone.sh,load.sh,verify.sh,prune.sh,switch.sh} "${PREFIX}/bin/"
 
     install -d -m 0755 -o root -g root "${PREFIX}/etc"
     if [ ! -f "${PREFIX}/etc/deploy.conf" ]; then

@@ -177,7 +177,7 @@ check "sa-builder was asked for the k-mer table" \
     "$(grep -c -- '--output-kmer-table' /work/sa-builder-calls)" "1"
 # Loading is load.sh's, which is what lets a load that fails be rerun without building again.
 check_true "nothing is loaded into OpenSearch" test ! -e /work/loader-calls
-check_true "it says how to load it" grep -qF '.deploy/server/load.sh --uniprot-version 2026-03' /work/last-output
+check_true "it says how to load it, with the installed load.sh" grep -qF '/opt/unipept-database/bin/load.sh --uniprot-version 2026-03' /work/last-output
 
 check "build-info.txt records this checkout" \
     "$(grep '^unipept-database:' "${OUT}/uniprot-2026-03/suffix-array/build-info.txt" | awk '{print $2}')" \
@@ -1109,6 +1109,8 @@ check "and every part of lib.sh" "$(ls "${PREFIX_A}/bin/lib")" "$(ls /repo/.depl
 check "all of them root's, as the scripts that load them are" \
     "$(stat -c '%U' "${PREFIX_A}/bin/lib" "${PREFIX_A}/bin/lib.sh" "${PREFIX_A}/bin/lib/"*.sh | sort -u)" "root"
 check_true "but not build.sh, which needs the whole repository" test ! -e "${PREFIX_A}/bin/build.sh"
+check "and nothing else: not distribute.sh, nor install.sh itself" \
+    "$(find "${PREFIX_A}/bin" -mindepth 1 -maxdepth 1 -printf '%f\n' | sort | tr '\n' ' ')" "clone.sh lib lib.sh load.sh prune.sh switch.sh verify.sh "
 check "the scripts belong to root, which alone changes them" "$(stat -c %U "${PREFIX_A}/bin/load.sh")" "root"
 # install.sh reads it as root, so a file the deploy user could write would hand that user root.
 check "and so does their configuration, which install.sh reads as root" "$(stat -c '%U %a' "${PREFIX_A}/etc/deploy.conf")" "root 644"
