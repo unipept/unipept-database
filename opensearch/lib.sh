@@ -95,8 +95,8 @@ index_ready() {
 # Warns when OpenSearch's disk is past its low watermark, 85% unless the cluster says otherwise.
 # Past it OpenSearch places no new shard on that node, and at the flood stage, 95%, it makes every
 # index read-only, so a load running then fails part way. Each loaded version keeps its index until
-# .deploy/prune.sh removes it, so this is how running out is heard about before a load breaks on it.
-# Says nothing when OpenSearch cannot be asked: the load that follows reports that itself.
+# .deploy/server/prune.sh removes it, so this is how running out is heard about before a load breaks
+# on it. Says nothing when OpenSearch cannot be asked: the load that follows reports that itself.
 warn_opensearch_disk() {
     local watermark used
 
@@ -110,6 +110,6 @@ warn_opensearch_disk() {
     [ -n "$used" ] || return 0
 
     if [ "$used" -ge "$watermark" ]; then
-        echo "WARN OpenSearch's disk is ${used}% full, past its ${watermark}% watermark. A load can fail part way once it reaches 95%; .deploy/prune.sh --keep N removes old versions." 1>&2
+        echo "WARN OpenSearch's disk is ${used}% full, past its ${watermark}% watermark. A load can fail part way once it reaches 95%; prune.sh --keep N removes old versions." 1>&2
     fi
 }

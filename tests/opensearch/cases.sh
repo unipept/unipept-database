@@ -147,7 +147,7 @@ API_DEPLOY_STUB="$(make_api_deploy /tmp/api-deploy.sh)"
 chmod 755 "$API_DEPLOY_STUB"
 
 
-section ".deploy/prune.sh"
+section ".deploy/server/prune.sh"
 # As the user the .deploy scripts run as, with each version's directory beside its index, the way
 # a host holds them, and the current link where install.sh and switch.sh put it. 2026-01 and
 # 2026-02 have only their index left. uniprot_entries, which the first sections loaded, is no
@@ -166,7 +166,7 @@ chown -R -h unipept: "$DATA"
 prune() {
     local logfile=$1
     shift
-    runuser -u unipept -- "${REPO}/.deploy/prune.sh" --output-dir "$DATA" --opensearch-url "$OPENSEARCH_URL" "$@" > "$logfile" 2>&1
+    runuser -u unipept -- "${REPO}/.deploy/server/prune.sh" --output-dir "$DATA" --opensearch-url "$OPENSEARCH_URL" "$@" > "$logfile" 2>&1
     rc=$?
 }
 
@@ -188,7 +188,7 @@ check "an index that is no version's is left alone" "$(status_of uniprot_entries
 check "and their files" "$([ -e "${DATA}/uniprot-2026-03" ] && echo left || echo removed)" "removed"
 check "current is left as it is" "$(readlink "${DATA}/current")" "uniprot-2026-07"
 
-section ".deploy/prune.sh keeps the version switch.sh --back goes to"
+section ".deploy/server/prune.sh keeps the version switch.sh --back goes to"
 as_unipept_link() { runuser -u unipept -- ln -sfn "$1" "${DATA}/$2"; }
 as_unipept_link uniprot-2026-04 previous
 prune "${WORK}/prune-previous.log" --keep 0
@@ -198,13 +198,13 @@ check "the one before is kept, with its files" "$(status_of uniprot_entries-2026
 check "and everything between the two" "$(status_of uniprot_entries-2026-05)" "open"
 runuser -u unipept -- unlink "${DATA}/previous"
 
-section ".deploy/prune.sh keeps the version the API says it serves"
+section ".deploy/server/prune.sh keeps the version the API says it serves"
 # A host whose API still reads a version's directory itself, rather than through current, and says
 # so in its status.
 prune_with_api() {
     local logfile=$1
     shift
-    runuser -u unipept -- env API_DEPLOY="$API_DEPLOY_STUB" "${REPO}/.deploy/prune.sh" --output-dir "$DATA" \
+    runuser -u unipept -- env API_DEPLOY="$API_DEPLOY_STUB" "${REPO}/.deploy/server/prune.sh" --output-dir "$DATA" \
         --opensearch-url "$OPENSEARCH_URL" "$@" > "$logfile" 2>&1
     rc=$?
 }
@@ -222,7 +222,7 @@ check_true "and says so" grep -q 'does not say which version this host serves' "
 check "and removes nothing" "$(status_of uniprot_entries-2026-04) $(status_of uniprot_entries-2026-05)" "open open"
 
 
-section ".deploy/prune.sh keeps a version loaded ahead of a switch"
+section ".deploy/server/prune.sh keeps a version loaded ahead of a switch"
 load_version uniprot_entries-2026-09 P90001
 mkdir -p "${DATA}/uniprot-2026-09/suffix-array" && chown -R unipept: "${DATA}/uniprot-2026-09"
 prune "${WORK}/prune-ahead.log" --keep 0
@@ -232,7 +232,7 @@ check "the version this host serves is kept" "$(status_of uniprot_entries-2026-0
 check "everything older is removed" "$(status_of uniprot_entries-2026-05)$(status_of uniprot_entries-2026-04)" ""
 check "files included" "$(find "$DATA" -mindepth 1 -maxdepth 1 -printf '%f\n' | sort | tr '\n' ' ')" "current uniprot-2026-07 uniprot-2026-09 "
 
-section ".deploy/prune.sh refuses what it cannot decide"
+section ".deploy/server/prune.sh refuses what it cannot decide"
 prune "${WORK}/prune-nokeep.log"
 check "without --keep it stops" "$rc" "2"
 # A load or a switch holds the lock; removing versions under either could take what it works on.
@@ -257,11 +257,11 @@ check "without a current link it stops" "$rc" "2"
 check_true "and says which version this host serves is not known" grep -q 'not known' "${WORK}/prune-nocurrent.log"
 check "and removes nothing" "$(status_of uniprot_entries-2026-09)" "open"
 runuser -u unipept -- mv "${DATA}/current.away" "${DATA}/current"
-"${REPO}/.deploy/prune.sh" --output-dir "$DATA" --opensearch-url "$OPENSEARCH_URL" --keep 0 > /dev/null 2>&1
+"${REPO}/.deploy/server/prune.sh" --output-dir "$DATA" --opensearch-url "$OPENSEARCH_URL" --keep 0 > /dev/null 2>&1
 check "as root it stops" "$?" "2"
 
 
-section ".deploy/switch.sh"
+section ".deploy/server/switch.sh"
 # A host that runs the API, as the user it runs as. Four versions: the one it serves, the one it
 # switches to, one whose proteins are not loaded, and one loaded ahead of a later switch. The API's
 # deploy.sh, sudo and systemctl are stand-ins that record their calls; OpenSearch is the real one,
@@ -343,7 +343,7 @@ switch() {
     shift
     forget_switch_calls
     runuser -u unipept -- env PATH="${SW_BIN}:${PATH}" API_DEPLOY="${SW_BIN}/deploy.sh" \
-        "${REPO}/.deploy/switch.sh" --output-dir "$SW_DATA" --opensearch-url "$OPENSEARCH_URL" "$@" > "$logfile" 2>&1
+        "${REPO}/.deploy/server/switch.sh" --output-dir "$SW_DATA" --opensearch-url "$OPENSEARCH_URL" "$@" > "$logfile" 2>&1
     rc=$?
 }
 calls() { tr '\n' ' ' < "${SW_STATE}/$1" 2> /dev/null; }
@@ -400,7 +400,7 @@ check "a version whose files are not whole stops it" "$rc" "2"
 check_true "and says it cannot be served" grep -q "FAIL ${SW_DATA}/uniprot-2027-02 is not a database the API can serve" "${WORK}/switch-notwhole.log"
 mv "${WORK}/mapping.bin.away" "${SW_DATA}/uniprot-2027-02/suffix-array/mapping.bin"
 
-runuser -u unipept -- "${REPO}/.deploy/load.sh" --output-dir "$SW_DATA" --uniprot-version 2027-02 \
+runuser -u unipept -- "${REPO}/.deploy/server/load.sh" --output-dir "$SW_DATA" --uniprot-version 2027-02 \
     --opensearch-url http://localhost:1 --check > "${WORK}/load-check-silent.log" 2>&1
 check "load.sh --check answers 2 for an OpenSearch that does not say" "$?" "2"
 check_true "without calling it not loaded" not_in 'is not loaded' "${WORK}/load-check-silent.log"
@@ -577,7 +577,7 @@ rm -f "${SW_STATE:?}/start-fails"
 touch "${SW_STATE}/start-sleeps"
 forget_switch_calls
 runuser -u unipept -- env PATH="${SW_BIN}:${PATH}" API_DEPLOY="${SW_BIN}/deploy.sh" \
-    "${REPO}/.deploy/switch.sh" --output-dir "$SW_DATA" --opensearch-url "$OPENSEARCH_URL" --uniprot-version 2027-02 \
+    "${REPO}/.deploy/server/switch.sh" --output-dir "$SW_DATA" --opensearch-url "$OPENSEARCH_URL" --uniprot-version 2027-02 \
     > "${WORK}/switch-interrupted.log" 2>&1 &
 switcher=$!
 for _ in $(seq 100); do
@@ -603,7 +603,7 @@ check "a host without current stops it" "$rc" "2"
 check_true "and says how to set it up" grep -q "point it at the first version, ln -s uniprot-YYYY-MM ${SW_DATA}/current" "${WORK}/switch-nocurrent.log"
 mv "${SW}/current.away" "${SW_DATA}/current"
 
-"${REPO}/.deploy/switch.sh" --output-dir "$SW_DATA" --uniprot-version 2027-02 > /dev/null 2>&1
+"${REPO}/.deploy/server/switch.sh" --output-dir "$SW_DATA" --uniprot-version 2027-02 > /dev/null 2>&1
 check "as root it stops" "$?" "2"
 
 

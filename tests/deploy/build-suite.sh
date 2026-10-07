@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 #
-# The .deploy scripts, build.sh, clone.sh, load.sh and opensearch/install.sh among them, in a
-# container that has what a host has. The cases run inside it: they start an sshd and clone over it, so the copy goes
-# through a real scp.
+# The .deploy scripts, build.sh, server/clone.sh, server/load.sh and server/opensearch/install.sh
+# among them, in a container that has what a host has. The cases run inside it: they start an sshd
+# and clone over it, so the copy goes through a real scp.
 #
 # Needs Docker. Nothing is published on the host.
 

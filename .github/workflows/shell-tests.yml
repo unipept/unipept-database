@@ -40,9 +40,9 @@ permissions:
 
 jobs:
   pipelines:
-    # lz() and luz() against a stand-in lz4, .deploy/verify.sh against a fixture index directory,
-    # and the parts of .deploy/lib.sh. They need nothing installed and run in seconds, so they share
-    # a runner.
+    # lz() and luz() against a stand-in lz4, .deploy/server/verify.sh against a fixture index
+    # directory, and the parts of .deploy/lib.sh. They need nothing installed and run in seconds, so
+    # they share a runner.
     name: Pipeline, verify and deploy library suites
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -115,8 +115,8 @@ jobs:
         run: env --default-signal=PIPE tests/run-tests.sh seam
 
   deploy:
-    # .deploy/build.sh, clone.sh, load.sh and opensearch/install.sh in a container, over a real
-    # ssh and scp.
+    # .deploy/build.sh, server/clone.sh, server/load.sh and server/opensearch/install.sh in a
+    # container, over a real ssh and scp.
     name: Deploy suite
     runs-on: ubuntu-latest
     timeout-minutes: 20

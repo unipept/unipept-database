@@ -113,13 +113,13 @@ build() {
 }
 
 clone() {
-    as_deployer "${CHECKOUT}/.deploy/clone.sh" \
+    as_deployer "${CHECKOUT}/.deploy/server/clone.sh" \
         --remote-address localhost --remote-user "$DEPLOY" \
         --local-ssh-key "${DEPLOY_HOME}/.ssh/id_test" "$@" > /work/last-output 2>&1
 }
 
 load_proteins() {
-    as_deployer "${CHECKOUT}/.deploy/load.sh" "$@" > /work/last-output 2>&1
+    as_deployer "${CHECKOUT}/.deploy/server/load.sh" "$@" > /work/last-output 2>&1
 }
 
 mkdir -p "$WORK"
@@ -143,16 +143,16 @@ check "build.sh refuses" "$?" "2"
 check_true "it names the user to run as" grep -q "Run it as ${DEPLOY}" /work/last-output
 check_true "before it writes anything" test ! -e /work/as-root
 
-"${CHECKOUT}/.deploy/clone.sh" --remote-address localhost --local-ssh-key "${DEPLOY_HOME}/.ssh/id_test" \
+"${CHECKOUT}/.deploy/server/clone.sh" --remote-address localhost --local-ssh-key "${DEPLOY_HOME}/.ssh/id_test" \
     --output-dir /work/as-root > /work/last-output 2>&1
 check "clone.sh refuses" "$?" "2"
 check_true "it names the user to run as" grep -q "Run it as ${DEPLOY}" /work/last-output
 
-"${CHECKOUT}/.deploy/load.sh" --output-dir /work > /work/last-output 2>&1
+"${CHECKOUT}/.deploy/server/load.sh" --output-dir /work > /work/last-output 2>&1
 check "load.sh refuses" "$?" "2"
 check_true "it names the user to run as" grep -q "Run it as ${DEPLOY}" /work/last-output
 
-"${CHECKOUT}/.deploy/verify.sh" --index-dir /work > /work/last-output 2>&1
+"${CHECKOUT}/.deploy/server/verify.sh" --index-dir /work > /work/last-output 2>&1
 check "verify.sh refuses" "$?" "2"
 check_true "it names the user to run as" grep -q "Run it as ${DEPLOY}" /work/last-output
 
@@ -167,7 +167,7 @@ check "the build succeeds" "$?" "0"
 check_true "the database is named after the version the pipeline wrote" \
     test -d "${OUT}/uniprot-2026-03"
 check_true "verify.sh passes on it" \
-    as_deployer "${CHECKOUT}/.deploy/verify.sh" --index-dir "${OUT}/uniprot-2026-03/suffix-array"
+    as_deployer "${CHECKOUT}/.deploy/server/verify.sh" --index-dir "${OUT}/uniprot-2026-03/suffix-array"
 check_true "the staging directory is gone" test ! -d "${OUT}/.build"
 check_true "the entries table is kept for load.sh and clone.sh" \
     test -s "${OUT}/uniprot-2026-03/tables/uniprot_entries.tsv.lz4"
@@ -177,7 +177,7 @@ check "sa-builder was asked for the k-mer table" \
     "$(grep -c -- '--output-kmer-table' /work/sa-builder-calls)" "1"
 # Loading is load.sh's, which is what lets a load that fails be rerun without building again.
 check_true "nothing is loaded into OpenSearch" test ! -e /work/loader-calls
-check_true "it says how to load it" grep -qF '.deploy/load.sh --uniprot-version 2026-03' /work/last-output
+check_true "it says how to load it, with this checkout's load.sh" grep -qF "${CHECKOUT}/.deploy/server/load.sh --uniprot-version 2026-03" /work/last-output
 
 check "build-info.txt records this checkout" \
     "$(grep '^unipept-database:' "${OUT}/uniprot-2026-03/suffix-array/build-info.txt" | awk '{print $2}')" \
@@ -356,14 +356,14 @@ rm -f /work/loader-calls
 clone --remote-output-dir "$REMOTE" --output-dir "$LOCAL"
 check "the clone succeeds" "$?" "0"
 check_true "nothing is loaded into OpenSearch" test ! -e /work/loader-calls
-check_true "it says how to load it" grep -qF '.deploy/load.sh --uniprot-version 2026-03' /work/last-output
+check_true "it says how to load it" grep -qF '.deploy/server/load.sh --uniprot-version 2026-03' /work/last-output
 check_true "the newest release on the remote is the one taken" test -d "${LOCAL}/uniprot-2026-03"
 check_true "a leftover beside it is not taken for a release" test ! -e "${LOCAL}/uniprot-2026-03.replaced"
 check_true "the older one is left alone" test ! -d "${LOCAL}/uniprot-2025-11"
 check_true "the copy lands where the script looks for it" \
     test -s "${LOCAL}/uniprot-2026-03/suffix-array/sa.bin"
 check_true "verify.sh passes on the copy" \
-    as_deployer "${CHECKOUT}/.deploy/verify.sh" --index-dir "${LOCAL}/uniprot-2026-03/suffix-array"
+    as_deployer "${CHECKOUT}/.deploy/server/verify.sh" --index-dir "${LOCAL}/uniprot-2026-03/suffix-array"
 check_true "the staging directory is gone" test ! -d "${LOCAL}/.clone"
 
 clone --remote-output-dir "$REMOTE" --output-dir "$LOCAL" --uniprot-version 2025-11
@@ -755,8 +755,8 @@ rm -rf "${OUT}/uniprot-2025-11"
 readonly INSTALL_STUBS="${WORK}/install-stubs"
 
 # The version install.sh pins, and the major version whose apt repository it adds.
-# shellcheck source=../../.deploy/opensearch/version.sh
-source /repo/.deploy/opensearch/version.sh
+# shellcheck source=../../.deploy/server/opensearch/version.sh
+source /repo/.deploy/server/opensearch/version.sh
 readonly PINNED="$OPENSEARCH_VERSION" PINNED_MAJOR="${OPENSEARCH_VERSION%%.*}"
 readonly DPKG_STATE="${WORK}/dpkg-state"
 readonly CONFIG=/etc/opensearch/opensearch.yml
@@ -841,7 +841,7 @@ forget_calls() {
 }
 
 install_opensearch() {
-    PATH="${INSTALL_STUBS}:${PATH}" "${CHECKOUT}/.deploy/opensearch/install.sh" "$@" > /work/last-output 2>&1
+    PATH="${INSTALL_STUBS}:${PATH}" "${CHECKOUT}/.deploy/server/opensearch/install.sh" "$@" > /work/last-output 2>&1
 }
 
 setup_install_stubs
@@ -1109,6 +1109,8 @@ check "and every part of lib.sh" "$(ls "${PREFIX_A}/bin/lib")" "$(ls /repo/.depl
 check "all of them root's, as the scripts that load them are" \
     "$(stat -c '%U' "${PREFIX_A}/bin/lib" "${PREFIX_A}/bin/lib.sh" "${PREFIX_A}/bin/lib/"*.sh | sort -u)" "root"
 check_true "but not build.sh, which needs the whole repository" test ! -e "${PREFIX_A}/bin/build.sh"
+check "and nothing else: not distribute.sh, nor install.sh itself" \
+    "$(find "${PREFIX_A}/bin" -mindepth 1 -maxdepth 1 -printf '%f\n' | sort | tr '\n' ' ')" "clone.sh lib lib.sh load.sh prune.sh switch.sh verify.sh "
 check "the scripts belong to root, which alone changes them" "$(stat -c %U "${PREFIX_A}/bin/load.sh")" "root"
 # install.sh reads it as root, so a file the deploy user could write would hand that user root.
 check "and so does their configuration, which install.sh reads as root" "$(stat -c '%U %a' "${PREFIX_A}/etc/deploy.conf")" "root 644"
@@ -1175,7 +1177,7 @@ rm -rf "$INSTALL_FROM"
 cp -a "$CHECKOUT" "$INSTALL_FROM"
 rm -f "${INSTALL_FROM}/.deploy/deploy.conf"
 install_from_checkout() {
-    PATH="${INSTALL_STUBS}:${PATH}" "${INSTALL_FROM}/.deploy/opensearch/install.sh" "$@" > /work/last-output 2>&1
+    PATH="${INSTALL_STUBS}:${PATH}" "${INSTALL_FROM}/.deploy/server/opensearch/install.sh" "$@" > /work/last-output 2>&1
 }
 
 chown "${DEPLOY}:" "${PREFIX_A}/etc/deploy.conf"
@@ -1196,7 +1198,7 @@ as_deployer cp -a "$CHECKOUT" "$BARE"
 rm -f "${BARE}/.deploy/deploy.conf"
 install -d /opt/unipept-database/etc
 printf 'OUTPUT_DIR=%s\n' "$OUT" > /opt/unipept-database/etc/deploy.conf
-as_deployer "${BARE}/.deploy/verify.sh" > /work/last-output 2>&1
+as_deployer "${BARE}/.deploy/server/verify.sh" > /work/last-output 2>&1
 check "a checkout without its own deploy.conf reads the host's installed one" "$?" "0"
 check_true "and so checks the databases it names" grep -qF "Checking ${OUT}/uniprot-2026-03" /work/last-output
 

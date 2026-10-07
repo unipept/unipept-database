@@ -7,8 +7,14 @@
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# shellcheck source=lib.sh
-source "${HERE}/lib.sh"
+# Beside this script once install.sh has placed both in /opt/unipept-database/bin, one level up in
+# a repository checkout.
+# shellcheck source=../lib.sh
+if [ -f "${HERE}/lib.sh" ]; then
+    source "${HERE}/lib.sh"
+else
+    source "${HERE}/../lib.sh"
+fi
 
 read_conf
 
@@ -46,7 +52,7 @@ usage() {
     cat <<'USAGE'
 Loads the proteins of a finished database into this host's OpenSearch.
 
-  .deploy/load.sh [OPTIONS]
+  bin/load.sh [OPTIONS]
 
   --uniprot-version YYYY-MM  load this one under OUTPUT_DIR, default the newest there
   --output-dir DIR           where the databases are
@@ -92,7 +98,7 @@ INDEX_NAME="uniprot_entries-${UNIPROT_VERSION}"
 # which the loader has already reported.
 if [ "$CHECK" = true ]; then
     status=0
-    "${HERE}/../opensearch/load.sh" --opensearch-url "$OPENSEARCH_URL" --index-name "$INDEX_NAME" --check-complete || status=$?
+    "${DEPLOY_DIR}/../opensearch/load.sh" --opensearch-url "$OPENSEARCH_URL" --index-name "$INDEX_NAME" --check-complete || status=$?
     case $status in
         0) echo "${INDEX_NAME} is loaded to the end." ;;
         1) echo "${INDEX_NAME} is not loaded, or its load did not finish." 1>&2 ;;
@@ -129,6 +135,6 @@ warn_opensearch_disk
 log "Started loading UniProtKB ${UNIPROT_VERSION} into ${INDEX_NAME} at ${OPENSEARCH_URL}."
 loader_arguments=(--opensearch-url "$OPENSEARCH_URL" --uniprot-entries "$ENTRIES" --index-name "$INDEX_NAME")
 [ -z "$SKIP_ROWS" ] || loader_arguments+=(--skip "$SKIP_ROWS")
-"${HERE}/../opensearch/load.sh" "${loader_arguments[@]}"
+"${DEPLOY_DIR}/../opensearch/load.sh" "${loader_arguments[@]}"
 log "Finished loading UniProtKB ${UNIPROT_VERSION} into ${INDEX_NAME}."
 log "The API does not query it until this host switches to it: switch.sh --uniprot-version ${UNIPROT_VERSION}."

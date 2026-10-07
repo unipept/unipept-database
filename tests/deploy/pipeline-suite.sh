@@ -85,7 +85,7 @@ check_true "the database is named from the version the pipeline wrote" test -d "
 check "the .version beside the index agrees with the name" \
     "$(cat "${INDEX_DIR}/.version" 2> /dev/null)" "2026.09"
 check_true "verify.sh passes on what the real pipeline produced" \
-    "${TREE}/.deploy/verify.sh" --index-dir "$INDEX_DIR"
+    "${TREE}/.deploy/server/verify.sh" --index-dir "$INDEX_DIR"
 check_true "the staging directory is gone" test ! -d "${OUT}/.build"
 
 
@@ -123,7 +123,7 @@ check "the taxon column holds a number" \
 
 section "the loader"
 
-# Loading is .deploy/load.sh's. A build that loaded would replace the proteins the API serves
+# Loading is .deploy/server/load.sh's. A build that loaded would replace the proteins the API serves
 # before anything had chosen to.
 check_true "build.sh does not call it" test ! -e "${WORK}/loader-calls"
 

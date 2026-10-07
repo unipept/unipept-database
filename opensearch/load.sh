@@ -4,8 +4,8 @@ set -eo pipefail
 
 # Drops and recreates one index on a running OpenSearch instance, uniprot_entries unless
 # --index-name says otherwise, then imports the proteins into it. Other indices on the instance are
-# not touched. .deploy/load.sh names the index after the version, and refuses the one this host
-# serves.
+# not touched. The deploy scripts' load.sh names the index after the version, and refuses the one
+# this host serves.
 
 
 # All references to an external script should be relative to the location of this script.
@@ -130,7 +130,7 @@ upload_uniprot_entries() {
 usage() {
     cat <<'USAGE'
 Drops and recreates one index on a running OpenSearch, then loads the proteins of a database into
-it. .deploy/load.sh runs this, naming the index after the version.
+it. The deploy scripts' load.sh runs this, naming the index after the version.
 
   opensearch/load.sh --uniprot-entries FILE [OPTIONS]
 

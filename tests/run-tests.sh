@@ -7,7 +7,7 @@
 #   run-tests.sh shell      the helpers in pipelines/lib/common.sh
 #   run-tests.sh build      pipelines/suffix-array/build.sh end to end, offline
 #   run-tests.sh opensearch opensearch/load.sh, against a real OpenSearch
-#   run-tests.sh verify     .deploy/verify.sh against a fixture index
+#   run-tests.sh verify     .deploy/server/verify.sh against a fixture index
 #   run-tests.sh lib        the parts of .deploy/lib.sh, function by function
 #   run-tests.sh deploy     the .deploy scripts, in a container
 #   run-tests.sh seam       .deploy/build.sh over the real pipeline, offline

@@ -1,13 +1,19 @@
 #!/usr/bin/env bash
 #
 # Copies a finished database from another host. The build itself runs once, on one host; every
-# other host clones the result. It loads nothing into OpenSearch; .deploy/load.sh does that. Run it
-# with --help for the options.
+# other host clones the result. It loads nothing into OpenSearch; load.sh does that.
+# Run it with --help for the options.
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# shellcheck source=lib.sh
-source "${HERE}/lib.sh"
+# Beside this script once install.sh has placed both in /opt/unipept-database/bin, one level up in
+# a repository checkout.
+# shellcheck source=../lib.sh
+if [ -f "${HERE}/lib.sh" ]; then
+    source "${HERE}/lib.sh"
+else
+    source "${HERE}/../lib.sh"
+fi
 
 # The settings only this script has. lib/ holds the ones it shares.
 
@@ -32,10 +38,10 @@ read_conf
 
 usage() {
     cat <<'USAGE'
-Copies a finished database from another host. .deploy/load.sh then loads its proteins into this
-host's OpenSearch.
+Copies a finished database from another host. load.sh then loads its proteins into this host's
+OpenSearch.
 
-  .deploy/clone.sh --remote-address HOST --local-ssh-key KEY [OPTIONS]
+  bin/clone.sh --remote-address HOST --local-ssh-key KEY [OPTIONS]
 
   --remote-address HOST      the host to copy from, required
   --local-ssh-key KEY        the private key to reach it with, required

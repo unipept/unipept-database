@@ -21,14 +21,20 @@
 #   4. Start OpenSearch, and wait for it and for the new version's index.
 #   5. Start the API, which checks the host once more and waits until it serves.
 #   6. Close the indices of versions older than both, which frees the memory they hold. Nothing is
-#      deleted: .deploy/prune.sh removes old versions.
+#      deleted: prune.sh removes old versions.
 #   A failure in 3, 4 or 5, or an interrupt from 2 on, points the links back and starts both on the
 #   version it left, so the host serves what it served before.
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# shellcheck source=lib.sh
-source "${HERE}/lib.sh"
+# Beside this script once install.sh has placed both in /opt/unipept-database/bin, one level up in
+# a repository checkout.
+# shellcheck source=../lib.sh
+if [ -f "${HERE}/lib.sh" ]; then
+    source "${HERE}/lib.sh"
+else
+    source "${HERE}/../lib.sh"
+fi
 
 read_conf
 
@@ -52,8 +58,8 @@ usage() {
     cat <<'USAGE'
 Switches the API on this host to another version it holds, stopping it and OpenSearch to do so.
 
-  .deploy/switch.sh --uniprot-version YYYY-MM [OPTIONS]
-  .deploy/switch.sh --back [OPTIONS]
+  bin/switch.sh --uniprot-version YYYY-MM [OPTIONS]
+  bin/switch.sh --back [OPTIONS]
 
   --uniprot-version YYYY-MM  the version to switch to. Its files and its proteins must be here
   --back                     switch to the version before, which `previous` points at
