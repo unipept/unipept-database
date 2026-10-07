@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# .deploy/verify.sh against a fixture index directory. Needs no container and no network: what it
+# .deploy/server/verify.sh against a fixture index directory. Needs no container and no network: what it
 # checks is a directory layout.
 
 set -uo pipefail
@@ -15,7 +15,7 @@ source "${HERE}/../lib.sh"
 # shellcheck source=../../.deploy/lib/database.sh
 source "${HERE}/../../.deploy/lib/database.sh"
 
-VERIFY="${HERE}/../../.deploy/verify.sh"
+VERIFY="${HERE}/../../.deploy/server/verify.sh"
 
 # verify.sh refuses root, because root reads everything and its check is whether the API can read
 # the files. The container suite checks that refusal; here there is nothing else to run.
@@ -221,10 +221,10 @@ checkout="${TEMP_DIR}/checkout"
 copy_deploy_scripts "${HERE}/../.." "$checkout"
 printf 'OUTPUT_DIR=%s\nUNIPROT_VERSION=2025-11\n' "$root" > "${checkout}/.deploy/deploy.conf"
 
-output="$("${checkout}/.deploy/verify.sh" --index-dir "$INDEX" 2>&1)"
+output="$("${checkout}/.deploy/server/verify.sh" --index-dir "$INDEX" 2>&1)"
 check "--index-dir still works" "$?" "0"
 
-output="$("${checkout}/.deploy/verify.sh" 2>&1)"
+output="$("${checkout}/.deploy/server/verify.sh" 2>&1)"
 check "with no flags it passes" "$?" "0"
 check_true "the newest is checked, not the pinned one" said "uniprot-2026-03/suffix-array"
 

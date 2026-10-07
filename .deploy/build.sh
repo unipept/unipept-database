@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Builds a Unipept database on this host: the tables, the suffix array and the datastore layout the
-# API reads. It loads nothing into OpenSearch; .deploy/load.sh does that. Run it with --help for the
+# API reads. It loads nothing into OpenSearch; .deploy/server/load.sh does that. Run it with --help for the
 # options.
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -73,7 +73,7 @@ INFO
 usage() {
     cat <<'USAGE'
 Builds a Unipept database on this host: the tables, the suffix array and the datastore layout the
-API reads. .deploy/load.sh then loads its proteins into OpenSearch.
+API reads. .deploy/server/load.sh then loads its proteins into OpenSearch.
 
   .deploy/build.sh [OPTIONS]
 
@@ -263,4 +263,4 @@ write_build_info "${STAGING_DIR}/suffix-array" "$UNIPROT_VERSION" "$DATABASE_COM
 
 swap_into_place "$STAGING_DIR" "$BUILD_DIR"
 
-log "The database is ready in ${BUILD_DIR}. Load its proteins with: .deploy/load.sh --uniprot-version ${UNIPROT_VERSION}"
+log "The database is ready in ${BUILD_DIR}. Load its proteins with: .deploy/server/load.sh --uniprot-version ${UNIPROT_VERSION}"

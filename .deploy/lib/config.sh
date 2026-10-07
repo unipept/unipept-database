@@ -14,7 +14,7 @@ OUTPUT_DIR=/mnt/data
 OPENSEARCH_URL=http://localhost:9200
 
 # Who builds, clones and owns the databases. The API on this host runs as the same user, which is
-# what makes every file a build writes one the API can read. opensearch/install.sh creates it and
+# what makes every file a build writes one the API can read. server/opensearch/install.sh creates it and
 # gives it OUTPUT_DIR; after that, nothing here needs root.
 DEPLOY_USER=unipept
 
@@ -25,10 +25,10 @@ DEPLOY_USER=unipept
 # for that reason alone. prune.sh removes databases, so it runs as the user who owns them.
 refuse_root() {
     [ "$(id -u)" -ne 0 ] \
-        || die "do not run this as root. Run it as ${DEPLOY_USER}, for example: sudo -iu ${DEPLOY_USER}. Only .deploy/opensearch/install.sh needs root."
+        || die "do not run this as root. Run it as ${DEPLOY_USER}, for example: sudo -iu ${DEPLOY_USER}. Only .deploy/server/opensearch/install.sh needs root."
 }
 
-# Where opensearch/install.sh installs the scripts a host runs, and their configuration. The build
+# Where server/opensearch/install.sh installs the scripts a host runs, and their configuration. The build
 # host still builds from a checkout, which needs the whole repository.
 readonly INSTALL_ROOT=/opt/unipept-database
 

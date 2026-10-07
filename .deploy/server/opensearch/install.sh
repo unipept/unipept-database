@@ -39,8 +39,8 @@
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# shellcheck source=../lib.sh
-source "${HERE}/../lib.sh"
+# shellcheck source=../../lib.sh
+source "${HERE}/../../lib.sh"
 
 # The settings only this script has.
 
@@ -124,7 +124,7 @@ readonly SUDOERS_FILE=/etc/sudoers.d/unipept-opensearch
 # and the host was left without OpenSearch until someone noticed, for months once.
 readonly START_TIMEOUT=600
 readonly RESTART_DELAY=30
-readonly MARKER='# Written by unipept-database .deploy/opensearch/install.sh. Edit that, not this.'
+readonly MARKER='# Written by unipept-database .deploy/server/opensearch/install.sh. Edit that, not this.'
 
 # Whether this run wrote a file the service reads, and so has to restart it.
 CHANGED=false
@@ -135,7 +135,7 @@ Prepares a host to build, clone and hold a Unipept database: the user that owns 
 tools the scripts run, the scripts themselves in /opt/unipept-database, and the OpenSearch instance
 the proteins are loaded into. Run as root; it is the only step that needs it.
 
-  .deploy/opensearch/install.sh [OPTIONS]
+  .deploy/server/opensearch/install.sh [OPTIONS]
 
   --heap SIZE                the heap OpenSearch takes, for example 8g; default what the host has,
                              or 4g
@@ -273,7 +273,7 @@ prepare_output_dir() {
 # From the checkout this runs in, so a host is updated by running this again from a checkout of the
 # commit to install, which INSTALLED then names.
 install_scripts() {
-    local repository="${HERE}/../.." commit
+    local repository="${HERE}/../../.." commit
 
     # A load, a switch or a prune running from these files while they are replaced
     # could pair a new lib.sh with an old script, or start opensearch/load.sh from the new release
@@ -293,7 +293,7 @@ install_scripts() {
     install -m 0644 "${repository}/.deploy/lib/"*.sh "${PREFIX}/bin/lib/"
     install -m 0755 "${repository}/opensearch/load.sh" "${PREFIX}/opensearch/"
     install -m 0644 "${repository}/.deploy/lib.sh" "${PREFIX}/bin/"
-    install -m 0755 "${repository}/.deploy/"{clone.sh,load.sh,verify.sh,prune.sh,switch.sh} "${PREFIX}/bin/"
+    install -m 0755 "${repository}/.deploy/server/"{clone.sh,load.sh,verify.sh,prune.sh,switch.sh} "${PREFIX}/bin/"
 
     install -d -m 0755 -o root -g root "${PREFIX}/etc"
     if [ ! -f "${PREFIX}/etc/deploy.conf" ]; then

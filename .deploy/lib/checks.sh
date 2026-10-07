@@ -199,10 +199,10 @@ check_links_previous() {
 
 # OpenSearch on this host, and the index of a version in it.
 
-# The sudo rule opensearch/install.sh writes, through which a switch stops and starts OpenSearch.
+# The sudo rule server/opensearch/install.sh writes, through which a switch stops and starts OpenSearch.
 check_sudo_opensearch() {
     { sudo -n -l systemctl stop opensearch && sudo -n -l systemctl start opensearch; } > /dev/null 2>&1 \
-        || { echo "FAIL ${DEPLOY_USER} may not stop and start OpenSearch through sudo. Run .deploy/opensearch/install.sh again, as root." 1>&2; return 1; }
+        || { echo "FAIL ${DEPLOY_USER} may not stop and start OpenSearch through sudo. Run .deploy/server/opensearch/install.sh again, as root." 1>&2; return 1; }
 }
 
 # Given the index the caller wants to know about, which is unknown when nothing answers.
@@ -275,7 +275,7 @@ check_copy_kept_kmer_table() {
 # It answers, and has the scripts installed.
 check_server_scripts() {
     on "$2" "$3" test -x bin/verify.sh -a -x bin/clone.sh -a -x bin/load.sh 2> /dev/null \
-        || { echo "FAIL ${1} cannot be reached, or has no scripts installed in ${3}; .deploy/opensearch/install.sh installs them." 1>&2; return 1; }
+        || { echo "FAIL ${1} cannot be reached, or has no scripts installed in ${3}; .deploy/server/opensearch/install.sh installs them." 1>&2; return 1; }
 }
 
 # And can clone the version from the source, as its own deploy.conf decides.
