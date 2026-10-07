@@ -465,7 +465,7 @@ for _ in $(seq 50); do
 done
 switch "${WORK}/switch-deploying.log" --uniprot-version 2027-02
 check "a deploy of the API running stops it" "$rc" "2"
-check_true "and says so" grep -q 'FAIL a deploy, rollback, start or stop of the API, or its install, is running on this host' "${WORK}/switch-deploying.log"
+check_true "and says so" grep -q "FAIL a deploy, rollback, start or stop, an install, or a change to the index this host serves, holds ${API_LOCK}" "${WORK}/switch-deploying.log"
 check "nothing is stopped" "$(calls lock-calls)$(calls systemctl-calls)" ""
 kill "$deployer"
 wait "$deployer" 2> /dev/null
@@ -653,8 +653,9 @@ check "one that was not loaded to the end fails it" "$rc" "2"
 check_true "and says to load it again" grep -q 'uniprot_entries-2027-05 is there and was not loaded to the end' "${WORK}/ensure.log"
 curl -s -X DELETE "${OPENSEARCH_URL}/uniprot_entries-2027-05" > /dev/null
 
-# A host whose alias points at the old index an earlier release kept. The index uniprot_entries the
-# first sections loaded goes first: an alias cannot share its name.
+# A host whose alias points at uniprot_entries-legacy, as a host loaded before versioned indices may
+# have it. The index uniprot_entries the first sections loaded goes first: an alias cannot share its
+# name.
 curl -s -X DELETE "${OPENSEARCH_URL}/uniprot_entries" > /dev/null
 load_version uniprot_entries-legacy P00001 P00002
 curl -s -X POST "${OPENSEARCH_URL}/_aliases" -H 'Content-Type: application/json' \
