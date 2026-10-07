@@ -176,8 +176,10 @@ trap 'rm -rf "${STAGING_DIR:?}"' EXIT
 take_opensearch_lock -s "$LOCK_WAIT" \
     || die "$(lock_refused $?) Waited ${LOCK_WAIT} seconds for it. The copy is removed; the next clone.sh copies again."
 # And no load of this version reads the table this replaces.
-take_load_lock "$UNIPROT_VERSION" \
-    || die "a load of ${UNIPROT_VERSION} is running on this host, and reads the files this would replace. The copy is removed; clone once it has finished."
+take_load_lock "$UNIPROT_VERSION" || case $? in
+    1) die "a load of ${UNIPROT_VERSION} is running on this host, and reads the files this would replace. The copy is removed; clone once it has finished." ;;
+    *) die "without its lock, a load of ${UNIPROT_VERSION} could read the files this replaces. The copy is removed. Make the lock readable by $(id -un) (above)." ;;
+esac
 [ ! -e "$BUILD_DIR" ] || refuse_replacing_served "$UNIPROT_VERSION" "The copy is removed. "
 trap - EXIT
 swap_into_place "$COPIED_DIR" "$BUILD_DIR"
