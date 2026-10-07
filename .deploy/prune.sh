@@ -14,12 +14,10 @@
 #   - the one `previous` points at, which switch.sh --back goes to;
 #   - every version newer than the oldest of those, which is loaded ahead of a switch still to come;
 #   - the --keep newest versions older than that, to go back to.
-# What a host loaded before versioned indices kept, uniprot_entries-legacy and uniprot_entries itself,
-# counts as the oldest: the API queries the versioned index migrate.sh kept the same proteins in.
 #
 # Without a current link, or where the API's deploy.sh does not say which version it serves, there
-# is no telling what the API serves, so nothing is removed. It holds the lock a load, a switch and
-# migrate.sh take, so none of them works on what it removes.
+# is no telling what the API serves, so nothing is removed. It holds the lock a load and a switch
+# take, so neither works on what it removes.
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -50,7 +48,6 @@ Removes old databases from this host, each version's files and its OpenSearch in
   --help                     print this message
 
 Every version this host serves, the one before it, and every newer one, are always kept.
-uniprot_entries and uniprot_entries-legacy, from before versioned indices, count as the oldest.
 
 A flag wins over .deploy/deploy.conf, which wins over the defaults in lib/ and in this script.
 USAGE
@@ -99,19 +96,17 @@ for version in $SERVING $BEFORE; do
     fi
 done
 
-# Every version this host holds anything of, files or index, newest first. legacy and plain sort
-# last, because they predate every versioned one, plain before legacy.
+# Every version this host holds anything of, files or index, newest first.
 versions=$(
     {
-        [ -z "$(index_status "$ALIAS")" ] || echo plain
         # shellcheck disable=SC2231 # DATABASE_GLOB is a glob, and has to expand
         for directory in "${OUTPUT_DIR}"/${DATABASE_GLOB}; do
             [ -d "$directory" ] && database_version_of "$directory"
         done
-        curl -s -f "${OPENSEARCH_URL}/_cat/indices/${ALIAS}-*?h=index&expand_wildcards=all" | while read -r index; do
+        curl -s -f "${OPENSEARCH_URL}/_cat/indices/${INDEX_PREFIX}-*?h=index&expand_wildcards=all" | while read -r index; do
             version_of_index "$index"
         done || true
-    } | sed 's/^legacy$/0000-01 legacy/; s/^plain$/0000-00 plain/; s/^\([0-9-]*\)$/\1 \1/' | sort -u -r -k1,1 | awk 'NF == 2 { print $2 }'
+    } | sort -u -r
 )
 
 # Newer than the older of what is served is kept: the other of the two, or loaded ahead of a switch.
@@ -145,16 +140,8 @@ log "Removing: ${remove% }"
 [ "$DRY_RUN" != true ] || { log "A dry run, so nothing is removed."; exit 0; }
 
 for version in $remove; do
-    if [ "$version" = legacy ]; then
-        index="$LEGACY"
-        directory=''
-    elif [ "$version" = plain ]; then
-        index="$ALIAS"
-        directory=''
-    else
-        index="${ALIAS}-${version}"
-        directory="${OUTPUT_DIR}/uniprot-${version}"
-    fi
+    index="${INDEX_PREFIX}-${version}"
+    directory="${OUTPUT_DIR}/uniprot-${version}"
 
     # Before the files, so a delete OpenSearch refuses leaves the version whole to try again.
     if [ -n "$(index_status "$index")" ]; then
@@ -162,7 +149,7 @@ for version in $remove; do
         log "Deleted the ${index} index."
     fi
 
-    if [ -n "$directory" ] && [ -e "$directory" ]; then
+    if [ -e "$directory" ]; then
         rm -rf "${directory:?}"
         log "Removed ${directory}."
     fi

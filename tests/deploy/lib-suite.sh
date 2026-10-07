@@ -279,7 +279,7 @@ section "every script's --help"
 copy_deploy_scripts "${HERE}/../.." "${TEMP_DIR}/checkout"
 DEPLOY="${TEMP_DIR}/checkout/.deploy"
 : > "${DEPLOY}/deploy.conf"
-for script in build clone distribute load migrate prune switch verify opensearch/install; do
+for script in build clone distribute load prune switch verify opensearch/install; do
     arguments=(--help)
     [ "$script" != opensearch/install ] || arguments=(--prefix "${TEMP_DIR}/prefix" --help)
     output=$("${DEPLOY}/${script}.sh" "${arguments[@]}" 2>&1)

@@ -231,7 +231,7 @@ check_opensearch_index_open() {
     case $(index_status "$1") in
         open) ;;
         '') echo "FAIL ${1}, of the version this host serves, is not in OpenSearch, so a switch that fails could not go back to it. Load it with load.sh --uniprot-version ${2} first." 1>&2; return 1 ;;
-        *) echo "FAIL ${1}, of the version this host serves, is not open, so a switch that fails could not go back to it. Run migrate.sh first." 1>&2; return 1 ;;
+        *) echo "FAIL ${1}, of the version this host serves, is not open, so a switch that fails could not go back to it. Open it first: curl -X POST ${OPENSEARCH_URL}/${1}/_open" 1>&2; return 1 ;;
     esac
 }
 

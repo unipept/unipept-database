@@ -518,7 +518,7 @@ section "load.sh"
 as_deployer cp -r "${OUT}/uniprot-2026-03" "${OUT}/uniprot-2025-11"
 printf '2025.11\n' > "${OUT}/uniprot-2025-11/suffix-array/.version"
 
-rm -f /work/loader-calls /work/activate-calls
+rm -f /work/loader-calls
 load_proteins --output-dir "$OUT" --opensearch-url http://stub:9200
 check "it succeeds" "$?" "0"
 check "the loader is called once" "$(grep -c -- '--uniprot-entries' /work/loader-calls)" "1"
@@ -526,9 +526,6 @@ check_true "with the newest database, into an index of its version, at the insta
     grep -qxF -- "--opensearch-url http://stub:9200 --uniprot-entries ${OUT}/uniprot-2026-03/tables/uniprot_entries.tsv.lz4 --index-name uniprot_entries-2026-03" \
     /work/loader-calls
 check_true "it says how to switch to it" grep -qF 'until this host switches to it: switch.sh --uniprot-version 2026-03' /work/last-output
-
-load_proteins --output-dir "$OUT" --activate
-check "--activate, which moved an alias the API no longer queries, is gone" "$?" "2"
 
 rm -f /work/loader-calls
 load_proteins --output-dir "$OUT" --uniprot-version 2025-11 --check
@@ -716,7 +713,7 @@ load_proteins --output-dir /work/nothing-here
 check "no database at all stops it" "$?" "2"
 
 # Refused before the loader is reached, so a database the API cannot serve never gets an index
-# that could be activated.
+# that could be switched to.
 rm "${OUT}/uniprot-2025-11/suffix-array/mapping.bin"
 load_proteins --output-dir "$OUT" --uniprot-version 2025-11
 check "a database that fails verification stops it" "$?" "2"
@@ -1099,16 +1096,12 @@ check_true "it says what is left to do as that user" grep -q "As ${DEPLOY} (sudo
 section "install.sh installs the scripts a host runs"
 
 PREFIX_A=/work/opt-a
-# What an earlier release installed, and this one removes.
-mkdir -p "${PREFIX_A}/opensearch"
-touch "${PREFIX_A}/opensearch/activate.sh"
 packaged_host
 install_opensearch --user "$DEPLOY" --output-dir "$OUT" --prefix "$PREFIX_A"
 check "it succeeds" "$?" "0"
-check_true "the activate.sh an earlier release installed is gone" test ! -e "${PREFIX_A}/opensearch/activate.sh"
 check_true "the scripts a host runs are there" \
     test -x "${PREFIX_A}/bin/clone.sh" -a -x "${PREFIX_A}/bin/load.sh" -a -x "${PREFIX_A}/bin/verify.sh" -a -x "${PREFIX_A}/bin/prune.sh" \
-        -a -x "${PREFIX_A}/bin/switch.sh" -a -x "${PREFIX_A}/bin/migrate.sh"
+        -a -x "${PREFIX_A}/bin/switch.sh"
 check_true "and what they call" \
     test -x "${PREFIX_A}/opensearch/load.sh" -a -f "${PREFIX_A}/opensearch/lib.sh" \
         -a -f "${PREFIX_A}/opensearch/mappings/uniprot_entries.json" -a -f "${PREFIX_A}/pipelines/lib/common.sh"
@@ -1271,7 +1264,6 @@ check_true "and passes verify.sh there" as_deployer /work/server-a/bin/verify.sh
 check_true "the load is of that copy, into the version's own index" \
     grep -qF -- "--uniprot-entries /work/a-data/uniprot-2026-03/tables/uniprot_entries.tsv.lz4 --index-name uniprot_entries-2026-03" \
     /work/a-loader-calls
-check_true "nothing switches the API to it" not grep -q -- '--activate' /work/a-loader-calls /work/b-loader-calls
 check_true "it says switch.sh is what switches" grep -q "Switch each server to it with switch.sh --uniprot-version" /work/last-output
 
 

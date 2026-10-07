@@ -183,10 +183,8 @@ start_opensearch() {
 
 # The indices of versions older than both the one switched to and the one left: neither the API nor
 # a --back needs them, and an open index holds memory. Versions newer than the one switched to are
-# loaded ahead of a switch and stay open. uniprot_entries and uniprot_entries-legacy, which a host
-# loaded before versioned indices may still have beside the clone migrate.sh made, count as the
-# oldest: the API queries the versioned one. Closing is not needed for the switch, so it happens
-# once the API serves, and a failure is only reported.
+# loaded ahead of a switch and stay open. Closing is not needed for the switch, so it happens once
+# the API serves, and a failure is only reported.
 close_older_indices() {
     local oldest="$TARGET" index status version
 
@@ -196,11 +194,7 @@ close_older_indices() {
         | while read -r index status; do
             [ "$status" = open ] || continue
             version=$(version_of_index "$index")
-            case $version in
-                '') continue ;;
-                legacy | plain) ;;
-                *) [[ "$version" < "$oldest" ]] || continue ;;
-            esac
+            [ -n "$version" ] && [[ "$version" < "$oldest" ]] || continue
             if curl -s -f -o /dev/null -X POST "${OPENSEARCH_URL}/${index}/_close"; then
                 log "Closed ${index}, which neither version needs."
             else
@@ -248,15 +242,15 @@ CURRENT=$(current_link)
 PREVIOUS=$(previous_link)
 
 [ -L "$CURRENT" ] \
-    || die "there is no ${CURRENT}, so which version this host serves is not known. Run migrate.sh once: it sets it up from the API's INDEX_LOCATION."
+    || die "there is no ${CURRENT}, so which version this host serves is not known. On a new host, point it at the first version, ln -s uniprot-YYYY-MM ${CURRENT}, and INDEX_LOCATION in the API's settings at ${CURRENT}/suffix-array."
 FROM_LINK=$(readlink "$CURRENT")
 FROM=$(linked_version "$CURRENT") || die "${CURRENT} points at ${FROM_LINK}, which is no version's directory."
-FROM_INDEX="${ALIAS}-${FROM}"
+FROM_INDEX="${INDEX_PREFIX}-${FROM}"
 PREVIOUS_LINK_WAS=$(readlink "$PREVIOUS" 2> /dev/null || true)
 
 if [ "$BACK" = true ]; then
     TARGET=$(linked_version "$PREVIOUS") || die "there is no version to go back to: ${PREVIOUS} is not there."
-    # Where previous points, which migrate.sh may have made a path outside OUTPUT_DIR.
+    # Where previous points, which a link made by hand may name by a path outside OUTPUT_DIR.
     TARGET_LINK=$(readlink "$PREVIOUS")
 else
     TARGET="$UNIPROT_VERSION"
@@ -266,7 +260,7 @@ case $TARGET_LINK in
     /*) TARGET_DIR="$TARGET_LINK" ;;
     *) TARGET_DIR="${OUTPUT_DIR%/}/${TARGET_LINK}" ;;
 esac
-TARGET_INDEX="${ALIAS}-${TARGET}"
+TARGET_INDEX="${INDEX_PREFIX}-${TARGET}"
 
 if [ "$TARGET" = "$FROM" ]; then
     log "This host already serves ${TARGET}."
