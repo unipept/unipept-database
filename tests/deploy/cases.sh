@@ -177,7 +177,7 @@ check "sa-builder was asked for the k-mer table" \
     "$(grep -c -- '--output-kmer-table' /work/sa-builder-calls)" "1"
 # Loading is load.sh's, which is what lets a load that fails be rerun without building again.
 check_true "nothing is loaded into OpenSearch" test ! -e /work/loader-calls
-check_true "it says how to load it, with the installed load.sh" grep -qF '/opt/unipept-database/bin/load.sh --uniprot-version 2026-03' /work/last-output
+check_true "it says how to load it, with this checkout's load.sh" grep -qF "${CHECKOUT}/.deploy/server/load.sh --uniprot-version 2026-03" /work/last-output
 
 check "build-info.txt records this checkout" \
     "$(grep '^unipept-database:' "${OUT}/uniprot-2026-03/suffix-array/build-info.txt" | awk '{print $2}')" \
