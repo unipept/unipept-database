@@ -232,25 +232,18 @@ OpenSearch is a system service, so stopping it takes root. `install.sh` allows `
 
 ### Setting up a host for it
 
-Once, on a host that runs the API, as `unipept`:
+Once, on a new host that runs the API, as `unipept`, when its first version is there and its
+proteins are loaded: point `current` at that version, and the API's `INDEX_LOCATION` through it.
 
 ```sh
-bin/migrate.sh
-```
-
-It points `current` at the version the API's `INDEX_LOCATION` names, which its `deploy.sh status`
-reports, and, on a host loaded before versioned indices, keeps the proteins it serves in the index
-named after that version too: a clone of `uniprot_entries`, or of `uniprot_entries-legacy` where an
-alias of that name points there, as some hosts have it, which costs no copy. Neither changes what the API serves,
-and running it again changes nothing on a host that is set up. What is left is one line in the API's
-environment file, which it asks for:
-
-```sh
+ln -s uniprot-2026-03 /mnt/data/current
+# in /opt/unipept-api/etc/unipept-api.env:
 INDEX_LOCATION=/mnt/data/current/suffix-array
 ```
 
-It names the same files, so nothing changes until the API next starts. After that, `switch.sh` is
-how the version changes.
+Then start the API on it. After that, `switch.sh` is how the version changes. A host whose
+OpenSearch still holds `uniprot_entries` or `uniprot_entries-legacy`, from before the indices were
+named after their version, keeps them until they are deleted by hand: nothing here knows them.
 
 ## Distributing a database
 
@@ -307,11 +300,9 @@ memory; what old versions cost is disk.
 
 It keeps the version `current` points at, the one `previous` points at, the one the API serves by
 its `deploy.sh status`, every version newer than the oldest of those, since those are
-loaded ahead of a switch still to come, and the `--keep` newest ones older than that. What a host
-loaded before versioned indices kept, `uniprot_entries-legacy` and `uniprot_entries` itself, counts
-as the oldest: `migrate.sh` kept its proteins in the index of their version, which the API queries.
-Without a `current` link, or where the API's `deploy.sh status` does not say what it serves, it
-removes nothing. It takes the same lock as a load and a switch, and `migrate.sh` takes it too.
+loaded ahead of a switch still to come, and the `--keep` newest ones older than that. Without a
+`current` link, or where the API's `deploy.sh status` does not say what it serves, it removes
+nothing. It takes the same lock as a load and a switch.
 
 `load.sh` warns when OpenSearch's disk is past its low watermark, 85% unless the cluster sets
 another. At 95% OpenSearch makes every index read-only, and a load running then fails part way, so
