@@ -5,8 +5,9 @@
 # through .deploy/lib.sh.
 
 # The lock that keeps loads and switches apart. One per host, as the OpenSearch it guards is, whatever
-# OUTPUT_DIR a run is given; /run/lock is there for every user to take one in.
-OPENSEARCH_LOCK=${OPENSEARCH_LOCK:-/run/lock/unipept-opensearch.lock}
+# OUTPUT_DIR a run is given; /run/lock is there for every user to take one in. Fixed, so every script
+# that takes it names the same file.
+readonly OPENSEARCH_LOCK=/run/lock/unipept-opensearch.lock
 
 # Seconds a build or a clone waits for that lock once its work is done, rather than throw the work
 # away: a switch holds it while OpenSearch starts, which takes minutes.
@@ -73,7 +74,7 @@ take_load_lock() {
 lock_refused() {
     case $1 in
         1) echo "a load, a switch, a prune or migrate.sh is running on this host; wait for it to finish." ;;
-        *) echo "without the lock, a load, a switch or a prune could run at the same time. Make ${OPENSEARCH_LOCK} readable by $(id -un), or set OPENSEARCH_LOCK." ;;
+        *) echo "without the lock, a load, a switch or a prune could run at the same time. Make ${OPENSEARCH_LOCK} readable by $(id -un)." ;;
     esac
 }
 

@@ -146,10 +146,12 @@ both_ways check_index_version "check_index_version '${DB}/suffix-array'" "check_
 both_ways check_db_whole "check_db_whole '${DB}'" "check_db_whole '${EMPTY}'" "${EMPTY} is not a database the API can serve"
 both_ways check_db_table "check_db_table '${DB}'" "check_db_table '${EMPTY}'" "${EMPTY} has no tables/uniprot_entries.tsv.lz4"
 
+# Through a stand-in for whether the lock opens: its path is fixed, in /run/lock, which the scripts'
+# own suites take it in.
 both_ways check_lock_usable \
-    "OPENSEARCH_LOCK='${TEMP_DIR}/checks/lock'; check_lock_usable 'the work'" \
-    "OPENSEARCH_LOCK='${TEMP_DIR}/checks/no/such/dir/lock'; check_lock_usable 'the work'" \
-    "the work is swapped in under ${TEMP_DIR}/checks/no/such/dir/lock at its end"
+    "opensearch_lock_usable() { return 0; }; check_lock_usable 'the work'" \
+    "opensearch_lock_usable() { return 1; }; check_lock_usable 'the work'" \
+    "the work is swapped in under /run/lock/unipept-opensearch.lock at its end"
 both_ways check_disk_room \
     "OUTPUT_DIR='${TEMP_DIR}'; check_disk_room '${DB}' 1 '${TEMP_DIR}/none'" \
     "OUTPUT_DIR='${TEMP_DIR}'; check_disk_room '${DB}' $((1024 * 1024 * 1024 * 1024)) '${TEMP_DIR}/none'" \
