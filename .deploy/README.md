@@ -42,12 +42,13 @@ its `servers.conf` is. Below, `deploy/` is that installed directory and `.deploy
 ## Preparing a host
 
 ```sh
-sudo .deploy/server/opensearch/install.sh --heap 8g
+sudo .deploy/server/install.sh --heap 8g
 ```
 
-This is the only step that needs root. It runs `.deploy/server/install.sh` first, which prepares
-the host and can also run on its own, as root too, and then sets up OpenSearch. Together they
-prepare everything the other scripts need, so they run without sudo:
+This is the only step that needs root. It prepares the host and installs the scripts, then runs
+`.deploy/server/opensearch/install.sh`, which sets up OpenSearch and can also run on its own, as
+root, to change a setting such as the heap. Together they prepare everything the other scripts
+need, so they run without sudo:
 
 - the `unipept` user (`DEPLOY_USER`), who builds, clones and owns the databases. The API on this
   host runs as the same user, and its own install creates it the same way, in either order;
@@ -57,8 +58,11 @@ prepare everything the other scripts need, so they run without sudo:
 - the scripts a host runs, in `/opt/unipept-database` as above, `etc/deploy.conf`, written once from
   the example and then root's to edit, since `install.sh` reads it as root, and `INSTALLED`, which
   names the commit they came from. A host takes a newer version by running `install.sh` again from
-  a clone of it. Each directory is built whole beside the one it replaces and swapped in by a
-  rename, so nothing a clone no longer has is left behind; `etc/` is not touched;
+  a clone of it. Each install builds a release whole in `releases/` and puts it in place with
+  `switch_release` from `lib/core.sh`: `release` is a link to it, renamed over the old one in one
+  step, and `deploy`, `opensearch` and `pipelines` are links through it. A script started at any
+  moment finds one release whole, an install stopped part way leaves the one before in place, and
+  nothing a clone no longer has is left behind; `etc/` is not touched;
 - the OpenSearch instance this host loads its proteins into, configured and started.
 
 It ends with what is left to do: fill in `deploy.conf` as root, then as `unipept` add an ssh key for
@@ -362,8 +366,7 @@ it uses of the others.
 
 ## What a host needs
 
-`server/opensearch/install.sh` installs all of it but Rust, and `server/install.sh` on its own all
-but Rust and OpenSearch. For reference, or for a host prepared another way:
+`server/install.sh` installs all of it but Rust. For reference, or for a host prepared another way:
 
 - `build.sh` needs `git`, `cmake` and a Rust toolchain, and the pipeline needs `curl`, `uuidgen`,
   `pigz`, `gawk`, `lz4`, `pv`, `unzip` and `xmllint`.
