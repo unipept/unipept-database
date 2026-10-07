@@ -843,11 +843,16 @@ forget_calls() {
 install_server() {
     PATH="${INSTALL_STUBS}:${PATH}" "${CHECKOUT}/.deploy/server/install.sh" "$@" > /work/last-output 2>&1
 }
+# What server/install.sh runs, on its own: for the cases of OpenSearch alone, which need nothing of
+# the host set up again.
+install_opensearch() {
+    PATH="${INSTALL_STUBS}:${PATH}" "${CHECKOUT}/.deploy/server/opensearch/install.sh" "$@" > /work/last-output 2>&1
+}
 
 setup_install_stubs
 
 
-section "install.sh on a fresh host"
+section "server/install.sh on a fresh host"
 
 packaged_host
 forget_calls
@@ -872,11 +877,11 @@ check_true "the plugin's replicated indices are not written" grep -qF '"search.i
 check_true "the indices already there lose theirs" grep -qF '/_all/_settings?expand_wildcards=all' /work/curl-calls
 
 
-section "install.sh a second time"
+section "opensearch/install.sh a second time"
 
 cp "$CONFIG" /work/config-before
 forget_calls
-install_server
+install_opensearch
 check "it succeeds" "$?" "0"
 check_true "nothing is installed" not grep -q 'install' /work/apt-calls
 check_true "the configuration is unchanged" cmp -s "$CONFIG" /work/config-before
@@ -886,36 +891,36 @@ check_true "the running service is not restarted" not grep -q 'restart' /work/sy
 # applies it on a reload.
 rm /etc/systemd/system/opensearch.service.d/unipept.conf
 forget_calls
-install_server
+install_opensearch
 check "a host that only lacks the drop-in succeeds" "$?" "0"
 check_true "it is written" test -s /etc/systemd/system/opensearch.service.d/unipept.conf
 check_true "systemd is reloaded" grep -qx 'daemon-reload' /work/systemctl-calls
 check_true "and the running service is not restarted" not grep -q 'restart' /work/systemctl-calls
 
 
-section "install.sh where OpenSearch does not start"
+section "opensearch/install.sh where OpenSearch does not start"
 
 rm -f "${WORK}/opensearch-active"
 touch "${WORK}/start-fails"
 forget_calls
-install_server
+install_opensearch
 check "a start that fails stops it" "$?" "2"
 check_true "and says how long it was given, and that systemd tries again" \
     grep -q 'did not start within 10 minutes. systemd starts it again every 30 seconds' /work/last-output
 rm "${WORK}/start-fails"
 
 
-section "install.sh where the service is down"
+section "opensearch/install.sh where the service is down"
 
 rm -f "${WORK}/opensearch-active"
 forget_calls
-install_server
+install_opensearch
 check "it succeeds" "$?" "0"
 check_true "the service is started, though nothing changed" grep -qx 'restart opensearch' /work/systemctl-calls
 
 touch "${WORK}/curl-fails"
 forget_calls
-install_server
+install_opensearch
 check "an instance that does not answer stops it" "$?" "2"
 check_true "it says where it waited and where to look" \
     grep -q 'did not answer at http://127.0.0.1:9200 .* journalctl -u opensearch' /work/last-output
@@ -923,22 +928,22 @@ check_true "it sets nothing on an instance that is not there" not grep -q '_sett
 rm "${WORK}/curl-fails"
 
 
-section "install.sh keeps the heap a host was given"
+section "opensearch/install.sh keeps the heap a host was given"
 
 forget_calls
-install_server --heap 8g
+install_opensearch --heap 8g
 check "--heap succeeds" "$?" "0"
 check_true "the heap is 8g" grep -qx -- '-Xmx8g' "$HEAP"
 check_true "the change restarts the service" grep -qx 'restart opensearch' /work/systemctl-calls
 
 forget_calls
-install_server
+install_opensearch
 check "a run without --heap succeeds" "$?" "0"
 check_true "the heap is still 8g" grep -qx -- '-Xmx8g' "$HEAP"
 check_true "nothing is restarted" not grep -q 'restart' /work/systemctl-calls
 
 
-section "install.sh on a host set up by hand"
+section "opensearch/install.sh on a host set up by hand"
 
 packaged_host
 mkdir -p /work/hand/data /work/hand/logs
@@ -946,7 +951,7 @@ printf 'cluster.name: by-hand\npath.data: /work/hand/data\npath.logs: /work/hand
 echo "installed ${PINNED}" > "$DPKG_STATE"
 touch "${WORK}/opensearch-active"
 forget_calls
-install_server
+install_opensearch
 check "it succeeds" "$?" "0"
 check_true "nothing is installed" not grep -q 'install' /work/apt-calls
 check_true "the version it already has is held" grep -qx 'hold opensearch' /work/apt-calls
@@ -956,30 +961,30 @@ check_true "and its log path" grep -qx 'path.logs: /work/hand/logs' "$CONFIG"
 packaged_host
 printf 'path.data: /work/no-such-volume\n' > "$CONFIG"
 cp "$CONFIG" /work/config-before
-install_server
+install_opensearch
 check "a data path that is not there stops it" "$?" "2"
 check_true "the path is named" grep -q '/work/no-such-volume' /work/last-output
 check_true "the configuration is left as it was" cmp -s "$CONFIG" /work/config-before
 
 
-section "install.sh where the package was removed and not purged"
+section "opensearch/install.sh where the package was removed and not purged"
 
 packaged_host
 echo "config-files 2.18.0" > "$DPKG_STATE"
 forget_calls
-install_server
+install_opensearch
 check "it installs rather than stopping" "$?" "0"
 check_true "the pinned version is installed" grep -q "install .*opensearch=${PINNED}" /work/apt-calls
 
 
-section "install.sh where an older release of the same major version is installed"
+section "opensearch/install.sh where an older release of the same major version is installed"
 
 # How a host is kept patched: the pin is raised, and install.sh run again.
 packaged_host
 echo "installed ${PINNED_MAJOR}.0.0" > "$DPKG_STATE"
 touch "${WORK}/opensearch-active"
 forget_calls
-install_server
+install_opensearch
 check "it upgrades" "$?" "0"
 check_true "to the pinned version, past the hold it put on it" \
     grep -q "install .*--allow-change-held-packages .*opensearch=${PINNED}" /work/apt-calls
@@ -994,7 +999,7 @@ packaged_host
 printf 'path.data: /var/lib/opensearch\npath.logs: /work/no-such-logs\n' > "$CONFIG"
 echo "installed ${PINNED_MAJOR}.0.0" > "$DPKG_STATE"
 forget_calls
-install_server
+install_opensearch
 check "an upgrade to a configuration that cannot start stops" "$?" "2"
 check_true "before the package is replaced" not grep -q 'install .*opensearch=' /work/apt-calls
 
@@ -1002,12 +1007,12 @@ check_true "before the package is replaced" not grep -q 'install .*opensearch=' 
 packaged_host
 echo "half-configured ${PINNED}" > "$DPKG_STATE"
 forget_calls
-install_server
+install_opensearch
 check "a half-configured pinned version is finished" "$?" "0"
 check_true "by installing it again" grep -q "install .*--reinstall .*opensearch=${PINNED}" /work/apt-calls
 
 
-section "install.sh where OpenSearch cannot go to the pinned version"
+section "server/install.sh where OpenSearch cannot go to the pinned version"
 
 # Each refused before anything on the host changes: here, before the scripts are installed under
 # a prefix of their own, which is the first thing it would otherwise write.
@@ -1043,23 +1048,23 @@ check "another major version left half-configured stops it too" "$?" "2"
 nothing_changed
 
 
-section "install.sh waits where the instance listens"
+section "opensearch/install.sh waits where the instance listens"
 
 packaged_host
 forget_calls
-install_server --bind 10.0.0.5 --port 9201
+install_opensearch --bind 10.0.0.5 --port 9201
 check "it succeeds" "$?" "0"
 check_true "the port is configured" grep -qx 'http.port: 9201' "$CONFIG"
 check_true "it waits on the bind address and port" grep -qF 'http://10.0.0.5:9201/_cluster/health' /work/curl-calls
 check_true "and sets the cluster there" grep -qF 'http://10.0.0.5:9201/_cluster/settings' /work/curl-calls
 
 forget_calls
-install_server --bind 0.0.0.0
+install_opensearch --bind 0.0.0.0
 check "a wildcard bind succeeds" "$?" "0"
 check_true "it waits on the loopback address" grep -qF 'http://127.0.0.1:9200/_cluster/health' /work/curl-calls
 
 
-section "install.sh prepares the user the databases belong to"
+section "server/install.sh prepares the user the databases belong to"
 
 packaged_host
 forget_calls
@@ -1093,7 +1098,7 @@ check "what else is there keeps its owner" "$(stat -c %U /work/out4/opensearch-d
 check_true "it says what is left to do as that user" grep -q "As ${DEPLOY} (sudo -iu ${DEPLOY})" /work/last-output
 
 
-section "install.sh installs the scripts a host runs"
+section "server/install.sh installs the scripts a host runs"
 
 PREFIX_A=/work/opt-a
 packaged_host
@@ -1117,8 +1122,8 @@ check "the install mirrors the checkout, file for file" "$(installed_files "$PRE
 check "beside its configuration, the release they go through and what it was installed from, and nothing else" \
     "$(find "$PREFIX_A" -mindepth 1 -maxdepth 1 -printf '%f\n' | sort | tr '\n' ' ')" "INSTALLED deploy etc opensearch pipelines release releases "
 check "each a link through the one release" \
-    "$(for entry in deploy opensearch pipelines; do readlink "${PREFIX_A}/${entry}"; done | tr '\n' ' ')$(readlink "${PREFIX_A}/release")" \
-    "release/deploy release/opensearch release/pipelines releases/$(ls "${PREFIX_A}/releases")"
+    "$(for entry in deploy opensearch pipelines INSTALLED; do readlink "${PREFIX_A}/${entry}"; done | tr '\n' ' ')$(readlink "${PREFIX_A}/release")" \
+    "release/deploy release/opensearch release/pipelines release/INSTALLED releases/$(ls "${PREFIX_A}/releases")"
 check "all of it root's, as only install.sh changes it" \
     "$(find "$PREFIX_A" -path "${PREFIX_A}/etc" -prune -o -printf '%u\n' | sort -u)" "root"
 check_true "the scripts runnable" test -x "${PREFIX_A}/deploy/server/load.sh" -a -x "${PREFIX_A}/opensearch/load.sh"
@@ -1135,8 +1140,7 @@ check_true "and checks the newest database there" grep -qF "Checking ${OUT}/unip
 section "opensearch/install.sh on its own changes OpenSearch, and nothing else"
 # What server/install.sh runs; on its own, it is how a host changes a setting of the instance.
 releases_before=$(ls "${PREFIX_A}/releases")
-PATH="${INSTALL_STUBS}:${PATH}" "${CHECKOUT}/.deploy/server/opensearch/install.sh" --prefix "$PREFIX_A" --heap 6g \
-    > /work/last-output 2>&1
+install_opensearch --prefix "$PREFIX_A" --heap 6g
 check "it succeeds" "$?" "0"
 check_true "the heap is the one given" grep -qx -- '-Xmx6g' "$HEAP"
 check "the scripts are left as they are" "$(ls "${PREFIX_A}/releases")" "$releases_before"
@@ -1147,7 +1151,7 @@ check_true "and says what is left to do last, after OpenSearch" \
     test "$(grep -n 'Still to do on this host' /work/last-output | cut -d: -f1)" -gt "$(grep -n 'OpenSearch is ready' /work/last-output | cut -d: -f1)"
 
 
-section "install.sh replaces no script a load, switch or prune is running from"
+section "server/install.sh replaces no script a load, switch or prune is running from"
 
 # A load holds the lock shared for as long as it runs.
 as_deployer flock -s /run/lock/unipept-opensearch.lock sleep 10 &
@@ -1158,6 +1162,12 @@ install_server --user "$DEPLOY" --output-dir "$OUT" --prefix "$PREFIX_A"
 check "it refuses while one runs" "$?" "2"
 check_true "and says what to wait for" grep -q "running on this host; wait for it to finish. Install once it has finished." /work/last-output
 check "and replaced nothing" "$(stat -c %Y "${PREFIX_A}/deploy/server/load.sh")" "$(date -d '2000-01-01' +%s)"
+# Nor is OpenSearch upgraded or restarted under the load.
+forget_calls
+install_opensearch --prefix "$PREFIX_A"
+check "opensearch/install.sh on its own refuses too" "$?" "2"
+check_true "and says what to wait for" grep -q "wait for it to finish. Set up OpenSearch once it has finished." /work/last-output
+check_true "touching nothing of the service" not grep -q . /work/systemctl-calls
 wait "$holder"
 # A script an earlier checkout had, and this one does not.
 touch "${PREFIX_A}/deploy/server/gone.sh" "${PREFIX_A}/opensearch/gone.py"
@@ -1167,10 +1177,10 @@ check_true "and replaces them" test "$(stat -c %Y "${PREFIX_A}/deploy/server/loa
 check "leaving nothing the checkout no longer has" "$(installed_files "$PREFIX_A")" "$(mirrored_files)"
 check "nor any release but the one in place and the one it replaced" "$(find "${PREFIX_A}/releases" -mindepth 1 -maxdepth 1 | wc -l | tr -d ' ')" "2"
 check_true "the one in place among them" test -d "${PREFIX_A}/$(readlink "${PREFIX_A}/release")"
-check "leaving the lock the deploy user's" "$(stat -c %U /run/lock/unipept-opensearch.lock)" "$DEPLOY"
+check "leaving the lock readable by every account" "$(stat -c %a /run/lock/unipept-opensearch.lock)" "644"
 
 
-section "install.sh lets the deploy user stop and start OpenSearch, and nothing more"
+section "server/install.sh lets the deploy user stop and start OpenSearch, and nothing more"
 
 SUDOERS=/etc/sudoers.d/unipept-opensearch
 # sudo -l answers only for a command that is there, and this container runs no systemd.
