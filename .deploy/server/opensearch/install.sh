@@ -11,7 +11,8 @@
 #   1. Check that this runs as root on a host with apt and systemd, and that the OpenSearch it has,
 #      if any, can be brought to the pinned version: nothing else is changed on a host where not.
 #   2. Run server/install.sh: the user, the tools, the output directory, the scripts and the sudo
-#      rule a switch stops and starts OpenSearch through.
+#      rule a switch stops and starts OpenSearch through. Then take the OpenSearch lock, held to
+#      the end, so no load runs while OpenSearch is upgraded or restarted.
 #   3. Add the OpenSearch APT repository, unless it is already there.
 #   4. Install the pinned version, or upgrade an older one of the same major version to it, keeping
 #      the configuration this script writes, and hold it so an unrelated upgrade cannot move it.
@@ -27,8 +28,9 @@
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+[ -r "${HERE}/../../lib.sh" ] || { echo "Error: there is no ${HERE}/../../lib.sh to load." 1>&2; exit 2; }
 # shellcheck source=../../lib.sh
-source "${HERE}/../../lib.sh" || exit 2
+source "${HERE}/../../lib.sh"
 
 # The settings only this script has.
 
@@ -373,6 +375,11 @@ require apt-get dpkg-query dpkg systemctl
 check_installed_version
 
 "${HERE}/../install.sh" "${HOST_ARGUMENTS[@]}" || die "server/install.sh did not prepare this host (above), so OpenSearch is not set up."
+
+# A load writes to OpenSearch for hours, and the upgrade and the restart below would break it part
+# way. Held from here to the end, as a switch holds it; server/install.sh above took it for itself
+# while it replaced the scripts, and let go when it ended.
+take_opensearch_lock -x || die "$(lock_refused $?) Set up OpenSearch once it has finished."
 
 # Installed with the tools above.
 require curl gpg
