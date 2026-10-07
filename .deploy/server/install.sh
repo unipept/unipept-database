@@ -28,8 +28,9 @@
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+[ -r "${HERE}/../lib.sh" ] || { echo "Error: there is no ${HERE}/../lib.sh to load." 1>&2; exit 2; }
 # shellcheck source=../lib.sh
-source "${HERE}/../lib.sh" || exit 2
+source "${HERE}/../lib.sh"
 
 # The settings only this script has.
 

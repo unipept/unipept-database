@@ -276,7 +276,7 @@ check_copy_kept_kmer_table() {
 # It answers, and has the scripts installed.
 check_server_scripts() {
     on "$2" "$3" test -x deploy/server/verify.sh -a -x deploy/server/clone.sh -a -x deploy/server/load.sh 2> /dev/null \
-        || { echo "FAIL ${1} cannot be reached, or has no scripts installed in ${3}; .deploy/server/opensearch/install.sh installs them." 1>&2; return 1; }
+        || { echo "FAIL ${1} cannot be reached, or has no scripts installed in ${3}; .deploy/server/install.sh installs them." 1>&2; return 1; }
 }
 
 # And can clone the version from the source, as its own deploy.conf decides.

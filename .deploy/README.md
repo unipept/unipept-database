@@ -46,8 +46,8 @@ sudo .deploy/server/opensearch/install.sh --heap 8g
 ```
 
 This is the only step that needs root. It runs `.deploy/server/install.sh` first, which prepares
-the host and can also run on its own, and then sets up OpenSearch. Together they prepare everything
-the other scripts need, so they run without sudo:
+the host and can also run on its own, as root too, and then sets up OpenSearch. Together they
+prepare everything the other scripts need, so they run without sudo:
 
 - the `unipept` user (`DEPLOY_USER`), who builds, clones and owns the databases. The API on this
   host runs as the same user, and its own install creates it the same way, in either order;
