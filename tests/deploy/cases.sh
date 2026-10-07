@@ -1165,7 +1165,8 @@ install_server --user "$DEPLOY" --output-dir "$OUT" --prefix "$PREFIX_A"
 check "once it is done, the install runs" "$?" "0"
 check_true "and replaces them" test "$(stat -c %Y "${PREFIX_A}/deploy/server/load.sh")" -gt "$(date -d '2000-01-01' +%s)"
 check "leaving nothing the checkout no longer has" "$(installed_files "$PREFIX_A")" "$(mirrored_files)"
-check "nor any release but the one in place" "$(ls "${PREFIX_A}/releases")" "$(basename "$(readlink "${PREFIX_A}/release")")"
+check "nor any release but the one in place and the one it replaced" "$(find "${PREFIX_A}/releases" -mindepth 1 -maxdepth 1 | wc -l | tr -d ' ')" "2"
+check_true "the one in place among them" test -d "${PREFIX_A}/$(readlink "${PREFIX_A}/release")"
 check "leaving the lock the deploy user's" "$(stat -c %U /run/lock/unipept-opensearch.lock)" "$DEPLOY"
 
 

@@ -60,9 +60,10 @@ need, so they run without sudo:
   names the commit they came from. A host takes a newer version by running `install.sh` again from
   a clone of it. Each install builds a release whole in `releases/` and puts it in place with
   `switch_release` from `lib/core.sh`: `release` is a link to it, renamed over the old one in one
-  step, and `deploy`, `opensearch` and `pipelines` are links through it. A script started at any
-  moment finds one release whole, an install stopped part way leaves the one before in place, and
-  nothing a clone no longer has is left behind; `etc/` is not touched;
+  step, and `deploy`, `opensearch`, `pipelines` and `INSTALLED` are links through it. Each file a
+  script opens is one whole release's, an install stopped part way leaves the one before in place,
+  and nothing a clone no longer has is left behind; the release replaced stays until the next
+  install, for a run that started from it; `etc/` is not touched;
 - the OpenSearch instance this host loads its proteins into, configured and started.
 
 It ends with what is left to do: fill in `deploy.conf` as root, then as `unipept` add an ssh key for
