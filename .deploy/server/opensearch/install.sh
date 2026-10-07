@@ -377,7 +377,8 @@ check_installed_version
 [ "$CHECK_ONLY" = false ] || exit 0
 
 # A load writes to OpenSearch for hours, and the upgrade and the restart below would break it part
-# way. Held from here to the end, as a switch holds it.
+# way. Held from here to the end, as a switch holds it; where server/install.sh runs this, taken
+# over from it on the descriptor this inherits.
 require flock:util-linux
 take_opensearch_lock -x || die "$(lock_refused $?) Set up OpenSearch once it has finished."
 

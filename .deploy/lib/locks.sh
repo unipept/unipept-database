@@ -28,10 +28,11 @@ open_lock() {
     local fd=$1 lock=$2
 
     {
-        # Made where missing, and there regardless where another account made it between the test
-        # and the open: that open to create is refused, in a sticky directory, though the file is
-        # there to take.
-        { [ -e "$lock" ] || : >> "$lock" || [ -e "$lock" ]; } &&
+        # Made where missing, 0644 whoever makes it: root's umask may be 077, and the deploy user
+        # could then not read a lock an install left behind. And there regardless where another
+        # account made it between the test and the open: that open to create is refused, in a
+        # sticky directory, though the file is there to take.
+        { [ -e "$lock" ] || (umask 022 && : >> "$lock") || [ -e "$lock" ]; } &&
             case $fd in
                 7) exec 7< "$lock" ;;
                 8) exec 8< "$lock" ;;
@@ -45,8 +46,12 @@ open_lock() {
 # switch takes it exclusively, from its checks to its end. On file descriptor 9, held until the
 # script exits. Fails, rather than waits: 1 where the other holds it, 2 where the lock cannot be
 # opened at all, which says so.
+#
+# A caller that holds it hands it down by leaving descriptor 9 open on it, as server/install.sh does
+# for opensearch/install.sh, and this then takes that descriptor rather than open the file again: a
+# second open would conflict with the caller's own lock, which flock ties to the open file.
 take_opensearch_lock() {
-    open_lock 9 "$OPENSEARCH_LOCK" || return 2
+    [ /dev/fd/9 -ef "$OPENSEARCH_LOCK" ] || open_lock 9 "$OPENSEARCH_LOCK" || return 2
     if [ -n "${2:-}" ]; then
         # Waiting, up to the seconds given, where giving up would throw away work already done.
         flock -w "$2" "$1" 9

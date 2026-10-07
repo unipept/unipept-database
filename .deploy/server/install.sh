@@ -27,7 +27,10 @@
 #   7. Run opensearch/install.sh, which sets up OpenSearch.
 #   8. Say what is left to do, on this host.
 #
-# A second run with the same settings changes nothing, and restarts nothing.
+# A second run with the same settings puts the same scripts in place again, and restarts nothing.
+#
+# The OpenSearch lock install_scripts takes is held to the end, and handed to opensearch/install.sh on
+# the descriptor it inherits, so no load starts between the scripts and the upgrade of OpenSearch.
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -209,7 +212,12 @@ install_scripts() {
     install -m 0755 "${repository}/opensearch/load.sh" "${release}/opensearch/"
     install -m 0644 "${repository}/opensearch/mappings/uniprot_entries.json" "${release}/opensearch/mappings/"
     install -m 0644 "${repository}/pipelines/lib/common.sh" "${release}/pipelines/lib/"
-    switch_release "$PREFIX" "$id" deploy opensearch pipelines
+    # In the release, so it names the scripts in place whatever stops the install.
+    # As root, of a checkout another user owns, which git refuses to read unless told to trust it.
+    commit=$(git -c safe.directory='*' -C "$repository" rev-parse HEAD 2>/dev/null || echo unknown)
+    printf 'commit: %s\ninstalled: %s\n' "$commit" "$(date -u +'%F %T UTC')" > "${release}/INSTALLED"
+    switch_release "$PREFIX" "$id" deploy opensearch pipelines INSTALLED
+    log "Installed the scripts of ${commit} in ${PREFIX}."
 
     install -d -m 0755 -o root -g root "${PREFIX}/etc"
     if [ ! -f "${PREFIX}/etc/deploy.conf" ]; then
@@ -217,14 +225,6 @@ install_scripts() {
         chmod 0644 "${PREFIX}/etc/deploy.conf"
         log "Wrote ${PREFIX}/etc/deploy.conf. Edit it, as root, for what this host decides."
     fi
-
-    # As root, of a checkout another user owns, which git refuses to read unless told to trust it.
-    commit=$(git -c safe.directory='*' -C "$repository" rev-parse HEAD 2>/dev/null || echo unknown)
-    printf 'commit: %s\ninstalled: %s\n' "$commit" "$(date -u +'%F %T UTC')" > "${PREFIX}/INSTALLED"
-    log "Installed the scripts of ${commit} in ${PREFIX}."
-
-    # Let go, so opensearch/install.sh, a process of its own, can take the lock for what it does.
-    exec 9<&-
 }
 
 # switch.sh stops and starts OpenSearch as DEPLOY_USER, which a system service allows root alone.
