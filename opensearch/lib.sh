@@ -6,8 +6,7 @@
 
 # What every version's index is named after, uniprot_entries-2026-03 for 2026-03, which is the one
 # the API queries. A host loaded before versioned indices has its proteins in an index of this name
-# itself, or in LEGACY, with an alias of this name on it, where an earlier release of these scripts
-# kept them.
+# itself, or in LEGACY, with an alias of this name on it.
 readonly ALIAS=uniprot_entries
 # shellcheck disable=SC2034 # read by the scripts that source this file
 readonly LEGACY="${ALIAS}-legacy"
@@ -149,10 +148,10 @@ allow_writes() {
 
 # Makes sure the proteins of a version are in its own index, uniprot_entries-<version>, which is
 # what the API queries. A host loaded before versioned indices has them in uniprot_entries itself,
-# or in uniprot_entries-legacy with an alias of that name on it, as an earlier release left it:
-# either is kept under the version's name. An index of that name already there has to be whole, and
-# is opened where it is closed, as an earlier release closed the one it switched away from. Fails
-# where no index holds them, or where the one there is not whole.
+# or in uniprot_entries-legacy with an alias of that name on it, as some hosts have it: either is
+# kept under the version's name. An index of that name already there has to be whole, and is opened
+# where it is closed, as switch.sh closes those of versions older than the two it switched between.
+# Fails where no index holds them, or where the one there is not whole.
 ensure_versioned_index() {
     local version="$1" timeout="$2" index="${ALIAS}-${1}" source='' status
 

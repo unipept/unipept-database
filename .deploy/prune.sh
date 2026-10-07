@@ -9,7 +9,8 @@
 #
 # Kept, whatever --keep says:
 #   - every version this host serves, by served_versions in lib/api.sh: what `current` points at,
-#     and the version of the index the API queries;
+#     and what the API serves by its deploy.sh status: the version of the index it queries, or of
+#     the directory INDEX_LOCATION names;
 #   - the one `previous` points at, which switch.sh --back goes to;
 #   - every version newer than the oldest of those, which is loaded ahead of a switch still to come;
 #   - the --keep newest versions older than that, to go back to.
@@ -17,8 +18,8 @@
 # counts as the oldest: the API queries the versioned index migrate.sh kept the same proteins in.
 #
 # Without a current link, or where the API's deploy.sh does not say which version it serves, there
-# is no telling what the API serves, so nothing is removed. It holds the lock a
-# load, a switch and migrate.sh take, so none of them works on what it removes.
+# is no telling what the API serves, so nothing is removed. It holds the lock a load, a switch and
+# migrate.sh take, so none of them works on what it removes.
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -27,7 +28,7 @@ source "${HERE}/lib.sh"
 
 # The settings only this script has, before read_conf, so deploy.conf can set them.
 
-# How many versions older than the one the API queries to keep. Required: removing is not undone.
+# How many versions older than the one this host serves to keep. Required: removing is not undone.
 KEEP=
 
 # Whether to only say what would be removed.

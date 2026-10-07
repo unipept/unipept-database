@@ -50,7 +50,7 @@ source "${HERE}/../lib.sh"
 source "${HERE}/version.sh"
 
 # The heap OpenSearch takes, and the one number a host decides. Deliberately small: this host also
-# serves the API, which holds the index resident, and unipept-api/.deploy sizes that against the
+# serves the API, which holds the index resident, and the API's deploy sizes that against the
 # memory it can see. Heap taken here is memory that sizing does not know about. The README and
 # deploy.conf.example point here rather than repeat this.
 #
@@ -73,7 +73,7 @@ OPENSEARCH_LOG_DIR=
 # Seconds to wait for the service to answer after it is started.
 OPENSEARCH_READY_TIMEOUT=180
 
-# Where the scripts a host runs are installed. /opt/unipept-database, as unipept-api's are in
+# Where the scripts a host runs are installed. /opt/unipept-database, as the API's are in
 # /opt/unipept-api; a flag for a test that installs more than one host into one machine.
 PREFIX="$INSTALL_ROOT"
 

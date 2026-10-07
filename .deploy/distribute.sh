@@ -35,7 +35,7 @@ source "${HERE}/lib.sh"
 # The servers to put the database on.
 SERVERS_FILE="${HERE}/servers.conf"
 
-# Who to log in as on the source and the servers, as unipept-api's rollout does. The port and the
+# Who to log in as on the source and the servers, as the API's rollout does. The port and the
 # key are ssh's own to decide, from ~/.ssh/config on the machine this runs on, so a host reached on
 # another port says so there once, for this and the API's rollout alike. Empty leaves the user to
 # ~/.ssh/config as well. How each server reaches the source is another connection, which its own
@@ -254,7 +254,7 @@ while IFS='|' read -r name files proteins result; do
 done <<< "$results"
 
 if [ "$failed" -eq 0 ]; then
-    log "Every server has ${UNIPROT_VERSION}, with its proteins loaded. Switch the API to it with its rollout."
+    log "Every server has ${UNIPROT_VERSION}, with its proteins loaded. Switch each server to it with switch.sh --uniprot-version ${UNIPROT_VERSION}."
 else
     log "Not every server is ready; the table says which, and the output above says why. A rerun picks up where this stopped."
 fi

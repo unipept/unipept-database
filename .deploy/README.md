@@ -118,7 +118,7 @@ sudo -iu unipept
 /opt/unipept-database/bin/clone.sh --remote-address selma.ugent.be --local-ssh-key ~/.ssh/id_unipept
 ```
 
-Both refuse to run as root, as do `load.sh` and `verify.sh`. A database written by root is one the
+Every script but `install.sh` refuses to run as root. A database written by root is one the
 next run as `unipept` cannot replace, and one whose check that the API can read it passes only
 because root reads everything.
 
@@ -199,8 +199,7 @@ the files and the proteins always change together.
 
 - **It checks everything first**, while both still run, and reports every problem: the API's
   `deploy.sh status` answers in the format these scripts read, the version's files, its index
-  loaded to the end, the index
-  of the version it leaves open and whole to go back to, `INDEX_LOCATION` naming `current`,
+  loaded to the end, the index of the version it leaves open and whole to go back to, `INDEX_LOCATION` naming `current`,
   `OUTPUT_DIR` writable for the links, no load running, the sudo rule below, and the API's own
   `deploy.sh check --index` on the new files, which covers the memory its variant needs for them. A
   host with any problem is left as it is. The one change before the stop is opening the new
@@ -240,10 +239,9 @@ bin/migrate.sh
 ```
 
 It points `current` at the version the API's `INDEX_LOCATION` names, which its `deploy.sh status`
-reports, and, on a host loaded before
-versioned indices, keeps the proteins it serves in the index named after that version too: a clone
-of `uniprot_entries`, or of `uniprot_entries-legacy` where an alias of that name points there, as an
-earlier release of these scripts left it, which costs no copy. Neither changes what the API serves,
+reports, and, on a host loaded before versioned indices, keeps the proteins it serves in the index
+named after that version too: a clone of `uniprot_entries`, or of `uniprot_entries-legacy` where an
+alias of that name points there, as some hosts have it, which costs no copy. Neither changes what the API serves,
 and running it again changes nothing on a host that is set up. What is left is one line in the API's
 environment file, which it asks for:
 
@@ -307,14 +305,13 @@ Every version stays on a host until this removes it, its directory and its OpenS
 together, so going back to one is a switch rather than a build or a copy. A closed index costs no
 memory; what old versions cost is disk.
 
-It keeps the version `current` points at, the one `previous` points at, the one whose index the API
-queries by its `deploy.sh status`, every version newer than the oldest of those, since those are
+It keeps the version `current` points at, the one `previous` points at, the one the API serves by
+its `deploy.sh status`, every version newer than the oldest of those, since those are
 loaded ahead of a switch still to come, and the `--keep` newest ones older than that. What a host
 loaded before versioned indices kept, `uniprot_entries-legacy` and `uniprot_entries` itself, counts
 as the oldest: `migrate.sh` kept its proteins in the index of their version, which the API queries.
 Without a `current` link, or where the API's `deploy.sh status` does not say what it serves, it
-removes nothing. It takes the same lock as a load and a
-switch, and `migrate.sh` takes it too.
+removes nothing. It takes the same lock as a load and a switch, and `migrate.sh` takes it too.
 
 `load.sh` warns when OpenSearch's disk is past its low watermark, 85% unless the cluster sets
 another. At 95% OpenSearch makes every index read-only, and a load running then fails part way, so

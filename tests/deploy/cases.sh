@@ -1272,7 +1272,7 @@ check_true "the load is of that copy, into the version's own index" \
     grep -qF -- "--uniprot-entries /work/a-data/uniprot-2026-03/tables/uniprot_entries.tsv.lz4 --index-name uniprot_entries-2026-03" \
     /work/a-loader-calls
 check_true "nothing switches the API to it" not grep -q -- '--activate' /work/a-loader-calls /work/b-loader-calls
-check_true "it says the rollout is what switches" grep -q "Switch the API to it with its rollout" /work/last-output
+check_true "it says switch.sh is what switches" grep -q "Switch each server to it with switch.sh --uniprot-version" /work/last-output
 
 
 section "distribute.sh a second time"
