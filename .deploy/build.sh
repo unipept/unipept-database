@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 #
 # Builds a Unipept database on this host: the tables, the suffix array and the datastore layout the
-# API reads. It loads nothing into OpenSearch; .deploy/server/load.sh does that. Run it with --help for the
-# options.
+# API reads. It loads nothing into OpenSearch; .deploy/server/load.sh does that. Run it with --help
+# for the options.
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 

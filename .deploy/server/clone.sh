@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 #
 # Copies a finished database from another host. The build itself runs once, on one host; every
-# other host clones the result. It loads nothing into OpenSearch; .deploy/server/load.sh does that. Run it
-# with --help for the options.
+# other host clones the result. It loads nothing into OpenSearch; .deploy/server/load.sh does that.
+# Run it with --help for the options.
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Beside this script once install.sh has placed both in /opt/unipept-database/bin, one level up in
-# a checkout.
+# a repository checkout.
 # shellcheck source=../lib.sh
 if [ -f "${HERE}/lib.sh" ]; then
     source "${HERE}/lib.sh"

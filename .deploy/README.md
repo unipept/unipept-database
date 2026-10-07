@@ -30,8 +30,8 @@ copying again.
 `distribute.sh` does those two steps on every API server at once, from wherever it is run. See
 [Distributing a database](#distributing-a-database).
 
-`server/opensearch/install.sh` installs the scripts in `server/` in `/opt/unipept-database/bin`,
-side by side, so a host that only clones and serves needs no clone of this repository, and the path
+`server/opensearch/install.sh` installs `clone.sh`, `load.sh`, `verify.sh`, `switch.sh` and
+`prune.sh` from `server/` in `/opt/unipept-database/bin`, side by side, so a host that only clones and serves needs no clone of this repository, and the path
 is the same on every host. `build.sh` runs from a clone, since it builds from the source, and
 `distribute.sh` from wherever its `servers.conf` is. Below, `bin/` is that installed directory and
 `.deploy/` a clone's.
@@ -51,7 +51,7 @@ run without sudo:
 - `OUTPUT_DIR`, owned by that user. Databases, staging directories and interrupted swaps an
   earlier run as root left there are handed over too; nothing else in the directory changes owner;
 - the scripts a host runs, in `/opt/unipept-database`: `bin/` with `clone.sh`, `load.sh`,
-  `verify.sh` and `prune.sh`, what they call beside it, `etc/deploy.conf`, written once from the
+  `verify.sh`, `switch.sh` and `prune.sh`, what they call beside it, `etc/deploy.conf`, written once from the
   example and then root's to edit, since `install.sh` reads it as root, and `INSTALLED`, which names
   the commit they came from. A host takes a newer version by running `install.sh` again from a clone
   of it;
@@ -165,9 +165,9 @@ and start them again afterwards, OpenSearch first. `--skip-checks` builds anyway
 ## Loading the proteins
 
 ```sh
-.deploy/server/load.sh                                # the newest one under OUTPUT_DIR
-.deploy/server/load.sh --uniprot-version 2026-03
-.deploy/server/load.sh --uniprot-version 2026-03 --skip 120000000   # continue a load that stopped
+bin/load.sh                                # the newest one under OUTPUT_DIR
+bin/load.sh --uniprot-version 2026-03
+bin/load.sh --uniprot-version 2026-03 --skip 120000000   # continue a load that stopped
 ```
 
 It checks the database as `verify.sh` does, and refuses one that fails, before it loads
@@ -296,8 +296,8 @@ The copy and the load take hours, each over an ssh session. Run it in `tmux` or 
 ## Removing old versions
 
 ```sh
-.deploy/server/prune.sh --keep 2 --dry-run      # what it would remove
-.deploy/server/prune.sh --keep 2
+bin/prune.sh --keep 2 --dry-run      # what it would remove
+bin/prune.sh --keep 2
 ```
 
 Every version stays on a host until this removes it, its directory and its OpenSearch index
@@ -317,9 +317,9 @@ the warning is the time to prune.
 ## Checking a database
 
 ```sh
-.deploy/server/verify.sh                              # the newest one under OUTPUT_DIR
-.deploy/server/verify.sh --uniprot-version 2026-03
-.deploy/server/verify.sh --index-dir /srv/data/uniprot-2026-03/suffix-array
+bin/verify.sh                              # the newest one under OUTPUT_DIR
+bin/verify.sh --uniprot-version 2026-03
+bin/verify.sh --index-dir /srv/data/uniprot-2026-03/suffix-array
 ```
 
 As `unipept`, like the others: it checks that the files can be read by the user the API runs

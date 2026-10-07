@@ -6,7 +6,7 @@
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Beside this script once install.sh has placed both in /opt/unipept-database/bin, one level up in
-# a checkout.
+# a repository checkout.
 # shellcheck source=../lib.sh
 if [ -f "${HERE}/lib.sh" ]; then
     source "${HERE}/lib.sh"
