@@ -6,7 +6,7 @@
 # versions.sh, and version_of_index from opensearch/lib.sh. Sourced through .deploy/lib.sh.
 
 # The API's deploy.sh, where its install puts it. A host without it runs no API.
-API_DEPLOY=${API_DEPLOY:-/opt/unipept-api/lib/deploy.sh}
+API_DEPLOY=${API_DEPLOY:-/opt/unipept-api/deploy/server/deploy.sh}
 
 # The status_format of `deploy.sh status` these scripts read. The API raises it only where a line
 # changes meaning or goes, so another one is refused rather than read wrongly.

@@ -7,14 +7,9 @@
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Beside this script once install.sh has placed both in /opt/unipept-database/bin, one level up in
-# a repository checkout.
+[ -r "${HERE}/../lib.sh" ] || { echo "Error: there is no ${HERE}/../lib.sh to load." 1>&2; exit 2; }
 # shellcheck source=../lib.sh
-if [ -f "${HERE}/lib.sh" ]; then
-    source "${HERE}/lib.sh"
-else
-    source "${HERE}/../lib.sh"
-fi
+source "${HERE}/../lib.sh"
 
 read_conf
 
@@ -52,7 +47,7 @@ usage() {
     cat <<'USAGE'
 Loads the proteins of a finished database into this host's OpenSearch.
 
-  bin/load.sh [OPTIONS]
+  deploy/server/load.sh [OPTIONS]
 
   --uniprot-version YYYY-MM  load this one under OUTPUT_DIR, default the newest there
   --output-dir DIR           where the databases are

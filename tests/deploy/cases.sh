@@ -3,10 +3,10 @@
 # The deploy cases. Runs inside the container build-suite.sh starts, with the repository at /repo
 # read-only and everything this writes under /work.
 #
-# What is real here: build.sh, clone.sh, load.sh, verify.sh, distribute.sh and install.sh
+# What is real here: build.sh, clone.sh, load.sh, verify.sh, distribute.sh and both installs
 # themselves, git, ssh and scp. What is stood in for: the pipeline, sa-builder and the OpenSearch
-# loader, each of which has a suite of its own, and the apt, dpkg, systemd and instance install.sh
-# drives.
+# loader, each of which has a suite of its own, and the apt, dpkg, systemd and instance the installs
+# drive.
 #
 # The cases run as root, which setting up sshd and install.sh need. build.sh, clone.sh, load.sh and
 # verify.sh run as DEPLOY, as on a host, and refuse root.
@@ -225,14 +225,14 @@ check_true "and the database that was there" test -f "${OUT}/uniprot-2026-03/mar
 as_deployer unlink "${OUT}/current"
 
 # Nor while the API does not say what it serves, which may be this version.
-mkdir -p /opt/unipept-api/lib
+mkdir -p /opt/unipept-api/deploy/server
 api_status_lines "${OUT}/uniprot-2026-03/suffix-array" uniprot_entries-2026-03 \
-    | sed 's/^status_format=1$/status_format=2/' > "$(make_api_deploy /opt/unipept-api/lib/deploy.sh).status"
+    | sed 's/^status_format=1$/status_format=2/' > "$(make_api_deploy /opt/unipept-api/deploy/server/deploy.sh).status"
 build --output-dir "$OUT" --scratch-dir /work/scratch --replace
 check "--replace with an API that does not say what it serves stops it" "$?" "2"
 check_true "and says so" grep -q "does not say which version this host serves" /work/last-output
 check_true "keeping the build" grep -qF "This build is in ${OUT}/.build" /work/last-output
-rm -f /opt/unipept-api/lib/deploy.sh*
+rm -f /opt/unipept-api/deploy/server/deploy.sh*
 
 build --output-dir "$OUT" --scratch-dir /work/scratch --replace
 check "--replace succeeds" "$?" "0"
@@ -259,10 +259,10 @@ check "a running API and OpenSearch stop it" "$?" "2"
 check_true "naming the API" grep -q 'The Unipept API is running' /work/last-output
 check_true "and OpenSearch" grep -q 'OpenSearch is running' /work/last-output
 # Each command on a line of its own, so a line copied from the message runs as it is.
-check_true "saying how to stop the API" grep -qx "  /opt/unipept-api/lib/deploy.sh stop" /work/last-output
+check_true "saying how to stop the API" grep -qx "  /opt/unipept-api/deploy/server/deploy.sh stop" /work/last-output
 check_true "and OpenSearch" grep -qx "  sudo systemctl stop opensearch" /work/last-output
 check_true "and to start them again afterwards" grep -qx "  sudo systemctl start opensearch" /work/last-output
-check_true "both of them" grep -qx "  /opt/unipept-api/lib/deploy.sh start" /work/last-output
+check_true "both of them" grep -qx "  /opt/unipept-api/deploy/server/deploy.sh start" /work/last-output
 check_true "nothing is built" test ! -e "${CHECK_OUT}/uniprot-2026-03"
 check_true "and before what an earlier build left is removed" test -e "${CHECK_OUT}/.build/kept"
 kill "$api_pid" 2> /dev/null; wait "$api_pid" 2> /dev/null
@@ -423,14 +423,14 @@ as_deployer rm -f "${LOCAL}/uniprot-2026-03/marker"
 rm "${STUBS}/scp"
 
 # The API ceasing to say what it serves during the copy: the copy is removed all the same.
-mkdir -p /opt/unipept-api/lib
-api_status_lines "${LOCAL}/current/suffix-array" uniprot_entries-2026-02 > "$(make_api_deploy /opt/unipept-api/lib/deploy.sh).status"
-chmod 666 /opt/unipept-api/lib/deploy.sh.status
+mkdir -p /opt/unipept-api/deploy/server
+api_status_lines "${LOCAL}/current/suffix-array" uniprot_entries-2026-02 > "$(make_api_deploy /opt/unipept-api/deploy/server/deploy.sh).status"
+chmod 666 /opt/unipept-api/deploy/server/deploy.sh.status
 cat > "${STUBS}/scp" <<SCP
 #!/usr/bin/env bash
 /usr/bin/scp "\$@" || exit
-status=\$(sed 's/^status_format=1\$/status_format=2/' /opt/unipept-api/lib/deploy.sh.status)
-printf '%s\n' "\$status" > /opt/unipept-api/lib/deploy.sh.status
+status=\$(sed 's/^status_format=1\$/status_format=2/' /opt/unipept-api/deploy/server/deploy.sh.status)
+printf '%s\n' "\$status" > /opt/unipept-api/deploy/server/deploy.sh.status
 SCP
 chmod +x "${STUBS}/scp"
 clone --remote-output-dir "$REMOTE" --output-dir "$LOCAL" --replace
@@ -438,7 +438,7 @@ check "an API that stops saying what it serves during the copy stops it" "$?" "2
 check_true "and says so" grep -q 'does not say which version this host serves' /work/last-output
 check_true "and that the copy is removed" grep -q 'The copy is removed' /work/last-output
 check_true "which it is" test ! -e "${LOCAL}/.clone"
-rm -f /opt/unipept-api/lib/deploy.sh* "${STUBS}/scp"
+rm -f /opt/unipept-api/deploy/server/deploy.sh* "${STUBS}/scp"
 
 # An scp that loses the k-mer table on the way, which the remote has.
 cat > "${STUBS}/scp" <<SCP
@@ -610,8 +610,8 @@ touch /work/index-whole
 as_deployer unlink "${OUT}/current"
 
 # A host that runs the API and has no current link yet: its deploy.sh status says what it serves.
-mkdir -p /opt/unipept-api/lib
-api_status_lines "${OUT}/uniprot-2026-03/suffix-array" uniprot_entries-2026-03 > "$(make_api_deploy /opt/unipept-api/lib/deploy.sh).status"
+mkdir -p /opt/unipept-api/deploy/server
+api_status_lines "${OUT}/uniprot-2026-03/suffix-array" uniprot_entries-2026-03 > "$(make_api_deploy /opt/unipept-api/deploy/server/deploy.sh).status"
 load_proteins --output-dir "$OUT"
 check "without current, the version the API serves is refused too" "$?" "2"
 check_true "and says why" grep -q '2026-03 is the version this host serves' /work/last-output
@@ -623,7 +623,7 @@ load_proteins --output-dir "$OUT"
 check "and where current and the API name the same one" "$?" "2"
 check_true "saying so" grep -q '2026-03 is the version this host serves' /work/last-output
 as_deployer unlink "${OUT}/current"
-rm -f /opt/unipept-api/lib/deploy.sh*
+rm -f /opt/unipept-api/deploy/server/deploy.sh*
 rm "${STUBS}/curl" /work/index-whole
 
 rm -f /work/loader-calls
@@ -840,6 +840,11 @@ forget_calls() {
     touch "${WORK}"/{apt-calls,systemctl-calls,curl-calls}
 }
 
+install_server() {
+    PATH="${INSTALL_STUBS}:${PATH}" "${CHECKOUT}/.deploy/server/install.sh" "$@" > /work/last-output 2>&1
+}
+# What server/install.sh runs, on its own: for the cases of OpenSearch alone, which need nothing of
+# the host set up again.
 install_opensearch() {
     PATH="${INSTALL_STUBS}:${PATH}" "${CHECKOUT}/.deploy/server/opensearch/install.sh" "$@" > /work/last-output 2>&1
 }
@@ -847,11 +852,11 @@ install_opensearch() {
 setup_install_stubs
 
 
-section "install.sh on a fresh host"
+section "server/install.sh on a fresh host"
 
 packaged_host
 forget_calls
-install_opensearch
+install_server
 check "it succeeds" "$?" "0"
 check_true "the pinned version is installed" grep -q "install .*opensearch=${PINNED}" /work/apt-calls
 check_true "and held" grep -qx 'hold opensearch' /work/apt-calls
@@ -872,7 +877,7 @@ check_true "the plugin's replicated indices are not written" grep -qF '"search.i
 check_true "the indices already there lose theirs" grep -qF '/_all/_settings?expand_wildcards=all' /work/curl-calls
 
 
-section "install.sh a second time"
+section "opensearch/install.sh a second time"
 
 cp "$CONFIG" /work/config-before
 forget_calls
@@ -893,7 +898,7 @@ check_true "systemd is reloaded" grep -qx 'daemon-reload' /work/systemctl-calls
 check_true "and the running service is not restarted" not grep -q 'restart' /work/systemctl-calls
 
 
-section "install.sh where OpenSearch does not start"
+section "opensearch/install.sh where OpenSearch does not start"
 
 rm -f "${WORK}/opensearch-active"
 touch "${WORK}/start-fails"
@@ -905,7 +910,7 @@ check_true "and says how long it was given, and that systemd tries again" \
 rm "${WORK}/start-fails"
 
 
-section "install.sh where the service is down"
+section "opensearch/install.sh where the service is down"
 
 rm -f "${WORK}/opensearch-active"
 forget_calls
@@ -923,7 +928,7 @@ check_true "it sets nothing on an instance that is not there" not grep -q '_sett
 rm "${WORK}/curl-fails"
 
 
-section "install.sh keeps the heap a host was given"
+section "opensearch/install.sh keeps the heap a host was given"
 
 forget_calls
 install_opensearch --heap 8g
@@ -938,7 +943,7 @@ check_true "the heap is still 8g" grep -qx -- '-Xmx8g' "$HEAP"
 check_true "nothing is restarted" not grep -q 'restart' /work/systemctl-calls
 
 
-section "install.sh on a host set up by hand"
+section "opensearch/install.sh on a host set up by hand"
 
 packaged_host
 mkdir -p /work/hand/data /work/hand/logs
@@ -962,7 +967,7 @@ check_true "the path is named" grep -q '/work/no-such-volume' /work/last-output
 check_true "the configuration is left as it was" cmp -s "$CONFIG" /work/config-before
 
 
-section "install.sh where the package was removed and not purged"
+section "opensearch/install.sh where the package was removed and not purged"
 
 packaged_host
 echo "config-files 2.18.0" > "$DPKG_STATE"
@@ -972,7 +977,7 @@ check "it installs rather than stopping" "$?" "0"
 check_true "the pinned version is installed" grep -q "install .*opensearch=${PINNED}" /work/apt-calls
 
 
-section "install.sh where an older release of the same major version is installed"
+section "opensearch/install.sh where an older release of the same major version is installed"
 
 # How a host is kept patched: the pin is raised, and install.sh run again.
 packaged_host
@@ -1007,7 +1012,7 @@ check "a half-configured pinned version is finished" "$?" "0"
 check_true "by installing it again" grep -q "install .*--reinstall .*opensearch=${PINNED}" /work/apt-calls
 
 
-section "install.sh where OpenSearch cannot go to the pinned version"
+section "server/install.sh where OpenSearch cannot go to the pinned version"
 
 # Each refused before anything on the host changes: here, before the scripts are installed under
 # a prefix of their own, which is the first thing it would otherwise write.
@@ -1019,7 +1024,7 @@ refused() {
     echo "$state" > "$DPKG_STATE"
     rm -rf /work/opt-refused
     forget_calls
-    install_opensearch --prefix /work/opt-refused
+    install_server --prefix /work/opt-refused
 }
 nothing_changed() {
     check_true "it installs nothing" not grep -q 'install' /work/apt-calls
@@ -1043,7 +1048,7 @@ check "another major version left half-configured stops it too" "$?" "2"
 nothing_changed
 
 
-section "install.sh waits where the instance listens"
+section "opensearch/install.sh waits where the instance listens"
 
 packaged_host
 forget_calls
@@ -1059,11 +1064,11 @@ check "a wildcard bind succeeds" "$?" "0"
 check_true "it waits on the loopback address" grep -qF 'http://127.0.0.1:9200/_cluster/health' /work/curl-calls
 
 
-section "install.sh prepares the user the databases belong to"
+section "server/install.sh prepares the user the databases belong to"
 
 packaged_host
 forget_calls
-install_opensearch --user deployer2 --output-dir /work/out2
+install_server --user deployer2 --output-dir /work/out2
 check "it succeeds" "$?" "0"
 check_true "the user is created" id deployer2
 check "with a login shell, for ssh" "$(getent passwd deployer2 | cut -d: -f7)" "/bin/bash"
@@ -1071,7 +1076,7 @@ check "the output directory is theirs" "$(stat -c %U /work/out2)" "deployer2"
 check_true "tools already there are not installed again" not grep -q 'install .*python3-requests' /work/apt-calls
 
 useradd --shell /usr/sbin/nologin deployer3
-install_opensearch --user deployer3 --output-dir /work/out3
+install_server --user deployer3 --output-dir /work/out3
 check "an account without a shell succeeds" "$?" "0"
 check "it is given one" "$(getent passwd deployer3 | cut -d: -f7)" "/bin/bash"
 
@@ -1082,7 +1087,7 @@ mkdir -p /work/out4/uniprot-2026-03/suffix-array /work/out4/uniprot-2025-11.repl
     /work/out4/.build /work/out4/.clone /work/out4/opensearch-data
 touch /work/out4/uniprot-2026-03/suffix-array/sa.bin /work/out4/uniprot-2025-11.replaced/suffix-array/sa.bin \
     /work/out4/opensearch-data/node
-install_opensearch --user "$DEPLOY" --output-dir /work/out4
+install_server --user "$DEPLOY" --output-dir /work/out4
 check "an output directory root owns succeeds" "$?" "0"
 check "it is handed over" "$(stat -c %U /work/out4)" "$DEPLOY"
 check "and the database in it" "$(stat -c %U /work/out4/uniprot-2026-03/suffix-array/sa.bin)" "$DEPLOY"
@@ -1093,54 +1098,98 @@ check "what else is there keeps its owner" "$(stat -c %U /work/out4/opensearch-d
 check_true "it says what is left to do as that user" grep -q "As ${DEPLOY} (sudo -iu ${DEPLOY})" /work/last-output
 
 
-section "install.sh installs the scripts a host runs"
+section "server/install.sh installs the scripts a host runs"
 
 PREFIX_A=/work/opt-a
 packaged_host
-install_opensearch --user "$DEPLOY" --output-dir "$OUT" --prefix "$PREFIX_A"
+install_server --user "$DEPLOY" --output-dir "$OUT" --prefix "$PREFIX_A"
 check "it succeeds" "$?" "0"
-check_true "the scripts a host runs are there" \
-    test -x "${PREFIX_A}/bin/clone.sh" -a -x "${PREFIX_A}/bin/load.sh" -a -x "${PREFIX_A}/bin/verify.sh" -a -x "${PREFIX_A}/bin/prune.sh" \
-        -a -x "${PREFIX_A}/bin/switch.sh"
-check_true "and what they call" \
-    test -x "${PREFIX_A}/opensearch/load.sh" -a -f "${PREFIX_A}/opensearch/lib.sh" \
-        -a -f "${PREFIX_A}/opensearch/mappings/uniprot_entries.json" -a -f "${PREFIX_A}/pipelines/lib/common.sh"
-check "and every part of lib.sh" "$(ls "${PREFIX_A}/bin/lib")" "$(ls /repo/.deploy/lib)"
-check "all of them root's, as the scripts that load them are" \
-    "$(stat -c '%U' "${PREFIX_A}/bin/lib" "${PREFIX_A}/bin/lib.sh" "${PREFIX_A}/bin/lib/"*.sh | sort -u)" "root"
-check_true "but not build.sh, which needs the whole repository" test ! -e "${PREFIX_A}/bin/build.sh"
-check "and nothing else: not distribute.sh, nor install.sh itself" \
-    "$(find "${PREFIX_A}/bin" -mindepth 1 -maxdepth 1 -printf '%f\n' | sort | tr '\n' ' ')" "clone.sh lib lib.sh load.sh prune.sh switch.sh verify.sh "
-check "the scripts belong to root, which alone changes them" "$(stat -c %U "${PREFIX_A}/bin/load.sh")" "root"
+# What a checkout holds of what a host runs, by the path it has in the install, which mirrors it:
+# deploy/ for .deploy/, beside opensearch/ and pipelines/. Not build.sh and distribute.sh, which
+# need a checkout, nor the installs themselves.
+mirrored_files() {
+    {
+        echo deploy/lib.sh
+        find /repo/.deploy/lib -name '*.sh' -printf 'deploy/lib/%f\n'
+        printf 'deploy/server/%s.sh\n' clone load prune switch verify
+        printf 'opensearch/%s\n' bulk_load.py lib.sh load.sh mappings/uniprot_entries.json
+        echo pipelines/lib/common.sh
+    } | sort
+}
+installed_files() { (cd "$1" && find -L deploy opensearch pipelines -type f | sort); }
+
+check "the install mirrors the checkout, file for file" "$(installed_files "$PREFIX_A")" "$(mirrored_files)"
+check "beside its configuration, the release they go through and what it was installed from, and nothing else" \
+    "$(find "$PREFIX_A" -mindepth 1 -maxdepth 1 -printf '%f\n' | sort | tr '\n' ' ')" "INSTALLED deploy etc opensearch pipelines release releases "
+check "each a link through the one release" \
+    "$(for entry in deploy opensearch pipelines INSTALLED; do readlink "${PREFIX_A}/${entry}"; done | tr '\n' ' ')$(readlink "${PREFIX_A}/release")" \
+    "release/deploy release/opensearch release/pipelines release/INSTALLED releases/$(ls "${PREFIX_A}/releases")"
+check "all of it root's, as only install.sh changes it" \
+    "$(find "$PREFIX_A" -path "${PREFIX_A}/etc" -prune -o -printf '%u\n' | sort -u)" "root"
+check_true "the scripts runnable" test -x "${PREFIX_A}/deploy/server/load.sh" -a -x "${PREFIX_A}/opensearch/load.sh"
 # install.sh reads it as root, so a file the deploy user could write would hand that user root.
 check "and so does their configuration, which install.sh reads as root" "$(stat -c '%U %a' "${PREFIX_A}/etc/deploy.conf")" "root 644"
 check "with the output directory it was given" "$(sed -n 's/^OUTPUT_DIR=//p' "${PREFIX_A}/etc/deploy.conf")" "$OUT"
 check "INSTALLED names the commit" "$(sed -n 's/^commit: //p' "${PREFIX_A}/INSTALLED")" "$(as_deployer git -C "$CHECKOUT" rev-parse HEAD)"
 
-as_deployer "${PREFIX_A}/bin/verify.sh" > /work/last-output 2>&1
+# A run keeps to the release it started from: its paths resolve into it, not through the link, and
+# the install's own deploy.conf is still the one read.
+check "an installed script resolves into its own release" \
+    "$(as_deployer bash -c "source '${PREFIX_A}/deploy/lib.sh' && echo \"\${DEPLOY_DIR} \${DEPLOY_CONF}\"")" \
+    "$(readlink -f "${PREFIX_A}/release")/deploy ${PREFIX_A}/etc/deploy.conf"
+
+as_deployer "${PREFIX_A}/deploy/server/verify.sh" > /work/last-output 2>&1
 check "the installed verify.sh runs, reading the installed deploy.conf" "$?" "0"
 check_true "and checks the newest database there" grep -qF "Checking ${OUT}/uniprot-2026-03/suffix-array" /work/last-output
 
 
-section "install.sh replaces no script a load, switch or prune is running from"
+section "opensearch/install.sh on its own changes OpenSearch, and nothing else"
+# What server/install.sh runs; on its own, it is how a host changes a setting of the instance.
+releases_before=$(ls "${PREFIX_A}/releases")
+install_opensearch --prefix "$PREFIX_A" --heap 6g
+check "it succeeds" "$?" "0"
+check_true "the heap is the one given" grep -qx -- '-Xmx6g' "$HEAP"
+check "the scripts are left as they are" "$(ls "${PREFIX_A}/releases")" "$releases_before"
+check_absent "and nothing about the host is said to be left" 'Still to do on this host' /work/last-output
+install_server --user "$DEPLOY" --output-dir "$OUT" --prefix "$PREFIX_A" --heap 4g
+check "server/install.sh passes --heap on" "$(grep -c -- '-Xmx4g' "$HEAP")" "1"
+check_true "and says what is left to do last, after OpenSearch" \
+    test "$(grep -n 'Still to do on this host' /work/last-output | cut -d: -f1)" -gt "$(grep -n 'OpenSearch is ready' /work/last-output | cut -d: -f1)"
+
+
+section "server/install.sh replaces no script a load, switch or prune is running from"
 
 # A load holds the lock shared for as long as it runs.
 as_deployer flock -s /run/lock/unipept-opensearch.lock sleep 10 &
 holder=$!
 for _ in $(seq 50); do flock -n -x /run/lock/unipept-opensearch.lock true 2> /dev/null || break; sleep 0.1; done
-touch -d '2000-01-01' "${PREFIX_A}/bin/load.sh"
-install_opensearch --user "$DEPLOY" --output-dir "$OUT" --prefix "$PREFIX_A"
+touch -d '2000-01-01' "${PREFIX_A}/deploy/server/load.sh"
+install_server --user "$DEPLOY" --output-dir "$OUT" --prefix "$PREFIX_A"
 check "it refuses while one runs" "$?" "2"
 check_true "and says what to wait for" grep -q "running on this host; wait for it to finish. Install once it has finished." /work/last-output
-check "and replaced nothing" "$(stat -c %Y "${PREFIX_A}/bin/load.sh")" "$(date -d '2000-01-01' +%s)"
+check "and replaced nothing" "$(stat -c %Y "${PREFIX_A}/deploy/server/load.sh")" "$(date -d '2000-01-01' +%s)"
+# Nor is OpenSearch upgraded or restarted under the load.
+forget_calls
+install_opensearch --prefix "$PREFIX_A"
+check "opensearch/install.sh on its own refuses too" "$?" "2"
+check_true "and says what to wait for" grep -q "wait for it to finish. Set up OpenSearch once it has finished." /work/last-output
+check_true "touching nothing of the service" not grep -q . /work/systemctl-calls
 wait "$holder"
-install_opensearch --user "$DEPLOY" --output-dir "$OUT" --prefix "$PREFIX_A"
+# A script an earlier checkout had, and this one does not.
+touch "${PREFIX_A}/deploy/server/gone.sh" "${PREFIX_A}/opensearch/gone.py"
+# And /run/lock emptied, as at boot, with root's umask strict: the lock the install makes has to be
+# one every account can open.
+rm -f /run/lock/unipept-opensearch.lock
+(umask 077 && install_server --user "$DEPLOY" --output-dir "$OUT" --prefix "$PREFIX_A")
 check "once it is done, the install runs" "$?" "0"
-check_true "and replaces them" test "$(stat -c %Y "${PREFIX_A}/bin/load.sh")" -gt "$(date -d '2000-01-01' +%s)"
-check "leaving the lock the deploy user's" "$(stat -c %U /run/lock/unipept-opensearch.lock)" "$DEPLOY"
+check_true "and replaces them" test "$(stat -c %Y "${PREFIX_A}/deploy/server/load.sh")" -gt "$(date -d '2000-01-01' +%s)"
+check "leaving nothing the checkout no longer has" "$(installed_files "$PREFIX_A")" "$(mirrored_files)"
+check "nor any release but the one in place and the one it replaced" "$(find "${PREFIX_A}/releases" -mindepth 1 -maxdepth 1 | wc -l | tr -d ' ')" "2"
+check_true "the one in place among them" test -d "${PREFIX_A}/$(readlink "${PREFIX_A}/release")"
+check "leaving the lock readable by every account" "$(stat -c %a /run/lock/unipept-opensearch.lock)" "644"
 
 
-section "install.sh lets the deploy user stop and start OpenSearch, and nothing more"
+section "server/install.sh lets the deploy user stop and start OpenSearch, and nothing more"
 
 SUDOERS=/etc/sudoers.d/unipept-opensearch
 # sudo -l answers only for a command that is there, and this container runs no systemd.
@@ -1157,16 +1206,16 @@ check_true "without a password" grep -q "^${DEPLOY} ALL=(root) NOPASSWD: " "$SUD
 rm -f /usr/bin/systemctl
 
 touch -d '2000-01-01' "$SUDOERS"
-install_opensearch --user "$DEPLOY" --output-dir "$OUT" --prefix "$PREFIX_A"
+install_server --user "$DEPLOY" --output-dir "$OUT" --prefix "$PREFIX_A"
 check "a second run succeeds" "$?" "0"
 check "and leaves the rule as it is" "$(stat -c %Y "$SUDOERS")" "$(date -d '2000-01-01' +%s)"
 rm -f /work/loader-calls
-as_deployer "${PREFIX_A}/bin/load.sh" --check > /work/last-output 2>&1
+as_deployer "${PREFIX_A}/deploy/server/load.sh" --check > /work/last-output 2>&1
 check "the installed load.sh reaches the installed loader" "$?" "0"
 check_true "which was asked about the newest version" grep -q -- '--index-name uniprot_entries-2026-03 --check-complete' /work/loader-calls
 
 printf '# edited on this host\n' >> "${PREFIX_A}/etc/deploy.conf"
-install_opensearch --user "$DEPLOY" --output-dir "$OUT" --prefix "$PREFIX_A"
+install_server --user "$DEPLOY" --output-dir "$OUT" --prefix "$PREFIX_A"
 check "installing again succeeds" "$?" "0"
 check_true "and keeps the deploy.conf the host edited" grep -q 'edited on this host' "${PREFIX_A}/etc/deploy.conf"
 
@@ -1177,7 +1226,7 @@ rm -rf "$INSTALL_FROM"
 cp -a "$CHECKOUT" "$INSTALL_FROM"
 rm -f "${INSTALL_FROM}/.deploy/deploy.conf"
 install_from_checkout() {
-    PATH="${INSTALL_STUBS}:${PATH}" "${INSTALL_FROM}/.deploy/server/opensearch/install.sh" "$@" > /work/last-output 2>&1
+    PATH="${INSTALL_STUBS}:${PATH}" "${INSTALL_FROM}/.deploy/server/install.sh" "$@" > /work/last-output 2>&1
 }
 
 chown "${DEPLOY}:" "${PREFIX_A}/etc/deploy.conf"
@@ -1220,7 +1269,7 @@ make_server() {
     local root="/work/server-${name}"
 
     rm -rf "$root" "/work/${name}-loaded" "/work/${name}-loader-calls"
-    install_opensearch --user "$DEPLOY" --output-dir "$output_dir" --prefix "$root" || return 1
+    install_server --user "$DEPLOY" --output-dir "$output_dir" --prefix "$root" || return 1
     printf 'OUTPUT_DIR=%s\nLOCAL_SSH_KEY=%s/.ssh/id_test\nREMOTE_USER=%s\n' \
         "$output_dir" "$DEPLOY_HOME" "$DEPLOY" > "${root}/etc/deploy.conf"
     cat > "${root}/opensearch/load.sh" <<LOADER
@@ -1262,7 +1311,7 @@ check "it succeeds" "$?" "0"
 check_true "a is copied to and loaded" row_says a copied loaded ready
 check_true "b is copied to and loaded" row_says b copied loaded ready
 check_true "the copy lands where a's own deploy.conf says" test -s /work/a-data/uniprot-2026-03/suffix-array/sa.bin
-check_true "and passes verify.sh there" as_deployer /work/server-a/bin/verify.sh --uniprot-version 2026-03
+check_true "and passes verify.sh there" as_deployer /work/server-a/deploy/server/verify.sh --uniprot-version 2026-03
 check_true "the load is of that copy, into the version's own index" \
     grep -qF -- "--uniprot-entries /work/a-data/uniprot-2026-03/tables/uniprot_entries.tsv.lz4 --index-name uniprot_entries-2026-03" \
     /work/a-loader-calls

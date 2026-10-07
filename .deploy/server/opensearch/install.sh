@@ -1,12 +1,8 @@
 #!/usr/bin/env bash
 #
-# Prepares a host to build, clone and hold a Unipept database: the user that owns the databases,
-# the tools build.sh, clone.sh and load.sh run, the scripts a host runs, installed where they do not
-# depend on a checkout, and the OpenSearch instance load.sh fills.
-# Run as root. Run it with --help for the options.
-#
-# This is the only step that needs root. Afterwards DEPLOY_USER owns OUTPUT_DIR and has every tool
-# it needs, so build.sh and clone.sh run as that user without sudo, as the API's deploy does.
+# Sets up the OpenSearch instance load.sh fills, on a host server/install.sh prepares: server/install.sh
+# runs this, after the tools this uses are installed. Run it on its own, as root, to change a
+# setting of the instance, such as its heap. Run it with --help for the options.
 #
 # For the Ubuntu 24.04 LTS the servers run: it installs through apt and starts through systemd.
 #
@@ -14,31 +10,26 @@
 #
 # Flow:
 #   1. Check that this runs as root on a host with apt and systemd, and that the OpenSearch it has,
-#      if any, can be brought to the pinned version: nothing else is changed on a host where not.
-#   2. Create DEPLOY_USER, or give an account that already exists a login shell: clone.sh copies
-#      over ssh as that user, and sshd needs a shell to run a remote command.
-#   3. Install the tools build.sh, clone.sh and load.sh use, the ones not installed already.
-#   4. Create OUTPUT_DIR owned by DEPLOY_USER, and hand it the databases a run as root left.
-#   5. Install clone.sh, load.sh, verify.sh, prune.sh, switch.sh and what they call into
-#      INSTALL_ROOT, from this checkout, and write etc/deploy.conf there unless it is already there.
-#      Allow DEPLOY_USER to stop and start OpenSearch through sudo, and nothing else, which is what
-#      switch.sh needs to switch without root.
-#   6. Add the OpenSearch APT repository, unless it is already there.
-#   7. Install the pinned version, or upgrade an older one of the same major version to it, keeping
+#      if any, can be brought to the pinned version: nothing is changed on a host where not.
+#      --check stops here, which is how server/install.sh asks before it changes anything.
+#   2. Take the OpenSearch lock, held to the end, so no load runs while OpenSearch is upgraded or
+#      restarted.
+#   3. Add the OpenSearch APT repository, unless it is already there.
+#   4. Install the pinned version, or upgrade an older one of the same major version to it, keeping
 #      the configuration this script writes, and hold it so an unrelated upgrade cannot move it.
-#   8. Write the configuration this instance needs, keeping a copy of what was there and the data
+#   5. Write the configuration this instance needs, keeping a copy of what was there and the data
 #      and log paths it named.
-#   9. Write the heap size, and a systemd drop-in giving OpenSearch time to start and starting it
+#   6. Write the heap size, and a systemd drop-in giving OpenSearch time to start and starting it
 #      again after a failure.
-#  10. Enable and start the service, restarting it only when something above changed, and wait
+#   7. Enable and start the service, restarting it only when something above changed, and wait
 #      for it to answer.
-#  11. Set every index to hold no replica.
-#  12. Say what is left to do, on this host.
+#   8. Set every index to hold no replica.
 #
 # A second run with the same settings changes nothing and restarts nothing.
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+[ -r "${HERE}/../../lib.sh" ] || { echo "Error: there is no ${HERE}/../../lib.sh to load." 1>&2; exit 2; }
 # shellcheck source=../../lib.sh
 source "${HERE}/../../lib.sh"
 
@@ -73,40 +64,11 @@ OPENSEARCH_LOG_DIR=
 # Seconds to wait for the service to answer after it is started.
 OPENSEARCH_READY_TIMEOUT=180
 
-# Where the scripts a host runs are installed. /opt/unipept-database, as the API's are in
-# /opt/unipept-api; a flag for a test that installs more than one host into one machine.
-PREFIX="$INSTALL_ROOT"
+# The install server/install.sh makes, whose deploy.conf this reads too.
+read_install_conf "$@"
 
-# The configuration of the install this run makes or updates, so --prefix reads its own and not
-# /opt/unipept-database's; a checkout's own deploy.conf still comes first, as lib/config.sh has
-# it. Found before the arguments are parsed, since read_conf comes first for a flag to win over it.
-for ((argument = 1; argument < $#; argument++)); do
-    [ "${!argument}" != --prefix ] || { next=$((argument + 1)); PREFIX="${!next}"; }
-done
-[ -f "${DEPLOY_DIR}/deploy.conf" ] || DEPLOY_CONF="${PREFIX}/etc/deploy.conf"
-
-# This runs as root, and sources that file. An installed one is root's, as install_scripts leaves
-# it, and one another user could write would hand that user root.
-if [ "$DEPLOY_CONF" != "${DEPLOY_DIR}/deploy.conf" ] && [ -e "$DEPLOY_CONF" ]; then
-    case "$(stat -c '%U %A' "$DEPLOY_CONF")" in
-        "root -rw-r--r--" | "root -rw-------" | "root -r--r--r--" | "root -r--------") ;;
-        *) die "${DEPLOY_CONF} can be written by someone other than root, and this runs as root and reads it. Make it root's, mode 0644, after checking what is in it." ;;
-    esac
-fi
-
-read_conf
-
-# What build.sh, clone.sh and load.sh run, by package: git, cmake and a C toolchain for the index
-# build, lz4, pv, pigz, gawk, unzip, uuidgen, xmllint and curl for the pipeline, python3-requests
-# for the loader, ssh and scp for the clone, and gnupg for the OpenSearch repository's key below.
-# The Rust toolchain is not here: the repository pins its own through rust-toolchain.toml, which
-# rustup, installed as DEPLOY_USER, follows.
-readonly TOOL_PACKAGES=(
-    git cmake build-essential curl ca-certificates gnupg
-    lz4 pv pigz gawk unzip uuid-runtime libxml2-utils
-    python3 python3-requests
-    openssh-client
-)
+# Whether to only check that the OpenSearch installed can be brought to the pinned version.
+CHECK_ONLY=false
 
 # OpenSearch publishes one apt repository per major version, so the one to add follows the pin.
 readonly OPENSEARCH_MAJOR="${OPENSEARCH_VERSION%%.*}"
@@ -115,7 +77,6 @@ readonly APT_KEYRING=/usr/share/keyrings/opensearch-keyring.gpg
 readonly CONFIG_FILE=/etc/opensearch/opensearch.yml
 readonly HEAP_FILE=/etc/opensearch/jvm.options.d/heap.options
 readonly UNIT_DROPIN=/etc/systemd/system/opensearch.service.d/unipept.conf
-readonly SUDOERS_FILE=/etc/sudoers.d/unipept-opensearch
 
 # How long systemd gives OpenSearch to start, and how soon it starts it again after a failure. The
 # package gives it 75 seconds and never starts it again. That is enough on its own, but not while
@@ -131,9 +92,8 @@ CHANGED=false
 
 usage() {
     cat <<'USAGE'
-Prepares a host to build, clone and hold a Unipept database: the user that owns the databases, the
-tools the scripts run, the scripts themselves in /opt/unipept-database, and the OpenSearch instance
-the proteins are loaded into. Run as root; it is the only step that needs it.
+Sets up the OpenSearch instance the proteins are loaded into. .deploy/server/install.sh runs this as
+part of preparing a host; run it on its own, as root, to change a setting of the instance.
 
   .deploy/server/opensearch/install.sh [OPTIONS]
 
@@ -143,10 +103,9 @@ the proteins are loaded into. Run as root; it is the only step that needs it.
   --port PORT                the port it listens on
   --data-dir DIR             where it keeps its data; default what the configuration names
   --log-dir DIR              where it writes its logs; default what the configuration names
-  --user USER                who builds, clones and owns the databases
-  --output-dir DIR           where the databases are, handed to that user
-  --prefix DIR               where the scripts a host runs are installed, default
-                             /opt/unipept-database
+  --prefix DIR               the install whose deploy.conf is read, default /opt/unipept-database
+  --check                    only check that the OpenSearch installed can be brought to the pinned
+                             version, and change nothing
   --help                     print this message
 
 A flag wins over deploy.conf, which wins over the defaults in this script. The deploy.conf read is the
@@ -163,9 +122,8 @@ parse_arguments() {
             --port) need_value "$1" "${2-}"; OPENSEARCH_PORT="$2"; shift 2 ;;
             --data-dir) need_value "$1" "${2-}"; OPENSEARCH_DATA_DIR="$2"; shift 2 ;;
             --log-dir) need_value "$1" "${2-}"; OPENSEARCH_LOG_DIR="$2"; shift 2 ;;
-            --user) need_value "$1" "${2-}"; DEPLOY_USER="$2"; shift 2 ;;
-            --output-dir) need_value "$1" "${2-}"; OUTPUT_DIR="$2"; shift 2 ;;
-            --prefix) need_value "$1" "${2-}"; PREFIX="$2"; shift 2 ;;
+            --prefix) need_value "$1" "${2-}"; shift 2 ;;
+            --check) CHECK_ONLY=true; shift ;;
             --help) usage; exit 0 ;;
             *) unknown_option "$1" ;;
         esac
@@ -194,138 +152,6 @@ write_if_changed() {
     fi
     printf '%s\n' "$content" > "$target"
     CHANGED=true
-}
-
-# The user build.sh and clone.sh run as. A home, because rustup and the ssh key live in it. A real
-# shell, because clone.sh runs commands on the remote host over ssh as this user, and sshd runs a
-# remote command through the login shell: nologin answers and runs nothing. The API's install makes
-# the same account the same way, so the two can run in either order.
-ensure_user() {
-    if id "$DEPLOY_USER" > /dev/null 2>&1; then
-        case "$(getent passwd "$DEPLOY_USER" | cut -d: -f7)" in
-            *nologin | *false)
-                usermod --shell /bin/bash "$DEPLOY_USER"
-                log "Gave ${DEPLOY_USER} a login shell, for ssh." ;;
-        esac
-    else
-        useradd --create-home --shell /bin/bash "$DEPLOY_USER"
-        log "Created the ${DEPLOY_USER} user."
-    fi
-}
-
-# Only the packages that are missing, so a second run does not reach apt at all.
-install_tools() {
-    local package missing=()
-
-    for package in "${TOOL_PACKAGES[@]}"; do
-        [ "$(dpkg-query --showformat='${db:Status-Status}' --show "$package" 2> /dev/null)" = installed ] \
-            || missing+=("$package")
-    done
-
-    if [ "${#missing[@]}" -eq 0 ]; then
-        log "The tools build.sh, clone.sh and load.sh use are installed."
-        return
-    fi
-
-    log "Installing ${missing[*]}."
-    apt-get update -qq
-    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "${missing[@]}"
-}
-
-# The directory the databases are written to, owned by DEPLOY_USER so a build or a clone creates
-# and renames in it without root. Only the directory itself and what build.sh and clone.sh write in
-# it change owner: OUTPUT_DIR is often a volume that holds other things, OpenSearch's data among
-# them, whose owners are not this script's to change.
-prepare_output_dir() {
-    local entry
-
-    if [ ! -d "$OUTPUT_DIR" ]; then
-        install -d -m 0755 -o "$DEPLOY_USER" -g "$DEPLOY_USER" "$OUTPUT_DIR"
-        log "Created ${OUTPUT_DIR} for ${DEPLOY_USER}."
-        return
-    fi
-
-    [ "$(stat -c %U "$OUTPUT_DIR")" = "$DEPLOY_USER" ] || {
-        chown "${DEPLOY_USER}:" "$OUTPUT_DIR"
-        log "Gave ${OUTPUT_DIR} to ${DEPLOY_USER}."
-    }
-
-    # What an earlier run as root left: databases the next run could not replace, and staging
-    # directories and the leftover of an interrupted swap, which it could not remove. A database is
-    # a few dozen files, so this is quick.
-    # shellcheck disable=SC2231 # DATABASE_GLOB is a glob, and has to expand
-    for entry in "$OUTPUT_DIR"/${DATABASE_GLOB} "$OUTPUT_DIR"/${DATABASE_GLOB}.replaced \
-        "${OUTPUT_DIR}/.build" "${OUTPUT_DIR}/.clone"; do
-        [ -e "$entry" ] || continue
-        if [ -n "$(find "$entry" ! -user "$DEPLOY_USER" -print -quit)" ]; then
-            chown -R "${DEPLOY_USER}:" "$entry"
-            log "Gave ${entry} to ${DEPLOY_USER}."
-        fi
-    done
-}
-
-# The scripts every host runs, where they do not depend on a checkout: a host that only clones and
-# serves needs no clone of this repository, and the path is the same on every host, so distribute.sh
-# and the API's deploy can rely on it. The scripts sit beside lib.sh here, where a checkout has it
-# one level up, and each looks in both places; the loader and lib/ keep their paths from lib.sh.
-# Owned by root, since only this script changes them; etc/ belongs to root too, since install.sh
-# reads deploy.conf as root.
-#
-# From the checkout this runs in, so a host is updated by running this again from a checkout of the
-# commit to install, which INSTALLED then names.
-install_scripts() {
-    local repository="${DEPLOY_DIR}/.." commit
-
-    # A load, a switch or a prune running from these files while they are replaced
-    # could pair a new lib.sh with an old script, or start opensearch/load.sh from the new release
-    # halfway through a run of the old one. Each holds OPENSEARCH_LOCK, so this holds it
-    # exclusively until it is done, and refuses while one runs. /run/lock is emptied at boot, so the
-    # file may not be there yet: it is made the deploy user's, as the first script to take it would
-    # have made it.
-    [ -e "$OPENSEARCH_LOCK" ] || install -m 0644 -o "$DEPLOY_USER" -g "$DEPLOY_USER" /dev/null "$OPENSEARCH_LOCK"
-    take_opensearch_lock -x || die "$(lock_refused $?) Install once it has finished."
-
-    install -d -m 0755 "$PREFIX" "${PREFIX}/bin" "${PREFIX}/bin/lib" "${PREFIX}/opensearch/mappings" "${PREFIX}/pipelines/lib"
-    # What is loaded before what loads it, so a script started meanwhile finds the files its own
-    # release has: the libraries first, then the loader, then the scripts.
-    install -m 0644 "${repository}/pipelines/lib/common.sh" "${PREFIX}/pipelines/lib/"
-    install -m 0644 "${repository}/opensearch/"{lib.sh,bulk_load.py} "${PREFIX}/opensearch/"
-    install -m 0644 "${repository}/opensearch/mappings/uniprot_entries.json" "${PREFIX}/opensearch/mappings/"
-    install -m 0644 "${repository}/.deploy/lib/"*.sh "${PREFIX}/bin/lib/"
-    install -m 0755 "${repository}/opensearch/load.sh" "${PREFIX}/opensearch/"
-    install -m 0644 "${repository}/.deploy/lib.sh" "${PREFIX}/bin/"
-    install -m 0755 "${repository}/.deploy/server/"{clone.sh,load.sh,verify.sh,prune.sh,switch.sh} "${PREFIX}/bin/"
-
-    install -d -m 0755 -o root -g root "${PREFIX}/etc"
-    if [ ! -f "${PREFIX}/etc/deploy.conf" ]; then
-        sed "s#^OUTPUT_DIR=.*#OUTPUT_DIR=${OUTPUT_DIR}#" "${repository}/.deploy/deploy.conf.example" > "${PREFIX}/etc/deploy.conf"
-        chmod 0644 "${PREFIX}/etc/deploy.conf"
-        log "Wrote ${PREFIX}/etc/deploy.conf. Edit it, as root, for what this host decides."
-    fi
-
-    # As root, of a checkout another user owns, which git refuses to read unless told to trust it.
-    commit=$(git -c safe.directory='*' -C "$repository" rev-parse HEAD 2>/dev/null || echo unknown)
-    printf 'commit: %s\ninstalled: %s\n' "$commit" "$(date -u +'%F %T UTC')" > "${PREFIX}/INSTALLED"
-    log "Installed the scripts of ${commit} in ${PREFIX}."
-}
-
-# switch.sh stops and starts OpenSearch as DEPLOY_USER, which a system service allows root alone.
-# Exactly those two commands, by full path, as sudo matches them, and checked by visudo before it is
-# put in place: a sudoers file sudo cannot parse stops sudo for everyone on the host.
-allow_opensearch_restart() {
-    local rule staged
-
-    rule="${DEPLOY_USER} ALL=(root) NOPASSWD: /usr/bin/systemctl stop opensearch, /usr/bin/systemctl start opensearch"
-    if [ -f "$SUDOERS_FILE" ] && [ "$(cat "$SUDOERS_FILE")" = "$(printf '%s\n%s' "$MARKER" "$rule")" ]; then
-        return 0
-    fi
-
-    staged=$(mktemp)
-    printf '%s\n%s\n' "$MARKER" "$rule" > "$staged"
-    visudo -c -q -f "$staged" > /dev/null || { rm -f "$staged"; die "visudo refuses the rule for ${DEPLOY_USER}, so it is not written."; }
-    install -m 0440 -o root -g root "$staged" "$SUDOERS_FILE"
-    rm -f "$staged"
-    log "Allowed ${DEPLOY_USER} to stop and start OpenSearch through sudo, for switch.sh."
 }
 
 add_repository() {
@@ -541,17 +367,18 @@ single_node_settings() {
 
 parse_arguments "$@"
 
-[ "$(id -u)" -eq 0 ] || die "run this as root. It is the only step that needs it."
-require apt-get dpkg-query dpkg systemctl getent useradd usermod visudo:sudo
+[ "$(id -u)" -eq 0 ] || die "run this as root."
+require apt-get dpkg-query dpkg systemctl
 
 # Before anything on the host changes, so a refused run leaves it as it was.
 check_installed_version
+[ "$CHECK_ONLY" = false ] || exit 0
 
-ensure_user
-install_tools
-prepare_output_dir
-install_scripts
-allow_opensearch_restart
+# A load writes to OpenSearch for hours, and the upgrade and the restart below would break it part
+# way. Held from here to the end, as a switch holds it; where server/install.sh runs this, taken
+# over from it on the descriptor this inherits.
+require flock:util-linux
+take_opensearch_lock -x || die "$(lock_refused $?) Set up OpenSearch once it has finished."
 
 # Installed with the tools above.
 require curl gpg
@@ -563,18 +390,4 @@ write_unit_dropin
 start_opensearch
 single_node_settings "$(ready_url)"
 
-cat >&2 <<EOF
-
-Still to do on this host:
-  1. As root, say what this host decides in ${PREFIX}/etc/deploy.conf.
-As ${DEPLOY_USER} (sudo -iu ${DEPLOY_USER}), none of it as root:
-  2. To clone from another host: an ssh key in ~/.ssh that ${DEPLOY_USER} on that host accepts.
-     ${PREFIX}/bin/clone.sh then copies a database, and ${PREFIX}/bin/load.sh loads its proteins.
-  3. To build: clone unipept-database, which build.sh needs whole, and install Rust with rustup
-     (https://rustup.rs); the repository pins the toolchain. .deploy/build.sh in that clone reads
-     the same deploy.conf.
-  4. On a host that runs the API, once its first version is here and loaded: point ${OUTPUT_DIR}/current
-     at it (ln -s uniprot-YYYY-MM ${OUTPUT_DIR}/current), and INDEX_LOCATION in the API's settings
-     at ${OUTPUT_DIR}/current/suffix-array. switch.sh changes the version from then on.
-EOF
-log "The host is ready."
+log "OpenSearch is ready."

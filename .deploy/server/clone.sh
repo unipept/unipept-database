@@ -6,14 +6,9 @@
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Beside this script once install.sh has placed both in /opt/unipept-database/bin, one level up in
-# a repository checkout.
+[ -r "${HERE}/../lib.sh" ] || { echo "Error: there is no ${HERE}/../lib.sh to load." 1>&2; exit 2; }
 # shellcheck source=../lib.sh
-if [ -f "${HERE}/lib.sh" ]; then
-    source "${HERE}/lib.sh"
-else
-    source "${HERE}/../lib.sh"
-fi
+source "${HERE}/../lib.sh"
 
 # The settings only this script has. lib/ holds the ones it shares.
 
@@ -41,7 +36,7 @@ usage() {
 Copies a finished database from another host. load.sh then loads its proteins into this host's
 OpenSearch.
 
-  bin/clone.sh --remote-address HOST --local-ssh-key KEY [OPTIONS]
+  deploy/server/clone.sh --remote-address HOST --local-ssh-key KEY [OPTIONS]
 
   --remote-address HOST      the host to copy from, required
   --local-ssh-key KEY        the private key to reach it with, required
