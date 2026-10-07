@@ -166,24 +166,22 @@ copy_database "$STAGING_DIR" "$REMOTE_DIR"
 COPIED_DIR="${STAGING_DIR}/uniprot-${UNIPROT_VERSION}"
 preflight_copy "$COPIED_DIR" "$REMOTE_DIR"
 
+# From here to the swap, whatever stops the clone removes the copy: it is hundreds of gigabytes, and
+# the next clone.sh starts one of its own. Not during the swap, which moves what was there aside.
+trap 'rm -rf "${STAGING_DIR:?}"' EXIT
+
 # Again, since the copy took hours in which this host may have switched to the version. Under the
 # lock a switch holds, so none can start between this and the swap, waited for rather than given up
-# on, since giving up would throw the copy away. The copy is removed where it cannot be used: it is
-# hundreds of gigabytes, and the next clone.sh starts one of its own.
-if ! take_opensearch_lock -s "$LOCK_WAIT"; then
-    refused=$(lock_refused $?)
-    rm -rf "${STAGING_DIR:?}"
-    die "${refused} Waited ${LOCK_WAIT} seconds for it. The copy is removed; the next clone.sh copies again."
-fi
+# on, since giving up would throw the copy away.
+take_opensearch_lock -s "$LOCK_WAIT" \
+    || die "$(lock_refused $?) Waited ${LOCK_WAIT} seconds for it. The copy is removed; the next clone.sh copies again."
 # And no load of this version reads the table this replaces.
-if ! take_load_lock "$UNIPROT_VERSION"; then
-    rm -rf "${STAGING_DIR:?}"
-    die "a load of ${UNIPROT_VERSION} is running on this host, and reads the files this would replace. The copy is removed; clone once it has finished."
-fi
-if [ -e "$BUILD_DIR" ] && is_served "$UNIPROT_VERSION"; then
-    rm -rf "${STAGING_DIR:?}"
-    die "${UNIPROT_VERSION} is the version this host serves, so its files are not replaced under the running API. The copy is removed. Switch this host to another version with switch.sh first."
-fi
+take_load_lock "$UNIPROT_VERSION" || case $? in
+    1) die "a load of ${UNIPROT_VERSION} is running on this host, and reads the files this would replace. The copy is removed; clone once it has finished." ;;
+    *) die "without its lock, a load of ${UNIPROT_VERSION} could read the files this replaces. The copy is removed. Make the lock readable by $(id -un) (above)." ;;
+esac
+[ ! -e "$BUILD_DIR" ] || refuse_replacing_served "$UNIPROT_VERSION" "The copy is removed. "
+trap - EXIT
 swap_into_place "$COPIED_DIR" "$BUILD_DIR"
 rm -rf "${STAGING_DIR:?}"
 

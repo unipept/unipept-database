@@ -9,20 +9,15 @@
 #
 # Kept, whatever --keep says:
 #   - every version this host serves, by served_versions in lib/api.sh: what `current` points at,
-#     what INDEX_LOCATION names where it names a version's directory itself, and what an alias of
-#     the old name points at;
+#     and what the API serves by its deploy.sh status: the version of the index it queries, or of
+#     the directory INDEX_LOCATION names;
 #   - the one `previous` points at, which switch.sh --back goes to;
 #   - every version newer than the oldest of those, which is loaded ahead of a switch still to come;
 #   - the --keep newest versions older than that, to go back to.
-# What a host loaded before versioned indices kept, uniprot_entries-legacy and uniprot_entries itself,
-# counts as the oldest, and is only removed once nothing may still need it: the API installed, and
-# the one unipept-api's deploy.sh would roll back to, query the index of the version they serve,
-# INDEX_LOCATION goes through current, and that index is open and loaded to the end. Until then it
-# may be the only copy of what an API serves, and it says which of these is not so.
 #
-# Without a current link, with API settings it cannot read, or with OpenSearch not saying what the
-# alias points at, there is no telling what the API serves, so nothing is removed. It holds the lock a
-# load, a switch and migrate.sh take, so none of them works on what it removes.
+# Without a current link, or where the API's deploy.sh does not say which version it serves, there
+# is no telling what the API serves, so nothing is removed. It holds the lock a load and a switch
+# take, so neither works on what it removes.
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -31,7 +26,7 @@ source "${HERE}/lib.sh"
 
 # The settings only this script has, before read_conf, so deploy.conf can set them.
 
-# How many versions older than the one the API queries to keep. Required: removing is not undone.
+# How many versions older than the one this host serves to keep. Required: removing is not undone.
 KEEP=
 
 # Whether to only say what would be removed.
@@ -53,9 +48,6 @@ Removes old databases from this host, each version's files and its OpenSearch in
   --help                     print this message
 
 Every version this host serves, the one before it, and every newer one, are always kept.
-uniprot_entries and uniprot_entries-legacy, from before versioned indices, only go once the API
-installed and the one deploy.sh would roll back to are 2.7.0 or newer, INDEX_LOCATION goes through
-current, and the index of the version it serves is loaded to the end.
 
 A flag wins over .deploy/deploy.conf, which wins over the defaults in lib/ and in this script.
 USAGE
@@ -89,67 +81,32 @@ take_opensearch_lock -x || die "$(lock_refused $?)"
 
 SERVED=$(linked_version "$(current_link)" 2> /dev/null) \
     || die "there is no $(current_link) pointing at a version, so which one this host serves is not known. Nothing is removed."
-[ ! -e "$API_ENV_FILE" ] || [ -r "$API_ENV_FILE" ] \
-    || die "cannot read ${API_ENV_FILE}, so which files the API reads is not known. Nothing is removed."
 BEFORE=$(linked_version "$(previous_link)" 2> /dev/null) || BEFORE=''
 
 # Kept whatever --keep says: every version this host serves, by served_versions, and the one before,
-# which switch.sh --back goes to. The oldest of the versioned ones is where what is kept is counted
-# from; legacy has no place in that order, and is kept by name.
+# which switch.sh --back goes to. The oldest of them is where what is kept is counted from.
 served=$(served_versions) \
-    || die "OpenSearch does not say what the alias ${ALIAS} points at, so what an older API serves is not known. Nothing is removed."
+    || die "the API's deploy.sh does not say which version this host serves (above). Nothing is removed."
 SERVING=$(printf '%s\n' "$served" | awk 'NF && !seen[$0]++' | tr '\n' ' ')
 PINNED=" ${SERVING}${BEFORE} "
 ACTIVE="$SERVED"
 for version in $SERVING $BEFORE; do
-    if [[ "$version" =~ ^[0-9]{4}-[0-9]{2}$ ]] && [[ "$version" < "$ACTIVE" ]]; then
+    if [[ "$version" < "$ACTIVE" ]]; then
         ACTIVE="$version"
     fi
 done
 
-# What a host loaded before versioned indices kept, uniprot_entries itself and uniprot_entries-legacy,
-# is only a candidate once nothing may still query it: the API installed, and the one deploy.sh keeps
-# to roll back to, query the index of the version they serve, INDEX_LOCATION names the suffix array through current, and that index
-# holds its proteins whole. Until then it may be the only copy of what the API serves.
-OLD_INDICES_GO=false
-if old_indices_unneeded && api_follows_current \
-    && [ "$(index_status "${ALIAS}-${SERVED}")" = open ] && is_complete "${ALIAS}-${SERVED}"; then
-    OLD_INDICES_GO=true
-elif [ -n "$(index_status "$ALIAS")$(index_status "$LEGACY")" ]; then
-    if ! old_indices_unneeded; then
-        why=''
-        for binary in "$API_BINARY" "$(api_rollback_binary)"; do
-            [ "$binary" = "$API_BINARY" ] || [ -e "$binary" ] || continue
-            api_state "$binary" || case $? in
-                1) why+="${why:+; }${binary} is older than ${API_VERSIONED_INDEX_SINCE}" ;;
-                *) why+="${why:+; }${binary} cannot be run to say which API it is (set API_BINARY where it is elsewhere)" ;;
-            esac
-        done
-    elif ! api_follows_current; then
-        why="INDEX_LOCATION does not go through $(current_link)"
-    else
-        why="${ALIAS}-${SERVED} is not open and loaded to the end"
-    fi
-    log "${ALIAS} and ${LEGACY}, from before versioned indices, are kept: ${why}."
-fi
-
-# Every version this host holds anything of, files or index, newest first. legacy and plain sort
-# last, because they predate every versioned one, plain before legacy.
+# Every version this host holds anything of, files or index, newest first.
 versions=$(
     {
-        if [ "$OLD_INDICES_GO" = true ] && [ -n "$(index_status "$ALIAS")" ]; then
-            echo plain
-        fi
         # shellcheck disable=SC2231 # DATABASE_GLOB is a glob, and has to expand
         for directory in "${OUTPUT_DIR}"/${DATABASE_GLOB}; do
             [ -d "$directory" ] && database_version_of "$directory"
         done
-        curl -s -f "${OPENSEARCH_URL}/_cat/indices/${ALIAS}-*?h=index&expand_wildcards=all" | while read -r index; do
-            version=$(version_of_index "$index")
-            [ "$version" != legacy ] || [ "$OLD_INDICES_GO" = true ] || continue
-            printf '%s\n' "$version"
+        curl -s -f "${OPENSEARCH_URL}/_cat/indices/${INDEX_PREFIX}-*?h=index&expand_wildcards=all" | while read -r index; do
+            version_of_index "$index"
         done || true
-    } | sed 's/^legacy$/0000-01 legacy/; s/^plain$/0000-00 plain/; s/^\([0-9-]*\)$/\1 \1/' | sort -u -r -k1,1 | awk 'NF == 2 { print $2 }'
+    } | sort -u -r
 )
 
 # Newer than the older of what is served is kept: the other of the two, or loaded ahead of a switch.
@@ -183,16 +140,8 @@ log "Removing: ${remove% }"
 [ "$DRY_RUN" != true ] || { log "A dry run, so nothing is removed."; exit 0; }
 
 for version in $remove; do
-    if [ "$version" = legacy ]; then
-        index="$LEGACY"
-        directory=''
-    elif [ "$version" = plain ]; then
-        index="$ALIAS"
-        directory=''
-    else
-        index="${ALIAS}-${version}"
-        directory="${OUTPUT_DIR}/uniprot-${version}"
-    fi
+    index="${INDEX_PREFIX}-${version}"
+    directory="${OUTPUT_DIR}/uniprot-${version}"
 
     # Before the files, so a delete OpenSearch refuses leaves the version whole to try again.
     if [ -n "$(index_status "$index")" ]; then
@@ -200,7 +149,7 @@ for version in $remove; do
         log "Deleted the ${index} index."
     fi
 
-    if [ -n "$directory" ] && [ -e "$directory" ]; then
+    if [ -e "$directory" ]; then
         rm -rf "${directory:?}"
         log "Removed ${directory}."
     fi

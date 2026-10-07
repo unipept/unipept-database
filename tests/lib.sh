@@ -56,6 +56,23 @@ make_stub() {
     echo "$1"
 }
 
+# A stand-in for the API's deploy.sh, at a path: `status` prints the lines in PATH.status, which a
+# case writes with api_status_lines, and every other command is appended to PATH.log and succeeds.
+# Prints the path.
+make_api_deploy() {
+    make_stub "$1" "if [ \"\$1\" = status ]; then cat '${1}.status'; else echo \"\$*\" >> '${1}.log'; fi"
+}
+
+# What the API's deploy.sh status prints, in the format these scripts read, for an API whose
+# INDEX_LOCATION and OpenSearch index are the ones given, `-` for none, as for files without a
+# .version, with its lock where it is given. The version of the index, as the real one reports it.
+api_status_lines() {
+    local version='-'
+    [ "$2" = - ] || { version=${2#uniprot_entries-}; version=${version/-/.}; }
+    printf 'status_format=1\nversion=2.7.0\nprevious=-\nvariant=hybrid\nport=8080\nactive=active\n'
+    printf 'index_location=%s\nindex_version=%s\nopensearch_index=%s\napi_lock=%s\n' "$1" "$version" "$2" "${3:-/run/lock/unipept-api.lock}"
+}
+
 # A heading between suites, or between the steps of one.
 heading() { printf '\n\033[1m%s\033[0m\n' "$*"; }
 

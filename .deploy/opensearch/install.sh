@@ -19,7 +19,7 @@
 #      over ssh as that user, and sshd needs a shell to run a remote command.
 #   3. Install the tools build.sh, clone.sh and load.sh use, the ones not installed already.
 #   4. Create OUTPUT_DIR owned by DEPLOY_USER, and hand it the databases a run as root left.
-#   5. Install clone.sh, load.sh, verify.sh, prune.sh, switch.sh, migrate.sh and what they call
+#   5. Install clone.sh, load.sh, verify.sh, prune.sh, switch.sh and what they call
 #      into INSTALL_ROOT, from this checkout, and write etc/deploy.conf there unless it is already there.
 #      Allow DEPLOY_USER to stop and start OpenSearch through sudo, and nothing else, which is what
 #      switch.sh needs to switch without root.
@@ -50,7 +50,7 @@ source "${HERE}/../lib.sh"
 source "${HERE}/version.sh"
 
 # The heap OpenSearch takes, and the one number a host decides. Deliberately small: this host also
-# serves the API, which holds the index resident, and unipept-api/.deploy sizes that against the
+# serves the API, which holds the index resident, and the API's deploy sizes that against the
 # memory it can see. Heap taken here is memory that sizing does not know about. The README and
 # deploy.conf.example point here rather than repeat this.
 #
@@ -73,7 +73,7 @@ OPENSEARCH_LOG_DIR=
 # Seconds to wait for the service to answer after it is started.
 OPENSEARCH_READY_TIMEOUT=180
 
-# Where the scripts a host runs are installed. /opt/unipept-database, as unipept-api's are in
+# Where the scripts a host runs are installed. /opt/unipept-database, as the API's are in
 # /opt/unipept-api; a flag for a test that installs more than one host into one machine.
 PREFIX="$INSTALL_ROOT"
 
@@ -275,7 +275,7 @@ prepare_output_dir() {
 install_scripts() {
     local repository="${HERE}/../.." commit
 
-    # A load, a switch, a prune or migrate.sh running from these files while they are replaced
+    # A load, a switch or a prune running from these files while they are replaced
     # could pair a new lib.sh with an old script, or start opensearch/load.sh from the new release
     # halfway through a run of the old one. Each holds OPENSEARCH_LOCK, so this holds it
     # exclusively until it is done, and refuses while one runs. /run/lock is emptied at boot, so the
@@ -293,10 +293,7 @@ install_scripts() {
     install -m 0644 "${repository}/.deploy/lib/"*.sh "${PREFIX}/bin/lib/"
     install -m 0755 "${repository}/opensearch/load.sh" "${PREFIX}/opensearch/"
     install -m 0644 "${repository}/.deploy/lib.sh" "${PREFIX}/bin/"
-    install -m 0755 "${repository}/.deploy/"{clone.sh,load.sh,verify.sh,prune.sh,switch.sh,migrate.sh} "${PREFIX}/bin/"
-    # What an earlier release installed: it moved an alias the API no longer queries, and closed the
-    # index the API did.
-    rm -f "${PREFIX}/opensearch/activate.sh"
+    install -m 0755 "${repository}/.deploy/"{clone.sh,load.sh,verify.sh,prune.sh,switch.sh} "${PREFIX}/bin/"
 
     install -d -m 0755 -o root -g root "${PREFIX}/etc"
     if [ ! -f "${PREFIX}/etc/deploy.conf" ]; then
@@ -575,6 +572,8 @@ As ${DEPLOY_USER} (sudo -iu ${DEPLOY_USER}), none of it as root:
   3. To build: clone unipept-database, which build.sh needs whole, and install Rust with rustup
      (https://rustup.rs); the repository pins the toolchain. .deploy/build.sh in that clone reads
      the same deploy.conf.
-  4. On a host that runs the API, once: ${PREFIX}/bin/migrate.sh, which sets it up for switch.sh.
+  4. On a host that runs the API, once its first version is here and loaded: point ${OUTPUT_DIR}/current
+     at it (ln -s uniprot-YYYY-MM ${OUTPUT_DIR}/current), and INDEX_LOCATION in the API's settings
+     at ${OUTPUT_DIR}/current/suffix-array. switch.sh changes the version from then on.
 EOF
 log "The host is ready."

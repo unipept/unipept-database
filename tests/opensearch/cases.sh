@@ -84,12 +84,7 @@ curl -s -X POST "${OPENSEARCH_URL}/uniprot_entries/_refresh" > /dev/null
 check "the index was not dropped and the rest was added" "$(documents_in uniprot_entries)" "3"
 
 
-# Where the uniprot_entries alias points, or nothing.
-alias_target() { curl -s "${OPENSEARCH_URL}/_cat/aliases/uniprot_entries?h=index" | tr -d '[:space:]'; }
-
 not_in() { ! grep -q "$1" "$2"; }
-not_served() { ! served "$@"; }
-not_ready() { ! ready "$@"; }
 
 # open, close, or nothing for an index that is not there.
 status_of() { curl -s "${OPENSEARCH_URL}/_cat/indices/$1?h=status&expand_wildcards=all" 2> /dev/null | grep -xE 'open|close'; }
@@ -106,12 +101,11 @@ load_version() {
 }
 
 
-section "a versioned index is loaded beside the one the API queries"
+section "a versioned index is loaded beside another"
 load_version uniprot_entries-2026-01 P10001 P10002
 check_true "the load succeeds" [ "$rc" -eq 0 ]
 check "the versioned index holds its rows" "$(documents_in uniprot_entries-2026-01)" "2"
-check "the index the API queries is untouched" "$(documents_in uniprot_entries)" "3"
-check "and is still an index, not an alias" "$(alias_target)" ""
+check "the index beside it is untouched" "$(documents_in uniprot_entries)" "3"
 "${REPO}/opensearch/load.sh" --opensearch-url "$OPENSEARCH_URL" --index-name uniprot_entries-2026-01 --check-complete
 check "it is marked as loaded to the end" "$?" "0"
 
@@ -147,29 +141,19 @@ curl -s -X POST "${OPENSEARCH_URL}/uniprot_entries-2026-07/_refresh" > /dev/null
 check "with every row" "$(documents_in uniprot_entries-2026-07)" "2"
 
 
-# The API installed on a host, as prune.sh and switch.sh ask it: by its --version, which a case sets.
-API_BIN=/tmp/api-bin/unipept-api
-mkdir -p /tmp/api-bin
-echo 2.7.0 > /tmp/api-bin/version
-# shellcheck disable=SC2016 # expands when the stand-in runs
-printf '#!/bin/sh\necho "unipept-api $(cat /tmp/api-bin/version)"\n' > "$API_BIN"
-chmod -R a+rX /tmp/api-bin
-chmod 755 "$API_BIN"
-# The one deploy.sh keeps to roll back to, where a case puts it, with its own version.
-roll_back_to() {
-    printf '#!/bin/sh\necho "unipept-api %s"\n' "$1" > "${API_BIN}.previous"
-    chmod 755 "${API_BIN}.previous"
-}
+# The API installed on a host, as prune.sh and switch.sh ask it: a stand-in for its
+# deploy.sh, whose status each case writes with api_status_lines.
+API_DEPLOY_STUB="$(make_api_deploy /tmp/api-deploy.sh)"
+chmod 755 "$API_DEPLOY_STUB"
 
 
 section ".deploy/prune.sh"
 # As the user the .deploy scripts run as, with each version's directory beside its index, the way
 # a host holds them, and the current link where install.sh and switch.sh put it. 2026-01 and
-# 2026-02 have only their index left, and uniprot_entries-legacy is what a host loaded before
-# versioned indices kept.
+# 2026-02 have only their index left. uniprot_entries, which the first sections loaded, is no
+# version's.
 DATA=/tmp/prune-data
 rm -rf "${DATA:?}"
-load_version uniprot_entries-legacy P00009
 for version in 2026-01 2026-02 2026-03 2026-04 2026-05; do
     load_version "uniprot_entries-${version}" "P${version//-/}"
 done
@@ -189,7 +173,7 @@ prune() {
 prune "${WORK}/prune-dry.log" --keep 2 --dry-run
 check_true "a dry run succeeds" [ "$rc" -eq 0 ]
 check_true "and names what it would remove, newest first" grep -q 'Removing: 2026-03 2026-02 2026-01$' "${WORK}/prune-dry.log"
-check "without removing an index" "$(status_of uniprot_entries-2026-01)" "open"
+check "without removing an index" "$(status_of uniprot_entries-2026-01) $(status_of uniprot_entries)" "open open"
 check_true "or a directory" test -d "${DATA}/uniprot-2026-03"
 
 prune "${WORK}/prune.log" --keep 2
@@ -200,8 +184,7 @@ check "the two before it are kept, index and files" \
     "$(status_of uniprot_entries-2026-05) $(status_of uniprot_entries-2026-04) $([ -d "${DATA}/uniprot-2026-04" ] && echo kept)" \
     "open open kept"
 check "older ones lose their index" "$(status_of uniprot_entries-2026-03)$(status_of uniprot_entries-2026-01)" ""
-# Nothing says INDEX_LOCATION goes through current here, so an older API may still query it.
-check "uniprot_entries-legacy is kept, which may be the only copy of what an older API serves" "$(status_of uniprot_entries-legacy)" "open"
+check "an index that is no version's is left alone" "$(status_of uniprot_entries)" "open"
 check "and their files" "$([ -e "${DATA}/uniprot-2026-03" ] && echo left || echo removed)" "removed"
 check "current is left as it is" "$(readlink "${DATA}/current")" "uniprot-2026-07"
 
@@ -215,57 +198,28 @@ check "the one before is kept, with its files" "$(status_of uniprot_entries-2026
 check "and everything between the two" "$(status_of uniprot_entries-2026-05)" "open"
 runuser -u unipept -- unlink "${DATA}/previous"
 
-section ".deploy/prune.sh keeps what INDEX_LOCATION names"
-# A host whose API still reads a version's directory itself, rather than through current.
-printf 'INDEX_LOCATION=%s/uniprot-2026-04/suffix-array\n' "$DATA" > /tmp/prune-api.env
-chmod 644 /tmp/prune-api.env
+section ".deploy/prune.sh keeps the version the API says it serves"
+# A host whose API still reads a version's directory itself, rather than through current, and says
+# so in its status.
 prune_with_api() {
     local logfile=$1
     shift
-    runuser -u unipept -- env API_ENV_FILE=/tmp/prune-api.env API_BINARY="$API_BIN" "${REPO}/.deploy/prune.sh" --output-dir "$DATA" \
+    runuser -u unipept -- env API_DEPLOY="$API_DEPLOY_STUB" "${REPO}/.deploy/prune.sh" --output-dir "$DATA" \
         --opensearch-url "$OPENSEARCH_URL" "$@" > "$logfile" 2>&1
     rc=$?
 }
+api_status_lines "${DATA}/uniprot-2026-04/suffix-array" uniprot_entries-2026-04 > "${API_DEPLOY_STUB}.status"
 prune_with_api "${WORK}/prune-inuse.log" --keep 0
 check_true "it succeeds" [ "$rc" -eq 0 ]
-check_true "and counts what INDEX_LOCATION names as served" grep -q 'This host serves 2026-07 2026-04' "${WORK}/prune-inuse.log"
+check_true "and counts the API's version as served" grep -q 'This host serves 2026-07 2026-04' "${WORK}/prune-inuse.log"
 check "that version is kept, with its files" "$(status_of uniprot_entries-2026-04) $([ -d "${DATA}/uniprot-2026-04" ] && echo kept)" "open kept"
-check "and uniprot_entries itself, which an API reading it that way may still query" "$(status_of uniprot_entries)" "open"
 
-# Once INDEX_LOCATION goes through current, the API queries the versioned index, and uniprot_entries
-# itself is the oldest.
-printf 'INDEX_LOCATION=%s/current/suffix-array\n' "$DATA" > /tmp/prune-api.env
-prune_with_api "${WORK}/prune-plain.log" --keep 1 --dry-run
-check_true "uniprot_entries itself is then removed as the oldest" grep -q 'Removing:.* plain$' "${WORK}/prune-plain.log"
-check "not on a dry run" "$(status_of uniprot_entries)" "open"
-
-# But not while the API installed is one that queries it, whatever INDEX_LOCATION says.
-echo 2.6.0 > /tmp/api-bin/version
-prune_with_api "${WORK}/prune-oldapi.log" --keep 1 --dry-run
-check "an older API keeps uniprot_entries itself" "$(grep -c 'plain' "${WORK}/prune-oldapi.log")" "0"
-echo 2.7.0 > /tmp/api-bin/version
-roll_back_to 2.6.0
-prune_with_api "${WORK}/prune-oldprevious.log" --keep 1 --dry-run
-check "and so does an older one deploy.sh would roll back to" "$(grep -c 'plain' "${WORK}/prune-oldprevious.log")" "0"
-check_true "and it says why" grep -q "from before versioned indices, are kept: ${API_BIN}.previous is older than 2.7.0" "${WORK}/prune-oldprevious.log"
-chmod 644 "${API_BIN}.previous"
-prune_with_api "${WORK}/prune-norun.log" --keep 1 --dry-run
-check_true "one it cannot run is said to be that" grep -q "${API_BIN}.previous cannot be run" "${WORK}/prune-norun.log"
-rm -f "${API_BIN}.previous"
-
-# Unless the index of the version it serves is not whole to serve from: then it may be the only copy.
-curl -s -X POST "${OPENSEARCH_URL}/uniprot_entries-2026-07/_close" > /dev/null
-prune_with_api "${WORK}/prune-notwhole.log" --keep 1 --dry-run
-check "while the served version's index is not open, uniprot_entries itself is not a candidate" \
-    "$(grep -c 'plain' "${WORK}/prune-notwhole.log")" "0"
-curl -s -X POST "${OPENSEARCH_URL}/uniprot_entries-2026-07/_open" > /dev/null
-
-# With the API's own settings the ones that say what it reads, it will not guess past them.
-chmod 600 /tmp/prune-api.env
-prune_with_api "${WORK}/prune-unreadable.log" --keep 0
-check "settings it cannot read stop it" "$rc" "2"
-check_true "and say so" grep -q 'cannot read /tmp/prune-api.env' "${WORK}/prune-unreadable.log"
-rm -f /tmp/prune-api.env
+# An API that does not say what it serves: what it may serve is not removed on a guess.
+sed -i 's/^status_format=1$/status_format=2/' "${API_DEPLOY_STUB}.status"
+prune_with_api "${WORK}/prune-unsaid.log" --keep 0
+check "an API whose status these scripts do not read stops it" "$rc" "2"
+check_true "and says so" grep -q 'does not say which version this host serves' "${WORK}/prune-unsaid.log"
+check "and removes nothing" "$(status_of uniprot_entries-2026-04) $(status_of uniprot_entries-2026-05)" "open open"
 
 
 section ".deploy/prune.sh keeps a version loaded ahead of a switch"
@@ -334,16 +288,28 @@ load_version uniprot_entries-2027-01 P27001
 load_version uniprot_entries-2027-02 P27002
 load_version uniprot_entries-2027-04 P27004
 curl -s -X POST "${OPENSEARCH_URL}/uniprot_entries-2027-02/_close" > /dev/null
-printf 'INDEX_LOCATION=%s/current/suffix-array\n' "$SW_DATA" > "${SW}/api.env"
-chmod 644 "${SW}/api.env"
+# The API's lock, in /run/lock as its install puts it.
+API_LOCK=/run/lock/unipept-api.lock
+mkdir -p /run/lock
+chmod 1777 /run/lock
+api_status_lines "${SW_DATA}/current/suffix-array" uniprot_entries-2027-01 "$API_LOCK" > "${SW_STATE}/status"
+chmod 644 "${SW_STATE}/status"
 
+# Its check, stop and start record whether they run under the API lock: handed down on descriptor 7,
+# taken through it as the real one takes it, and so held against another open of the file.
 cat > "${SW_BIN}/deploy.sh" <<STUB
 #!/usr/bin/env bash
+[ "\${1:-}" = status ] && { cat "${SW_STATE}/status"; exit; }
 printf '%s\n' "\$*" >> "${SW_STATE}/api-calls"
 case "\${1:-}" in
-    '')
-        if [ -e "${SW_STATE}/old-api" ]; then echo 'usage: deploy.sh deploy' 1>&2; else echo 'usage: deploy.sh stop / deploy.sh start' 1>&2; fi
-        exit 2 ;;
+    check | stop | start)
+        if [ /dev/fd/7 -ef "$API_LOCK" ] && flock -n 7 && ! flock -n "$API_LOCK" true 2> /dev/null; then
+            echo "\$1 held" >> "${SW_STATE}/lock-calls"
+        else
+            echo "\$1 free" >> "${SW_STATE}/lock-calls"
+        fi ;;
+esac
+case "\${1:-}" in
     check) [ ! -e "${SW_STATE}/check-fails" ] || { echo 'check: the variant does not fit' 1>&2; exit 1; } ;;
     start)
         [ ! -e "${SW_STATE}/start-sleeps" ] || sleep 3
@@ -371,12 +337,12 @@ esac
 STUB
 chmod 755 "$SW_BIN"/*
 
-forget_switch_calls() { rm -f "${SW_STATE:?}/api-calls" "${SW_STATE:?}/systemctl-calls" "${SW_STATE:?}/started-on"; }
+forget_switch_calls() { rm -f "${SW_STATE:?}/api-calls" "${SW_STATE:?}/systemctl-calls" "${SW_STATE:?}/started-on" "${SW_STATE:?}/lock-calls"; }
 switch() {
     local logfile=$1
     shift
     forget_switch_calls
-    runuser -u unipept -- env PATH="${SW_BIN}:${PATH}" API_ENV_FILE="${SW}/api.env" API_DEPLOY="${SW_BIN}/deploy.sh" API_BINARY="$API_BIN" \
+    runuser -u unipept -- env PATH="${SW_BIN}:${PATH}" API_DEPLOY="${SW_BIN}/deploy.sh" \
         "${REPO}/.deploy/switch.sh" --output-dir "$SW_DATA" --opensearch-url "$OPENSEARCH_URL" "$@" > "$logfile" 2>&1
     rc=$?
 }
@@ -384,33 +350,28 @@ calls() { tr '\n' ' ' < "${SW_STATE}/$1" 2> /dev/null; }
 serves() { readlink "${SW_DATA}/current"; }
 
 # Every problem at once, and nothing stopped for any of them.
-printf 'INDEX_LOCATION=%s/uniprot-2027-01/suffix-array\n' "$SW_DATA" > "${SW}/api.env"
-touch "${SW_STATE}/no-sudo" "${SW_STATE}/old-api"
+api_status_lines "${SW_DATA}/uniprot-2027-01/suffix-array" uniprot_entries-2027-01 "$API_LOCK" > "${SW_STATE}/status"
+touch "${SW_STATE}/no-sudo"
 switch "${WORK}/switch-refused.log" --uniprot-version 2027-03
 check "a host that cannot switch stops it" "$rc" "2"
 check_true "its proteins not loaded" grep -q 'uniprot_entries-2027-03 is not in OpenSearch. Load it with load.sh --uniprot-version 2027-03' "${WORK}/switch-refused.log"
 check_true "an API that would not follow" grep -q "Set it to ${SW_DATA}/current/suffix-array" "${WORK}/switch-refused.log"
 check_true "no sudo for OpenSearch" grep -q 'may not stop and start OpenSearch through sudo' "${WORK}/switch-refused.log"
-check_true "an API without stop and start" grep -q 'has no stop and start' "${WORK}/switch-refused.log"
-check_true "counted" grep -q '4 problem(s), so nothing was changed' "${WORK}/switch-refused.log"
-check "nothing is stopped" "$(calls api-calls)$(calls systemctl-calls)" " "
+check_true "counted" grep -q '3 problem(s), so nothing was changed' "${WORK}/switch-refused.log"
+check "nothing is stopped" "$(calls api-calls)$(calls systemctl-calls)" ""
 check "it serves what it served" "$(serves)" "uniprot-2027-01"
-printf 'INDEX_LOCATION=%s/current/suffix-array\n' "$SW_DATA" > "${SW}/api.env"
-rm -f "${SW_STATE:?}/no-sudo" "${SW_STATE:?}/old-api"
+rm -f "${SW_STATE:?}/no-sudo"
 
-echo 2.6.0 > /tmp/api-bin/version
-switch "${WORK}/switch-oldapi.log" --uniprot-version 2027-02
-check "an API that queries no version's own index stops it" "$rc" "2"
-check_true "and says which is needed" grep -q 'the API installed is 2.6.0, older than 2.7.0' "${WORK}/switch-oldapi.log"
-echo 2.7.0-rc.1 > /tmp/api-bin/version
-switch "${WORK}/switch-rc.log" --uniprot-version 2027-02 --check
-check_true "a release candidate of 2.7.0 is taken for 2.7.0" not_in 'older than' "${WORK}/switch-rc.log"
-echo 2.7.0 > /tmp/api-bin/version
-mv "$API_BIN" "${API_BIN}.away"
-switch "${WORK}/switch-nobinary.log" --uniprot-version 2027-02
-check "an API it cannot run stops it" "$rc" "2"
-check_true "and says so, not that it is old" grep -q "cannot run ${API_BIN} --version" "${WORK}/switch-nobinary.log"
-mv "${API_BIN}.away" "$API_BIN"
+# An API whose status these scripts do not read: what it says of INDEX_LOCATION and its lock is not
+# taken from it, and it is one problem, not one for each.
+sed 's/^status_format=1$/status_format=2/' "${SW_STATE}/status" > "${SW_STATE}/status.new" && mv "${SW_STATE}/status.new" "${SW_STATE}/status"
+chmod 644 "${SW_STATE}/status"
+switch "${WORK}/switch-format.log" --uniprot-version 2027-02
+check "an API whose status these scripts do not read stops it" "$rc" "2"
+check_true "and says so" grep -q 'status does not answer as these scripts read it' "${WORK}/switch-format.log"
+check_true "once" grep -q '1 problem(s), so nothing was changed' "${WORK}/switch-format.log"
+check "nothing is stopped" "$(calls api-calls)$(calls systemctl-calls)" ""
+api_status_lines "${SW_DATA}/current/suffix-array" uniprot_entries-2027-01 "$API_LOCK" > "${SW_STATE}/status"
 
 curl -s -X POST "${OPENSEARCH_URL}/uniprot_entries-2027-01/_close" > /dev/null
 switch "${WORK}/switch-fromclosed.log" --uniprot-version 2027-02
@@ -461,7 +422,7 @@ touch "${SW_STATE}/check-fails"
 switch "${WORK}/switch-apicheck.log" --uniprot-version 2027-02
 check "the API's own check refusing stops it" "$rc" "2"
 check_true "with the API's reason" grep -q 'check: the variant does not fit' "${WORK}/switch-apicheck.log"
-check "nothing is stopped" "$(calls api-calls)" " check --index ${SW_DATA}/uniprot-2027-02/suffix-array "
+check "nothing is stopped" "$(calls api-calls)" "check --index ${SW_DATA}/uniprot-2027-02/suffix-array "
 rm -f "${SW_STATE:?}/check-fails"
 
 # A load holds the lock shared, as load.sh takes it, from before it drops its index to its end. One
@@ -484,6 +445,31 @@ check "a load running stops it" "$rc" "2"
 check_true "and says so" grep -q 'is running on this host; wait for it to finish' "${WORK}/switch-loading.log"
 kill "$loader"
 wait "$loader" 2> /dev/null
+
+# A deploy, rollback, stop or start of the API holds the API's lock: a switch would stop the API
+# under it, or have it restarted under the switch.
+runuser -u unipept -- touch "$API_LOCK"
+# shellcheck disable=SC2016 # $1 belongs to the inner shell
+setpriv --reuid unipept --regid unipept --init-groups bash -c 'exec 7< "$1"; flock -x 7; exec sleep 30' _ "$API_LOCK" &
+deployer=$!
+for _ in $(seq 50); do
+    runuser -u unipept -- flock -n -x "$API_LOCK" true 2> /dev/null || break
+    sleep 0.1
+done
+switch "${WORK}/switch-deploying.log" --uniprot-version 2027-02
+check "a deploy of the API running stops it" "$rc" "2"
+check_true "and says so" grep -q "FAIL a deploy, rollback, start or stop, an install, or a change to the index this host serves, holds ${API_LOCK}" "${WORK}/switch-deploying.log"
+check "nothing is stopped" "$(calls lock-calls)$(calls systemctl-calls)" ""
+kill "$deployer"
+wait "$deployer" 2> /dev/null
+
+# A status that names no lock: the API's deploys could not be kept out.
+grep -v '^api_lock=' "${SW_STATE}/status" > "${SW_STATE}/status.new" && mv "${SW_STATE}/status.new" "${SW_STATE}/status"
+chmod 644 "${SW_STATE}/status"
+switch "${WORK}/switch-nolock.log" --uniprot-version 2027-02
+check "a status that names no API lock stops it" "$rc" "2"
+check_true "and says so" grep -q 'status names no api_lock' "${WORK}/switch-nolock.log"
+api_status_lines "${SW_DATA}/current/suffix-array" uniprot_entries-2027-01 "$API_LOCK" > "${SW_STATE}/status"
 
 # A lock it cannot open is said to be that, not taken for a load.
 mv "$LOCK" "${LOCK}.away"
@@ -520,20 +506,22 @@ switch "${WORK}/switch-check-closed.log" --uniprot-version 2027-02 --check
 check "--check on a closed index stops it" "$rc" "2"
 check_true "and says the API's check could not run" grep -q "the API's own check of 2027-02 cannot run" "${WORK}/switch-check-closed.log"
 check "changing nothing" "$(serves) $(status_of uniprot_entries-2027-02)" "uniprot-2027-01 close"
-check "the API's check is not asked" "$(calls api-calls)" " "
+check "the API's check is not asked" "$(calls api-calls)" ""
 
 curl -s -X POST "${OPENSEARCH_URL}/uniprot_entries-2027-02/_open" > /dev/null
 switch "${WORK}/switch-check.log" --uniprot-version 2027-02 --check
 check "--check succeeds" "$rc" "0"
 check_true "and says the host can switch" grep -q 'can switch from 2027-01 to 2027-02' "${WORK}/switch-check.log"
-check "asking the API's check" "$(calls api-calls)" " check --index ${SW_DATA}/uniprot-2027-02/suffix-array "
+check "having let go of the API lock before the API's check, which a deploy could otherwise not run beside" "$(calls lock-calls)" "check free "
+check "asking the API's check" "$(calls api-calls)" "check --index ${SW_DATA}/uniprot-2027-02/suffix-array "
 check "changing nothing" "$(serves)" "uniprot-2027-01"
 curl -s -X POST "${OPENSEARCH_URL}/uniprot_entries-2027-02/_close" > /dev/null
 
 switch "${WORK}/switch.log" --uniprot-version 2027-02
 check "a switch succeeds" "$rc" "0"
-check "the API checks the new version, is stopped and started" "$(calls api-calls)" " check --index ${SW_DATA}/uniprot-2027-02/suffix-array stop start "
+check "the API checks the new version, is stopped and started" "$(calls api-calls)" "check --index ${SW_DATA}/uniprot-2027-02/suffix-array stop start "
 check "OpenSearch is stopped after it and started before it" "$(calls systemctl-calls)" "stop opensearch start opensearch "
+check "all under the API lock the switch hands down" "$(calls lock-calls)" "check held stop held start held "
 check "the API starts on the new version" "$(cat "${SW_STATE}/started-on")" "uniprot-2027-02"
 check "current points at it" "$(serves)" "uniprot-2027-02"
 check "previous at the one it left" "$(readlink "${SW_DATA}/previous")" "uniprot-2027-01"
@@ -542,31 +530,18 @@ check "its closed index was opened" "$(status_of uniprot_entries-2027-02)" "open
 check "the one it left stays open, to go back to" "$(status_of uniprot_entries-2027-01)" "open"
 check "one loaded ahead stays open" "$(status_of uniprot_entries-2027-04)" "open"
 check "older ones are closed" "$(status_of uniprot_entries-2026-09)" "close"
-check "no alias of the old name is left, which the API no longer queries" "$(alias_target)" ""
 
 switch "${WORK}/switch-again.log" --uniprot-version 2027-02
 check "switching to what it serves succeeds" "$rc" "0"
 check_true "and says so" grep -q 'already serves 2027-02' "${WORK}/switch-again.log"
 check "stopping nothing" "$(calls api-calls)" ""
 
-# previous pointing at a path, as migrate.sh leaves where the version is outside OUTPUT_DIR.
+# previous pointing at a path, as a link made by hand may, where the version is outside OUTPUT_DIR.
 runuser -u unipept -- ln -sfn "${SW_DATA}/uniprot-2027-01" "${SW_DATA}/previous"
 switch "${WORK}/switch-back.log" --back
 check "--back succeeds" "$rc" "0"
 check "back on the one before, where previous pointed" "$(serves) $(readlink "${SW_DATA}/previous")" "${SW_DATA}/uniprot-2027-01 uniprot-2027-02"
 runuser -u unipept -- ln -sfn uniprot-2027-01 "${SW_DATA}/current"
-
-# With an older API to roll back to, which after a switch would serve the new files with the proteins
-# of the version before it: refused, with how to give that rollback up.
-roll_back_to 2.6.0
-switch "${WORK}/switch-oldprevious.log" --uniprot-version 2027-02
-check "a switch with an older API to roll back to stops it" "$rc" "2"
-check_true "and says how to give that rollback up" grep -q "Remove it, as unipept, to give up rolling back past 2.7.0: rm ${API_BIN}.previous" "${WORK}/switch-oldprevious.log"
-check "nothing is switched" "$(serves)" "uniprot-2027-01"
-roll_back_to 2.7.0
-switch "${WORK}/switch-newprevious.log" --uniprot-version 2027-02 --check
-check "one that queries versioned indices is fine" "$rc" "0"
-rm -f "${API_BIN}.previous"
 
 touch "${SW_STATE}/start-fails-once"
 switch "${WORK}/switch-apifails.log" --uniprot-version 2027-02
@@ -601,7 +576,7 @@ rm -f "${SW_STATE:?}/start-fails"
 # An interrupt while the API starts on the new version: it goes back.
 touch "${SW_STATE}/start-sleeps"
 forget_switch_calls
-runuser -u unipept -- env PATH="${SW_BIN}:${PATH}" API_ENV_FILE="${SW}/api.env" API_DEPLOY="${SW_BIN}/deploy.sh" API_BINARY="$API_BIN" \
+runuser -u unipept -- env PATH="${SW_BIN}:${PATH}" API_DEPLOY="${SW_BIN}/deploy.sh" \
     "${REPO}/.deploy/switch.sh" --output-dir "$SW_DATA" --opensearch-url "$OPENSEARCH_URL" --uniprot-version 2027-02 \
     > "${WORK}/switch-interrupted.log" 2>&1 &
 switcher=$!
@@ -625,208 +600,11 @@ check "and the API was started on it" "$(cat "${SW_STATE}/started-on")" "uniprot
 mv "${SW_DATA}/current" "${SW}/current.away"
 switch "${WORK}/switch-nocurrent.log" --uniprot-version 2027-02
 check "a host without current stops it" "$rc" "2"
-check_true "and says migrate.sh sets it up" grep -q 'Run migrate.sh once' "${WORK}/switch-nocurrent.log"
+check_true "and says how to set it up" grep -q "point it at the first version, ln -s uniprot-YYYY-MM ${SW_DATA}/current" "${WORK}/switch-nocurrent.log"
 mv "${SW}/current.away" "${SW_DATA}/current"
 
 "${REPO}/.deploy/switch.sh" --output-dir "$SW_DATA" --uniprot-version 2027-02 > /dev/null 2>&1
 check "as root it stops" "$?" "2"
-
-
-section "the proteins of the version a host serves, kept in the index named after it"
-ensure() {
-    ( source "${REPO}/pipelines/lib/common.sh" && source "${REPO}/opensearch/lib.sh" && ensure_versioned_index "$1" 60 ) > "${WORK}/ensure.log" 2>&1
-    rc=$?
-}
-ready() {
-    ( source "${REPO}/pipelines/lib/common.sh" && source "${REPO}/opensearch/lib.sh" && OPENSEARCH_URL="$1" index_ready "$2" 1 ) > /dev/null 2>&1
-}
-check_true "an index that answers is ready" ready "$OPENSEARCH_URL" uniprot_entries-2027-01
-check_true "one that is not there is not" not_ready "$OPENSEARCH_URL" uniprot_entries-2099-01
-check_true "nor is one where OpenSearch does not answer" not_ready http://127.0.0.1:1 uniprot_entries-2027-01
-check_true "nor one whose request OpenSearch answers with an error" not_ready "${OPENSEARCH_URL}/no-such-path" uniprot_entries-2027-01
-is_marked() { curl -s "${OPENSEARCH_URL}/$1/_mapping" | grep -qF '"unipept_load":"complete"'; }
-
-ensure 2027-01
-check "an index already there is left as it is" "$rc" "0"
-check "without a word" "$(cat "${WORK}/ensure.log")" ""
-
-# What an interrupted run leaves: the clone, and the block on what it was cloned from.
-load_version uniprot_entries-legacy P00007
-curl -s -X PUT "${OPENSEARCH_URL}/uniprot_entries-legacy/_settings" -H 'Content-Type: application/json' \
-    -d '{"index.blocks.write":true}' > /dev/null
-ensure 2027-01
-check "run again, it succeeds" "$rc" "0"
-check "and lifts the block" \
-    "$(curl -s -o /dev/null -w '%{http_code}' -X PUT "${OPENSEARCH_URL}/uniprot_entries-legacy/_doc/P00098" -H 'Content-Type: application/json' -d '{"uniprot_accession_number":"P00098"}')" "201"
-curl -s -X DELETE "${OPENSEARCH_URL}/uniprot_entries-legacy" > /dev/null
-
-curl -s -X POST "${OPENSEARCH_URL}/uniprot_entries-2027-01/_close" > /dev/null
-ensure 2027-01
-check "one that is closed" "$rc" "0"
-check "is opened" "$(status_of uniprot_entries-2027-01)" "open"
-
-curl -s -X PUT "${OPENSEARCH_URL}/uniprot_entries-2027-05" -H 'Content-Type: application/json' \
-    -d @"${REPO}/opensearch/mappings/uniprot_entries.json" > /dev/null
-ensure 2027-05
-check "one that was not loaded to the end fails it" "$rc" "2"
-check_true "and says to load it again" grep -q 'uniprot_entries-2027-05 is there and was not loaded to the end' "${WORK}/ensure.log"
-curl -s -X DELETE "${OPENSEARCH_URL}/uniprot_entries-2027-05" > /dev/null
-
-# A host whose alias points at the old index an earlier release kept. The index uniprot_entries the
-# first sections loaded goes first: an alias cannot share its name.
-curl -s -X DELETE "${OPENSEARCH_URL}/uniprot_entries" > /dev/null
-load_version uniprot_entries-legacy P00001 P00002
-curl -s -X POST "${OPENSEARCH_URL}/_aliases" -H 'Content-Type: application/json' \
-    -d '{"actions":[{"add":{"index":"uniprot_entries-legacy","alias":"uniprot_entries"}}]}' > /dev/null
-ensure 2025-04
-check "the proteins behind the alias are kept" "$rc" "0"
-check "under the version's name" "$(documents_in uniprot_entries-2025-04)" "2"
-check_true "marked as loaded to the end" is_marked uniprot_entries-2025-04
-check_true "and it says so" grep -q 'Kept uniprot_entries-legacy as uniprot_entries-2025-04' "${WORK}/ensure.log"
-# An alias left on two indices, legacy the second: its proteins are found all the same.
-curl -s -X POST "${OPENSEARCH_URL}/_aliases" -H 'Content-Type: application/json' \
-    -d '{"actions":[{"add":{"index":"uniprot_entries-2027-01","alias":"uniprot_entries"}}]}' > /dev/null
-ensure 2025-05
-check "legacy among two the alias points at is found" "$rc" "0"
-check "and kept" "$(documents_in uniprot_entries-2025-05)" "2"
-curl -s -X POST "${OPENSEARCH_URL}/_aliases" -H 'Content-Type: application/json' \
-    -d '{"actions":[{"remove":{"index":"uniprot_entries-2027-01","alias":"uniprot_entries"}}]}' > /dev/null
-check "the clone takes writes, as a load continued with --skip makes" \
-    "$(curl -s -o /dev/null -w '%{http_code}' -X PUT "${OPENSEARCH_URL}/uniprot_entries-2025-04/_doc/P00099" -H 'Content-Type: application/json' -d '{"uniprot_accession_number":"P00099"}')" "201"
-check "and so does the index it was made from" \
-    "$(curl -s -o /dev/null -w '%{http_code}' -X PUT "${OPENSEARCH_URL}/uniprot_entries-legacy/_doc/P00099" -H 'Content-Type: application/json' -d '{"uniprot_accession_number":"P00099"}')" "201"
-
-# A host loaded before versioned indices, whose proteins are in uniprot_entries itself.
-curl -s -X POST "${OPENSEARCH_URL}/_aliases" -H 'Content-Type: application/json' \
-    -d '{"actions":[{"remove":{"index":"uniprot_entries-legacy","alias":"uniprot_entries"}}]}' > /dev/null
-load_version uniprot_entries P00003 P00004 P00005
-ensure 2025-03
-check "the proteins in uniprot_entries are kept" "$rc" "0"
-check "under the version's name" "$(documents_in uniprot_entries-2025-03)" "3"
-check_true "marked as loaded to the end" is_marked uniprot_entries-2025-03
-check "and the index they were in is still there" "$(documents_in uniprot_entries)" "3"
-
-curl -s -X DELETE "${OPENSEARCH_URL}/uniprot_entries" > /dev/null
-ensure 2025-02
-check "no index holding them fails it" "$rc" "2"
-check_true "and says to load them" grep -q 'no index holds the proteins of 2025-02' "${WORK}/ensure.log"
-
-section ".deploy/migrate.sh"
-# A host set up before switch.sh: INDEX_LOCATION names the version's directory itself, and its
-# proteins are in the index uniprot_entries.
-MIG=/tmp/migrate
-rm -rf "${MIG:?}"
-mkdir -p "${MIG}/data/uniprot-2024-12/suffix-array"
-printf 'INDEX_LOCATION=%s/data/uniprot-2024-12/suffix-array\n' "$MIG" > "${MIG}/api.env"
-chown -R unipept: "$MIG"
-load_version uniprot_entries P24001 P24002
-migrate() {
-    local logfile=$1
-    shift
-    runuser -u unipept -- env API_ENV_FILE="${MIG}/api.env" "${REPO}/.deploy/migrate.sh" \
-        --output-dir "${MIG}/data" --opensearch-url "$OPENSEARCH_URL" "$@" > "$logfile" 2>&1
-    rc=$?
-}
-
-migrate "${WORK}/migrate.log" --output-dir "${MIG}/data/"
-check "it succeeds" "$rc" "0"
-check "current points at the version the API serves" "$(readlink "${MIG}/data/current")" "uniprot-2024-12"
-check "and belongs to the user the API runs as" "$(stat -c %U "${MIG}/data/current")" "unipept"
-check "the proteins are in the index named after it" "$(documents_in uniprot_entries-2024-12)" "2"
-check "what the API reads is not touched" "$(sed -n 's/^INDEX_LOCATION=//p' "${MIG}/api.env")" "${MIG}/data/uniprot-2024-12/suffix-array"
-check_true "it says to point INDEX_LOCATION through current" grep -qxF "  INDEX_LOCATION=${MIG}/data/current/suffix-array" "${WORK}/migrate.log"
-
-# With a slash at the end, which names the same directory.
-printf 'INDEX_LOCATION=%s/data/current/suffix-array/\n' "$MIG" > "${MIG}/api.env"
-migrate "${WORK}/migrate-again.log" --output-dir "${MIG}/data/"
-check "a second run succeeds" "$rc" "0"
-check_true "and says the host is set up" grep -q 'This host is set up for switch.sh' "${WORK}/migrate-again.log"
-check "with nothing left to do" "$(grep -c 'Still to do' "${WORK}/migrate-again.log")" "0"
-
-# Where switch.sh has moved it since, it stays.
-runuser -u unipept -- ln -sfn uniprot-2027-01 "${MIG}/data/current"
-migrate "${WORK}/migrate-moved.log"
-check "a link switch.sh moved is left" "$(readlink "${MIG}/data/current")" "uniprot-2027-01"
-
-# A link to one version, and INDEX_LOCATION naming another: whose proteins are which is not known.
-runuser -u unipept -- ln -sfn uniprot-2024-11 "${MIG}/data/current"
-printf 'INDEX_LOCATION=%s/data/uniprot-2024-12/suffix-array\n' "$MIG" > "${MIG}/api.env"
-migrate "${WORK}/migrate-mismatch.log"
-check "current and INDEX_LOCATION naming different versions stop it" "$rc" "2"
-check_true "and it says so" grep -q 'current points at 2024-11, and INDEX_LOCATION names 2024-12' "${WORK}/migrate-mismatch.log"
-check "cloning nothing" "$(status_of uniprot_entries-2024-11)" ""
-
-runuser -u unipept -- unlink "${MIG}/data/current"
-printf 'INDEX_LOCATION=/srv/index\n' > "${MIG}/api.env"
-migrate "${WORK}/migrate-noversion.log"
-check "an INDEX_LOCATION that names no version stops it" "$rc" "2"
-check_true "and says how to set it up by hand" grep -q "Point ${MIG}/data/current at it yourself" "${WORK}/migrate-noversion.log"
-check_true "setting up no link" test ! -L "${MIG}/data/current"
-
-mv "${MIG}/api.env" "${MIG}/api.env.away"
-migrate "${WORK}/migrate-noapi.log"
-check "a host without the API stops it" "$rc" "2"
-check_true "and says so" grep -q 'this host runs no API' "${WORK}/migrate-noapi.log"
-mv "${MIG}/api.env.away" "${MIG}/api.env"
-
-env API_ENV_FILE="${MIG}/api.env" "${REPO}/.deploy/migrate.sh" --output-dir "${MIG}/data" > /dev/null 2>&1
-check "as root it stops" "$?" "2"
-
-# A switch or a prune holds the lock; cloning under either could lose what it clones from.
-# shellcheck disable=SC2016 # $1 belongs to the inner shell
-setpriv --reuid unipept --regid unipept --init-groups bash -c 'exec 9>> "$1"; flock -s 9; exec sleep 30' _ /run/lock/unipept-opensearch.lock &
-holder=$!
-for _ in $(seq 50); do
-    runuser -u unipept -- flock -n -x /run/lock/unipept-opensearch.lock true 2> /dev/null || break
-    sleep 0.1
-done
-migrate "${WORK}/migrate-locked.log"
-check "a load, a switch or a prune running stops it" "$rc" "2"
-check_true "and says so" grep -q 'is running on this host; wait for it to finish' "${WORK}/migrate-locked.log"
-kill "$holder"
-wait "$holder" 2> /dev/null
-
-# A clone OpenSearch refuses leaves no write block on what it would have been made from.
-ensure 2099-ZZ
-check "a clone that is refused fails it" "$rc" "2"
-check "and uniprot_entries takes writes again" \
-    "$(curl -s -o /dev/null -w '%{http_code}' -X PUT "${OPENSEARCH_URL}/uniprot_entries/_doc/P00097" -H 'Content-Type: application/json' -d '{"uniprot_accession_number":"P00097"}')" "201"
-
-
-section ".deploy/prune.sh keeps what an alias of the old name points at"
-# A host an earlier release left with the alias on uniprot_entries-legacy, whose API is still from
-# before versioned indices and queries through it.
-curl -s -X DELETE "${OPENSEARCH_URL}/uniprot_entries" > /dev/null
-[ -n "$(status_of uniprot_entries-legacy)" ] || load_version uniprot_entries-legacy P00001
-curl -s -X POST "${OPENSEARCH_URL}/_aliases" -H 'Content-Type: application/json' \
-    -d '{"actions":[{"add":{"index":"uniprot_entries-legacy","alias":"uniprot_entries"}}]}' > /dev/null
-prune "${WORK}/prune-alias.log" --keep 0
-check_true "it succeeds" [ "$rc" -eq 0 ]
-check_true "and counts what the alias points at as served" grep -q 'This host serves 2026-07 legacy' "${WORK}/prune-alias.log"
-check "that index is kept, though --keep is 0" "$(status_of uniprot_entries-legacy)" "open"
-
-
-section "a host serves what an alias of the old name points at"
-# An API from before versioned indices queries through the alias, whatever INDEX_LOCATION and
-# current say: load.sh, build.sh and clone.sh leave that version alone too.
-curl -s -X POST "${OPENSEARCH_URL}/_aliases" -H 'Content-Type: application/json' \
-    -d '{"actions":[{"remove":{"index":"*","alias":"uniprot_entries"}},{"add":{"index":"uniprot_entries-2027-02","alias":"uniprot_entries"}}]}' > /dev/null
-served() {
-    local url="$OPENSEARCH_URL"
-    ( source "${REPO}/.deploy/lib.sh" && OPENSEARCH_URL="$url" OUTPUT_DIR=/nonexistent API_ENV_FILE=/nonexistent is_served "$1" ) > /dev/null 2>&1
-}
-check_true "the version it points at is served" served 2027-02
-check_true "another is not" not_served 2027-01
-
-# shellcheck disable=SC2031 # the suite's own, which served() only changes in its subshell
-curl -s -X POST "${OPENSEARCH_URL}/_aliases" -H 'Content-Type: application/json' \
-    -d '{"actions":[{"add":{"index":"uniprot_entries-2027-04","alias":"uniprot_entries"}}]}' > /dev/null
-check_true "on two indices, the one" served 2027-02
-check_true "and the other" served 2027-04
-
-# shellcheck disable=SC2030 # in the subshell only, on purpose
-check "an alias OpenSearch does not answer for fails the question" \
-    "$( ( source "${REPO}/.deploy/lib.sh" && OPENSEARCH_URL=http://127.0.0.1:1 OUTPUT_DIR=/nonexistent API_ENV_FILE=/nonexistent served_versions ) > /dev/null 2>&1; echo $?)" "1"
 
 
 summary

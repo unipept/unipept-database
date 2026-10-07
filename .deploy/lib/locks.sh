@@ -1,11 +1,13 @@
 # shellcheck shell=bash
 #
-# The locks that keep the scripts on one host from working on the same thing at once. Needs
-# nothing else. Sourced through .deploy/lib.sh.
+# The locks that keep the scripts on one host from working on the same thing at once: their own, and
+# the API's, which a switch holds so no deploy restarts the API under it. Needs nothing else.
+# Sourced through .deploy/lib.sh.
 
-# The lock that keeps loads and switches apart. One per host, as the OpenSearch it guards is, whatever
-# OUTPUT_DIR a run is given; /run/lock is there for every user to take one in.
-OPENSEARCH_LOCK=${OPENSEARCH_LOCK:-/run/lock/unipept-opensearch.lock}
+# The lock that keeps loads and switches apart. One per host, as the OpenSearch it guards is,
+# whatever OUTPUT_DIR a run is given; /run/lock is there for every user to take one in. Fixed, so
+# every script that takes it names the same file.
+readonly OPENSEARCH_LOCK=/run/lock/unipept-opensearch.lock
 
 # Seconds a build or a clone waits for that lock once its work is done, rather than throw the work
 # away: a switch holds it while OpenSearch starts, which takes minutes.
@@ -20,7 +22,7 @@ cannot_open_lock() {
 # Opens a lock file for flock on a file descriptor of this shell, made first where no one has made
 # it. For reading, which is all flock needs: /run/lock is sticky, so opening another user's file
 # there for writing is refused even to root, which is how opensearch/install.sh takes these. On
-# descriptor 8 or 9, the two these locks use.
+# descriptor 7, 8 or 9, the three these locks use.
 # Fails, saying so, where it cannot.
 open_lock() {
     local fd=$1 lock=$2
@@ -28,6 +30,7 @@ open_lock() {
     {
         { [ -e "$lock" ] || : >> "$lock"; } &&
             case $fd in
+                7) exec 7< "$lock" ;;
                 8) exec 8< "$lock" ;;
                 9) exec 9< "$lock" ;;
             esac
@@ -70,7 +73,25 @@ take_load_lock() {
 # it could not be opened.
 lock_refused() {
     case $1 in
-        1) echo "a load, a switch, a prune or migrate.sh is running on this host; wait for it to finish." ;;
-        *) echo "without the lock, a load, a switch or a prune could run at the same time. Make ${OPENSEARCH_LOCK} readable by $(id -un), or set OPENSEARCH_LOCK." ;;
+        1) echo "a load, a switch or a prune is running on this host; wait for it to finish." ;;
+        *) echo "without the lock, a load, a switch or a prune could run at the same time. Make ${OPENSEARCH_LOCK} readable by $(id -un)." ;;
+    esac
+}
+
+# The API's own lock, at the path its deploy.sh status names, on file descriptor 7, held until the
+# script exits. Its deploy, rollback, stop and start take it too, so while a switch holds it no
+# deploy restarts the API on the version being left; the deploy.sh stop and start the switch runs
+# find it on descriptor 7, which they inherit, and take it through that rather than being refused.
+# Fails, rather than waits: 1 where another holds it, 2 where it cannot be opened, which it says.
+take_api_lock() {
+    open_lock 7 "$1" || return 2
+    flock -n 7
+}
+
+# What a script that could not take the API lock says, by why.
+api_lock_refused() {
+    case $1 in
+        1) echo "a deploy, rollback, start or stop, an install, or a change to the index this host serves, holds ${2}; wait for it to finish" ;;
+        *) echo "without the API's lock, a deploy could restart the API during the switch. Make ${2} readable by $(id -un)." ;;
     esac
 }

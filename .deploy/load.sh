@@ -117,7 +117,7 @@ esac
 # is nothing to gain; where it is missing or was not loaded to the end, the API answers from it badly
 # already, and loading it is how the host gets it back.
 # An error from OpenSearch is not an index that is not whole, and loading on it would drop a whole one.
-if is_served "$UNIPROT_VERSION" strict; then
+if is_served "$UNIPROT_VERSION"; then
     case $(load_state "$INDEX_NAME") in
         complete) die "${UNIPROT_VERSION} is the version this host serves, and ${INDEX_NAME} is loaded to the end. Loading into it would change what the running API answers. Switch this host to another version with switch.sh first, then load it again." ;;
         unknown) die "${UNIPROT_VERSION} is the version this host serves, and OpenSearch did not say whether ${INDEX_NAME} is whole, so loading into it is not risked. Try again once it answers." ;;
