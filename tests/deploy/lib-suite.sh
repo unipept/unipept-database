@@ -101,6 +101,9 @@ check "another version is not" "$?" "1"
 api_status_lines "${TEMP_DIR}/served/uniprot-2026-02/suffix-array" - > "${API}.status"
 check "where the API's files have no .version, the version of the directory it reads" \
     "$(in_lib "${SERVED_HOST}; served_versions" | tr '\n' ' ')" "2026-03 2026-02 "
+api_status_lines "${TEMP_DIR}/served/uniprot-2026-02.bak/suffix-array" - > "${API}.status"
+check "but not a directory whose name is no version" \
+    "$(in_lib "${SERVED_HOST}; served_versions" | tr '\n' ' ')" "2026-03 "
 api_status_lines "${TEMP_DIR}/served/current/suffix-array" uniprot_entries-2026-02 > "${API}.status"
 check "and through current, the version of the index it queries" \
     "$(in_lib "${SERVED_HOST}; served_versions" | tr '\n' ' ')" "2026-03 2026-02 "

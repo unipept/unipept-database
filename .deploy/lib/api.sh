@@ -45,12 +45,14 @@ api_follows_current() {
 # build.sh, clone.sh and prune.sh all go by. Fails, after printing the first, where the API's
 # deploy.sh is there and does not say.
 served_versions() {
-    local status
+    local status named
 
     linked_version "$(current_link)" 2> /dev/null || true
     [ -x "$API_DEPLOY" ] || return 0
     status=$(api_status) || return 1
-    database_version_of "$(printf '%s\n' "$status" | env_value index_location)" 2> /dev/null || true
+    # Only a version's own directory: uniprot-2025-12.bak names none.
+    named=$(database_version_of "$(printf '%s\n' "$status" | env_value index_location)" 2> /dev/null) || true
+    [[ ! "$named" =~ ^[0-9]{4}-[0-9]{2}$ ]] || echo "$named"
     version_of_index "$(printf '%s\n' "$status" | env_value opensearch_index)"
 }
 
