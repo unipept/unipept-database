@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 #
-# Sets up the OpenSearch instance load.sh fills, on a host server/install.sh prepares, which this
-# runs first, so one command prepares a server. Run as root. Run it with --help for the options.
+# Sets up the OpenSearch instance load.sh fills, on a host server/install.sh prepares: server/install.sh
+# runs this, after the tools this uses are installed. Run it on its own, as root, to change a
+# setting of the instance, such as its heap. Run it with --help for the options.
 #
 # For the Ubuntu 24.04 LTS the servers run: it installs through apt and starts through systemd.
 #
@@ -9,10 +10,10 @@
 #
 # Flow:
 #   1. Check that this runs as root on a host with apt and systemd, and that the OpenSearch it has,
-#      if any, can be brought to the pinned version: nothing else is changed on a host where not.
-#   2. Run server/install.sh: the user, the tools, the output directory, the scripts and the sudo
-#      rule a switch stops and starts OpenSearch through. Then take the OpenSearch lock, held to
-#      the end, so no load runs while OpenSearch is upgraded or restarted.
+#      if any, can be brought to the pinned version: nothing is changed on a host where not.
+#      --check stops here, which is how server/install.sh asks before it changes anything.
+#   2. Take the OpenSearch lock, held to the end, so no load runs while OpenSearch is upgraded or
+#      restarted.
 #   3. Add the OpenSearch APT repository, unless it is already there.
 #   4. Install the pinned version, or upgrade an older one of the same major version to it, keeping
 #      the configuration this script writes, and hold it so an unrelated upgrade cannot move it.
@@ -68,8 +69,8 @@ OPENSEARCH_READY_TIMEOUT=180
 PREFIX="$INSTALL_ROOT"
 read_install_conf "$@"
 
-# The options this passes on to server/install.sh.
-HOST_ARGUMENTS=()
+# Whether to only check that the OpenSearch installed can be brought to the pinned version.
+CHECK_ONLY=false
 
 # OpenSearch publishes one apt repository per major version, so the one to add follows the pin.
 readonly OPENSEARCH_MAJOR="${OPENSEARCH_VERSION%%.*}"
@@ -93,8 +94,8 @@ CHANGED=false
 
 usage() {
     cat <<'USAGE'
-Sets up the OpenSearch instance the proteins are loaded into, after .deploy/server/install.sh has
-prepared the host, which this runs first. Run as root.
+Sets up the OpenSearch instance the proteins are loaded into. .deploy/server/install.sh runs this as
+part of preparing a host; run it on its own, as root, to change a setting of the instance.
 
   .deploy/server/opensearch/install.sh [OPTIONS]
 
@@ -104,10 +105,9 @@ prepared the host, which this runs first. Run as root.
   --port PORT                the port it listens on
   --data-dir DIR             where it keeps its data; default what the configuration names
   --log-dir DIR              where it writes its logs; default what the configuration names
-  --user USER                for server/install.sh: who builds, clones and owns the databases
-  --output-dir DIR           for server/install.sh: where the databases are
-  --prefix DIR               for server/install.sh: where the scripts a host runs are installed,
-                             default /opt/unipept-database
+  --prefix DIR               the install whose deploy.conf is read, default /opt/unipept-database
+  --check                    only check that the OpenSearch installed can be brought to the pinned
+                             version, and change nothing
   --help                     print this message
 
 A flag wins over deploy.conf, which wins over the defaults in this script. The deploy.conf read is the
@@ -124,7 +124,8 @@ parse_arguments() {
             --port) need_value "$1" "${2-}"; OPENSEARCH_PORT="$2"; shift 2 ;;
             --data-dir) need_value "$1" "${2-}"; OPENSEARCH_DATA_DIR="$2"; shift 2 ;;
             --log-dir) need_value "$1" "${2-}"; OPENSEARCH_LOG_DIR="$2"; shift 2 ;;
-            --user | --output-dir | --prefix) need_value "$1" "${2-}"; HOST_ARGUMENTS+=("$1" "$2"); shift 2 ;;
+            --prefix) need_value "$1" "${2-}"; shift 2 ;;
+            --check) CHECK_ONLY=true; shift ;;
             --help) usage; exit 0 ;;
             *) unknown_option "$1" ;;
         esac
@@ -373,12 +374,11 @@ require apt-get dpkg-query dpkg systemctl
 
 # Before anything on the host changes, so a refused run leaves it as it was.
 check_installed_version
-
-"${HERE}/../install.sh" "${HOST_ARGUMENTS[@]}" || die "server/install.sh did not prepare this host (above), so OpenSearch is not set up."
+[ "$CHECK_ONLY" = false ] || exit 0
 
 # A load writes to OpenSearch for hours, and the upgrade and the restart below would break it part
-# way. Held from here to the end, as a switch holds it; server/install.sh above took it for itself
-# while it replaced the scripts, and let go when it ended.
+# way. Held from here to the end, as a switch holds it.
+require flock:util-linux
 take_opensearch_lock -x || die "$(lock_refused $?) Set up OpenSearch once it has finished."
 
 # Installed with the tools above.
@@ -391,4 +391,4 @@ write_unit_dropin
 start_opensearch
 single_node_settings "$(ready_url)"
 
-log "OpenSearch is ready, and so is this host. What is left to do by hand is listed above."
+log "OpenSearch is ready."
