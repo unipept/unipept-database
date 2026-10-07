@@ -4,7 +4,7 @@
 # the API's, which a switch holds so no deploy restarts the API under it. Needs nothing else.
 # Sourced through .deploy/lib.sh.
 
-# The lock that keeps loads and switches apart. One per host, as the OpenSearch it guards is,
+# The lock that keeps loads apart from switches, prunes and installs. One per host, as the OpenSearch it guards is,
 # whatever OUTPUT_DIR a run is given; /run/lock is there for every user to take one in. Fixed, so
 # every script that takes it names the same file.
 readonly OPENSEARCH_LOCK=/run/lock/unipept-opensearch.lock
@@ -43,13 +43,15 @@ open_lock() {
 
 # Loads and switches exclude each other: a switch stops OpenSearch, which breaks a load running then.
 # A load takes OPENSEARCH_LOCK shared, so loads of different versions still run side by side, and a
-# switch takes it exclusively, from its checks to its end. On file descriptor 9, held until the
-# script exits. Fails, rather than waits: 1 where the other holds it, 2 where the lock cannot be
-# opened at all, which says so.
+# switch, a prune or an install takes it exclusively, from its checks to its end. On file descriptor
+# 9, held until the script exits. Fails, rather than waits: 1 where the other holds it, 2 where the
+# lock cannot be opened at all, which says so.
 #
 # A caller that holds it hands it down by leaving descriptor 9 open on it, as server/install.sh does
-# for opensearch/install.sh, and this then takes that descriptor rather than open the file again: a
-# second open would conflict with the caller's own lock, which flock ties to the open file.
+# for opensearch/install.sh, and this then takes that descriptor rather than open the file again:
+# flock ties a lock to the open file, not to the process, so a second open would conflict with the
+# caller's own lock. On the descriptor handed down, flock succeeds where the caller holds the lock,
+# and takes it where nobody does, for as long as the caller keeps the descriptor open.
 take_opensearch_lock() {
     [ /dev/fd/9 -ef "$OPENSEARCH_LOCK" ] || open_lock 9 "$OPENSEARCH_LOCK" || return 2
     if [ -n "${2:-}" ]; then

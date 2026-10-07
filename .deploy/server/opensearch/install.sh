@@ -65,8 +65,6 @@ OPENSEARCH_LOG_DIR=
 OPENSEARCH_READY_TIMEOUT=180
 
 # The install server/install.sh makes, whose deploy.conf this reads too.
-# shellcheck disable=SC2034 # read and set by read_install_conf
-PREFIX="$INSTALL_ROOT"
 read_install_conf "$@"
 
 # Whether to only check that the OpenSearch installed can be brought to the pinned version.
@@ -369,7 +367,7 @@ single_node_settings() {
 
 parse_arguments "$@"
 
-[ "$(id -u)" -eq 0 ] || die "run this as root. It is one of the two steps that need it."
+[ "$(id -u)" -eq 0 ] || die "run this as root."
 require apt-get dpkg-query dpkg systemctl
 
 # Before anything on the host changes, so a refused run leaves it as it was.

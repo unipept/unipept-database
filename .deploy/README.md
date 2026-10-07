@@ -45,10 +45,10 @@ its `servers.conf` is. Below, `deploy/` is that installed directory and `.deploy
 sudo .deploy/server/install.sh --heap 8g
 ```
 
-This is the only step that needs root. It prepares the host and installs the scripts, then runs
-`.deploy/server/opensearch/install.sh`, which sets up OpenSearch and can also run on its own, as
-root, to change a setting such as the heap. Together they prepare everything the other scripts
-need, so they run without sudo:
+This, and `opensearch/install.sh`, which it runs, are the only steps that need root. It prepares the
+host and installs the scripts, then runs `.deploy/server/opensearch/install.sh`, which sets up
+OpenSearch and can also run on its own, as root, to change a setting such as the heap. Together they
+prepare everything the other scripts need, so they run without sudo:
 
 - the `unipept` user (`DEPLOY_USER`), who builds, clones and owns the databases. The API on this
   host runs as the same user, and its own install creates it the same way, in either order;
@@ -352,7 +352,7 @@ it uses of the others.
 
 | Part | What it holds |
 | --- | --- |
-| `lib/core.sh` | the shell options, `log`, `die`, `require`, `need_value`, the error trap |
+| `lib/core.sh` | the shell options, `log`, `die`, `require`, `need_value`, the error trap, `switch_release` |
 | `lib/config.sh` | the settings the parts share, the deploy user, reading `deploy.conf` and `key=value` lines |
 | `lib/locks.sh` | the OpenSearch lock, the lock per version, and taking the API's lock |
 | `lib/versions.sh` | version names, `.version`, the `current` and `previous` links |

@@ -5,7 +5,7 @@
 # they do not depend on a checkout, and, through opensearch/install.sh, the OpenSearch instance
 # load.sh fills. Run as root. Run it with --help for the options.
 #
-# The only step that needs root, with opensearch/install.sh, which this runs. Afterwards
+# This and opensearch/install.sh, which it runs, are the only scripts that need root. Afterwards
 # DEPLOY_USER owns OUTPUT_DIR and has every tool it needs, so build.sh and clone.sh run as that user
 # without sudo, as the API's deploy does.
 #
@@ -14,7 +14,8 @@
 # Flow:
 #   1. Check that this runs as root, and, through opensearch/install.sh --check, that the
 #      OpenSearch the host has, if any, can be brought to the pinned version: nothing is changed on
-#      a host where not.
+#      a host where not. Then take the OpenSearch lock, refused while a load, a switch or a prune
+#      runs.
 #   2. Create DEPLOY_USER, or give an account that already exists a login shell: clone.sh copies
 #      over ssh as that user, and sshd needs a shell to run a remote command.
 #   3. Install the tools build.sh, clone.sh and load.sh use, the ones not installed already.
@@ -29,8 +30,9 @@
 #
 # A second run with the same settings puts the same scripts in place again, and restarts nothing.
 #
-# The OpenSearch lock install_scripts takes is held to the end, and handed to opensearch/install.sh on
-# the descriptor it inherits, so no load starts between the scripts and the upgrade of OpenSearch.
+# The OpenSearch lock this takes after the check is held to the end, and handed to
+# opensearch/install.sh on the descriptor it inherits, so no load starts while the scripts are
+# replaced, nor between them and the upgrade of OpenSearch.
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -39,10 +41,6 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${HERE}/../lib.sh"
 
 # The settings only this script has.
-
-# Where the scripts a host runs are installed. /opt/unipept-database, as the API's are in
-# /opt/unipept-api; a flag for a test that installs more than one host into one machine.
-PREFIX="$INSTALL_ROOT"
 
 read_install_conf "$@"
 
@@ -70,7 +68,7 @@ usage() {
 Prepares a server to build, clone and hold a Unipept database: the user that owns the databases,
 the tools the scripts run, the scripts themselves in /opt/unipept-database, and the OpenSearch
 instance the proteins are loaded into, which .deploy/server/opensearch/install.sh sets up. Run as
-root; it is the only step that needs it.
+root; it and opensearch/install.sh are the only steps that need it.
 
   .deploy/server/install.sh [OPTIONS]
 
@@ -96,7 +94,7 @@ parse_arguments() {
         case "$1" in
             --user) need_value "$1" "${2-}"; DEPLOY_USER="$2"; shift 2 ;;
             --output-dir) need_value "$1" "${2-}"; OUTPUT_DIR="$2"; shift 2 ;;
-            --prefix) need_value "$1" "${2-}"; PREFIX="$2"; OPENSEARCH_ARGUMENTS+=("$1" "$2"); shift 2 ;;
+            --prefix) need_value "$1" "${2-}"; OPENSEARCH_ARGUMENTS+=("$1" "$2"); shift 2 ;;
             --heap | --bind | --port | --data-dir | --log-dir)
                 need_value "$1" "${2-}"; OPENSEARCH_ARGUMENTS+=("$1" "$2"); shift 2 ;;
             --help) usage; exit 0 ;;
@@ -179,27 +177,20 @@ prepare_output_dir() {
 # lib.sh, the loader and the rest by the same relative path in both. Owned by root, since only this
 # script changes them; etc/ belongs to root too, since this reads deploy.conf as root.
 #
-# A release, made whole in releases/ and put in place at once by switch_release: a script started
-# meanwhile finds one release or the other whole, an install stopped part way leaves the one before,
-# and nothing the checkout no longer has lingers. etc/ is not touched.
+# A release, made whole in releases/ and put in place at once by switch_release: each file a script
+# opens is one whole release's, and a load, a switch or a prune, which would pair two, is refused the
+# lock this holds; an install stopped part way leaves the one before, and nothing the checkout no
+# longer has lingers. etc/ is not touched.
 #
 # From the checkout this runs in, so a host is updated by running this again from a checkout of the
 # commit to install, which INSTALLED then names.
 install_scripts() {
-    local repository="${DEPLOY_DIR}/.." id release commit
-
-    # A load, a switch or a prune running from these files while they are replaced could pair a new
-    # lib.sh with an old script, or start opensearch/load.sh from the new release halfway through a
-    # run of the old one. Each holds OPENSEARCH_LOCK, so this holds it exclusively until it is done,
-    # and refuses while one runs. /run/lock is emptied at boot, so the file may not be there yet: it
-    # is made the deploy user's, as the first script to take it would have made it.
-    [ -e "$OPENSEARCH_LOCK" ] || install -m 0644 -o "$DEPLOY_USER" -g "$DEPLOY_USER" /dev/null "$OPENSEARCH_LOCK"
-    take_opensearch_lock -x || die "$(lock_refused $?) Install once it has finished."
+    local repository="${DEPLOY_DIR}/.." release_id release commit
 
     # Named after when it was made, and by which run, so a second install of the same commit makes a
     # release of its own rather than writing into the one in use.
-    id="$(date -u +%Y%m%dT%H%M%SZ).$$"
-    release="${PREFIX}/releases/${id}"
+    release_id="$(date -u +%Y%m%dT%H%M%SZ).$$"
+    release="${PREFIX}/releases/${release_id}"
     install -d -m 0755 -o root -g root "$PREFIX" "${PREFIX}/releases"
     install -d -m 0755 "${release}/deploy/lib" "${release}/deploy/server" \
         "${release}/opensearch/mappings" "${release}/pipelines/lib"
@@ -216,7 +207,7 @@ install_scripts() {
     # As root, of a checkout another user owns, which git refuses to read unless told to trust it.
     commit=$(git -c safe.directory='*' -C "$repository" rev-parse HEAD 2>/dev/null || echo unknown)
     printf 'commit: %s\ninstalled: %s\n' "$commit" "$(date -u +'%F %T UTC')" > "${release}/INSTALLED"
-    switch_release "$PREFIX" "$id" deploy opensearch pipelines INSTALLED
+    switch_release "$PREFIX" "$release_id" deploy opensearch pipelines INSTALLED
     log "Installed the scripts of ${commit} in ${PREFIX}."
 
     install -d -m 0755 -o root -g root "${PREFIX}/etc"
@@ -248,11 +239,18 @@ allow_opensearch_restart() {
 
 parse_arguments "$@"
 
-[ "$(id -u)" -eq 0 ] || die "run this as root. It is the only step that needs it."
+[ "$(id -u)" -eq 0 ] || die "run this as root."
 require apt-get dpkg-query getent useradd usermod visudo:sudo flock:util-linux
 
 # Before anything on the host changes, so a refused run leaves it as it was.
 "${HERE}/opensearch/install.sh" --check "${OPENSEARCH_ARGUMENTS[@]}" || exit 2
+
+# A load, a switch or a prune running from the scripts while they are replaced could pair a new
+# lib.sh with an old script, or start opensearch/load.sh from the new release halfway through a run
+# of the old one, and the upgrade and the restart of OpenSearch would break a load part way. Each
+# holds this lock, so this holds it exclusively to the end, handing it to opensearch/install.sh, and
+# refuses while one runs.
+take_opensearch_lock -x || die "$(lock_refused $?) Install once it has finished."
 
 ensure_user
 install_tools

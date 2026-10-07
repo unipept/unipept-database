@@ -56,15 +56,16 @@ env_value() {
     sed -n "s/^${1}=//p" | tail -1
 }
 
-# What an install reads, as root, given its arguments: PREFIX, from --prefix where they give one,
-# and the deploy.conf of the install under it, a checkout's own where it has one, as for any script,
-# and otherwise that install's etc/deploy.conf, so --prefix reads its own and not
-# /opt/unipept-database's. Found before the arguments are parsed, since read_conf comes first for a
-# flag to win over it. Refused where anyone but root could write it: this sources it as root, and
-# such a file would hand that user root. Then read as read_conf reads it.
+# What an install reads, as root, given its arguments: PREFIX, from --prefix where they give one and
+# INSTALL_ROOT otherwise, and the deploy.conf of the install under it, a checkout's own where it has
+# one, as for any script, and otherwise that install's etc/deploy.conf, so --prefix reads its own
+# and not /opt/unipept-database's. Found before the arguments are parsed, since read_conf comes
+# first for a flag to win over it. Refused where anyone but root could write it: this sources it as
+# root, and such a file would hand that user root. Then read as read_conf reads it.
 read_install_conf() {
     local argument next
 
+    PREFIX="$INSTALL_ROOT"
     for ((argument = 1; argument < $#; argument++)); do
         [ "${!argument}" != --prefix ] || { next=$((argument + 1)); PREFIX="${!next}"; }
     done
