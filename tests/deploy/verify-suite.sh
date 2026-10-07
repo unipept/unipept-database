@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
-# .deploy/server/verify.sh against a fixture index directory. Needs no container and no network: what it
-# checks is a directory layout.
+# .deploy/server/verify.sh against a fixture index directory. Needs no container and no network:
+# what it checks is a directory layout.
 
 set -uo pipefail
 

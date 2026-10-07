@@ -53,8 +53,8 @@ run without sudo:
 - the scripts a host runs, in `/opt/unipept-database`: `bin/` with `clone.sh`, `load.sh`,
   `verify.sh`, `switch.sh` and `prune.sh`, what they call beside it, `etc/deploy.conf`, written once
   from the example and then root's to edit, since `install.sh` reads it as root, and `INSTALLED`,
-  which names the commit they came from. A host takes a newer version by running `install.sh` again from a clone
-  of it;
+  which names the commit they came from. A host takes a newer version by running `install.sh` again
+  from a clone of it;
 - the OpenSearch instance this host loads its proteins into, configured and started.
 
 It ends with what is left to do: fill in `deploy.conf` as root, then as `unipept` add an ssh key for

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Copies a finished database from another host. The build itself runs once, on one host; every
-# other host clones the result. It loads nothing into OpenSearch; .deploy/server/load.sh does that.
+# other host clones the result. It loads nothing into OpenSearch; load.sh does that.
 # Run it with --help for the options.
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -38,8 +38,8 @@ read_conf
 
 usage() {
     cat <<'USAGE'
-Copies a finished database from another host. .deploy/server/load.sh then loads its proteins into this
-host's OpenSearch.
+Copies a finished database from another host. load.sh then loads its proteins into this host's
+OpenSearch.
 
   bin/clone.sh --remote-address HOST --local-ssh-key KEY [OPTIONS]
 

@@ -21,8 +21,8 @@ cannot_open_lock() {
 
 # Opens a lock file for flock on a file descriptor of this shell, made first where no one has made
 # it. For reading, which is all flock needs: /run/lock is sticky, so opening another user's file
-# there for writing is refused even to root, which is how server/opensearch/install.sh takes these. On
-# descriptor 7, 8 or 9, the three these locks use.
+# there for writing is refused even to root, which is how server/opensearch/install.sh takes these.
+# On descriptor 7, 8 or 9, the three these locks use.
 # Fails, saying so, where it cannot.
 open_lock() {
     local fd=$1 lock=$2

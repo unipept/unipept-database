@@ -21,7 +21,7 @@
 #   4. Start OpenSearch, and wait for it and for the new version's index.
 #   5. Start the API, which checks the host once more and waits until it serves.
 #   6. Close the indices of versions older than both, which frees the memory they hold. Nothing is
-#      deleted: .deploy/server/prune.sh removes old versions.
+#      deleted: prune.sh removes old versions.
 #   A failure in 3, 4 or 5, or an interrupt from 2 on, points the links back and starts both on the
 #   version it left, so the host serves what it served before.
 

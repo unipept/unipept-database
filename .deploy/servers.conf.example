@@ -5,9 +5,9 @@
 # needs, but a copy of its own: each repository is deployed from its own checkout.
 #
 # Every server has the scripts .deploy/server/opensearch/install.sh installs, in
-# /opt/unipept-database, and distribute.sh logs in as the user who owns the databases there. Everything a server decides, where
-# its databases are and how it reaches the host it clones from, is in its
-# /opt/unipept-database/etc/deploy.conf. A third field names another install root, for a server
+# /opt/unipept-database, and distribute.sh logs in as the user who owns the databases there.
+# Everything a server decides, where its databases are and how it reaches the host it clones from,
+# is in its /opt/unipept-database/etc/deploy.conf. A third field names another install root, for a server
 # whose scripts are installed somewhere else.
 #
 # Servers are handled in the order listed.
