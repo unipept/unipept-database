@@ -67,10 +67,9 @@ require flock:util-linux
 take_opensearch_lock -x || die "$(lock_refused $?)"
 
 CURRENT=$(current_link)
-LOCATION=$(api_value index_location) || case $? in
-    3) die "there is no ${API_DEPLOY}, so this host runs no API and has nothing to switch." ;;
-    *) die "the API's deploy.sh does not say what it serves (above). Run this as the user the API runs as." ;;
-esac
+[ -x "$API_DEPLOY" ] || die "there is no ${API_DEPLOY}, so this host runs no API and has nothing to switch."
+STATUS=$(api_status) || die "the API's deploy.sh does not say what it serves (above). Run this as the user the API runs as."
+LOCATION=$(printf '%s\n' "$STATUS" | env_value index_location)
 
 if [ -L "$CURRENT" ]; then
     # The proteins cloned below are the ones INDEX_LOCATION serves, so they have to be that version's.
@@ -97,7 +96,7 @@ require_opensearch
 ensure_versioned_index "$VERSION" "$READY_TIMEOUT"
 log "The proteins of ${VERSION} are in ${ALIAS}-${VERSION}, which the API queries."
 
-if api_follows_current; then
+if api_follows_current "$LOCATION"; then
     log "INDEX_LOCATION names ${CURRENT}/suffix-array. This host is set up for switch.sh."
 else
     cat >&2 <<EOF

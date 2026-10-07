@@ -164,11 +164,9 @@ check_db_table() {
 # The API on this host, as its install lays it out.
 
 # Its deploy.sh, answering status in the format these scripts read: what a switch asks it, and the
-# stop and start it runs.
+# stop and start it runs. Prints that status, for the checks that read it.
 check_api_status() {
-    [ -x "$API_DEPLOY" ] || { echo "FAIL there is no API here: ${API_DEPLOY} is missing. unipept-api's install puts it there." 1>&2; return 1; }
-    api_status > /dev/null \
-        || { echo "FAIL ${API_DEPLOY} status does not answer as these scripts read it (above)." 1>&2; return 1; }
+    api_status || { echo "FAIL ${API_DEPLOY} status does not answer as these scripts read it (above)." 1>&2; return 1; }
 }
 
 # The API's own check of a database's files, the memory for them and the index of its proteins.
@@ -179,10 +177,10 @@ check_api_accepts() {
 
 # The links in OUTPUT_DIR that say which version this host serves.
 
-# INDEX_LOCATION goes through `current`, so the API follows a switch.
+# INDEX_LOCATION, as the API's status gives it, goes through `current`, so the API follows a switch.
 check_links_follows_current() {
-    api_follows_current \
-        || { echo "FAIL INDEX_LOCATION in the API's settings is '$(api_index_location 2> /dev/null)', so the API would not follow the switch. Set it to $(current_link)/suffix-array." 1>&2; return 1; }
+    api_follows_current "$1" \
+        || { echo "FAIL INDEX_LOCATION in the API's settings is '${1}', so the API would not follow the switch. Set it to $(current_link)/suffix-array." 1>&2; return 1; }
 }
 
 # OUTPUT_DIR is writable, so `current` can be moved: a switch moves it with the API and OpenSearch

@@ -92,28 +92,30 @@ parse_arguments() {
 # open or close, once preflight has found the index to switch to.
 TARGET_STATUS=''
 
+# Holds the API's lock, at the path its status names, until the switch ends, so no deploy, rollback,
+# stop or start of it runs meanwhile; the deploy.sh stop and start the switch runs inherit it. Here
+# rather than in checks.sh, whose checks change nothing. Says why where it cannot.
+hold_api_lock() {
+    [ -n "$1" ] || { echo "FAIL ${API_DEPLOY} status names no api_lock, so a deploy of the API could run during the switch." 1>&2; return 1; }
+    take_api_lock "$1" || { echo "FAIL $(api_lock_refused $? "$1")" 1>&2; return 1; }
+}
+
 # Everything the switch depends on that can be known without changing anything, while the API and
 # OpenSearch still run, so a host that cannot switch keeps serving exactly as it did. Every check
 # runs, and each problem is counted.
 preflight() {
-    local problems=0 api_lock
+    local problems=0 status
 
     if check_db_present "$TARGET_DIR"; then
         check_db_whole "$TARGET_DIR" || problems=$((problems + 1))
     else
         problems=$((problems + 1))
     fi
-    # What the API's status says, once it answers in a form these scripts read: where INDEX_LOCATION
-    # is, and where its lock is, held so no deploy, rollback, stop or start of it runs until the
-    # switch ends; the deploy.sh stop and start it runs inherit it.
-    if check_api_status; then
-        check_links_follows_current || problems=$((problems + 1))
-        if ! api_lock=$(api_value api_lock) || [ -z "$api_lock" ]; then
-            echo "FAIL ${API_DEPLOY} status names no api_lock, so a deploy of the API could run during the switch." 1>&2
-            problems=$((problems + 1))
-        else
-            take_api_lock "$api_lock" || { echo "FAIL $(api_lock_refused $? "$api_lock")" 1>&2; problems=$((problems + 1)); }
-        fi
+    # Where INDEX_LOCATION is and where the API's lock is, from one answer of its status, once that
+    # answers in a form these scripts read.
+    if status=$(check_api_status); then
+        check_links_follows_current "$(printf '%s\n' "$status" | env_value index_location)" || problems=$((problems + 1))
+        hold_api_lock "$(printf '%s\n' "$status" | env_value api_lock)" || problems=$((problems + 1))
     else
         problems=$((problems + 1))
     fi
@@ -183,8 +185,8 @@ start_opensearch() {
 # a --back needs them, and an open index holds memory. Versions newer than the one switched to are
 # loaded ahead of a switch and stay open. uniprot_entries and uniprot_entries-legacy, which a host
 # loaded before versioned indices may still have beside the clone migrate.sh made, count as the
-# oldest: the API queries the versioned one. Closing is not needed for the switch, so it happens once the
-# API serves, and a failure is only reported.
+# oldest: the API queries the versioned one. Closing is not needed for the switch, so it happens
+# once the API serves, and a failure is only reported.
 close_older_indices() {
     local oldest="$TARGET" index status version
 
