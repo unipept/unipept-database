@@ -37,12 +37,7 @@ source "${HERE}/../lib.sh" || exit 2
 # /opt/unipept-api; a flag for a test that installs more than one host into one machine.
 PREFIX="$INSTALL_ROOT"
 
-# The configuration of the install this run makes or updates. Found before the arguments are
-# parsed, since read_conf comes first for a flag to win over it.
-for ((argument = 1; argument < $#; argument++)); do
-    [ "${!argument}" != --prefix ] || { next=$((argument + 1)); PREFIX="${!next}"; }
-done
-read_install_conf "$PREFIX"
+read_install_conf "$@"
 
 # What build.sh, clone.sh and load.sh run, by package: git, cmake and a C toolchain for the index
 # build, lz4, pv, pigz, gawk, unzip, uuidgen, xmllint and curl for the pipeline, python3-requests
@@ -55,11 +50,6 @@ readonly TOOL_PACKAGES=(
     python3 python3-requests
     openssh-client
 )
-
-# The scripts every host runs, by their path under .deploy, which is their path under deploy/ once
-# installed. Not install.sh and opensearch/install.sh, which run from a checkout, nor build.sh and
-# distribute.sh, which need one.
-readonly SCRIPTS=(server/clone.sh server/load.sh server/verify.sh server/switch.sh server/prune.sh)
 
 readonly SUDOERS_FILE=/etc/sudoers.d/unipept-opensearch
 readonly MARKER='# Written by unipept-database .deploy/server/install.sh. Edit that, not this.'
@@ -176,7 +166,7 @@ prepare_output_dir() {
 # From the checkout this runs in, so a host is updated by running this again from a checkout of the
 # commit to install, which INSTALLED then names.
 install_scripts() {
-    local repository="${DEPLOY_DIR}/.." staging="${PREFIX}/.staging" directory script commit
+    local repository="${DEPLOY_DIR}/.." staging="${PREFIX}/.staging" entry commit
 
     # A load, a switch or a prune running from these files while they are replaced could pair a new
     # lib.sh with an old script, or start opensearch/load.sh from the new release halfway through a
@@ -187,26 +177,27 @@ install_scripts() {
     take_opensearch_lock -x || die "$(lock_refused $?) Install once it has finished."
 
     rm -rf "${staging:?}"
-    install -d -m 0755 "$PREFIX" "${staging}/deploy/lib" "${staging}/deploy/server" \
+    install -d -m 0755 -o root -g root "$PREFIX"
+    install -d -m 0755 "${staging}/deploy/lib" "${staging}/deploy/server" \
         "${staging}/opensearch/mappings" "${staging}/pipelines/lib"
     install -m 0644 "${repository}/.deploy/lib.sh" "${staging}/deploy/"
     install -m 0644 "${repository}/.deploy/lib/"*.sh "${staging}/deploy/lib/"
-    for script in "${SCRIPTS[@]}"; do
-        install -m 0755 "${repository}/.deploy/${script}" "${staging}/deploy/${script}"
-    done
+    # The scripts every host runs. Not the installs, which run from a checkout, nor build.sh and
+    # distribute.sh, which need one.
+    install -m 0755 "${repository}/.deploy/server/"{clone.sh,load.sh,verify.sh,switch.sh,prune.sh} "${staging}/deploy/server/"
     install -m 0644 "${repository}/opensearch/"{lib.sh,bulk_load.py} "${staging}/opensearch/"
     install -m 0755 "${repository}/opensearch/load.sh" "${staging}/opensearch/"
     install -m 0644 "${repository}/opensearch/mappings/uniprot_entries.json" "${staging}/opensearch/mappings/"
     install -m 0644 "${repository}/pipelines/lib/common.sh" "${staging}/pipelines/lib/"
 
-    # What is loaded before what loads it, so a script started meanwhile finds the files of its own
-    # release: the pipelines' library, then the loader, then the scripts. Each old directory is moved
-    # aside before the new one takes its name, and removed once it has.
-    for directory in pipelines opensearch deploy; do
-        rm -rf "${PREFIX:?}/${directory}.old"
-        [ ! -e "${PREFIX}/${directory}" ] || mv "${PREFIX}/${directory}" "${PREFIX}/${directory}.old"
-        mv "${staging}/${directory}" "${PREFIX}/${directory}"
-        rm -rf "${PREFIX:?}/${directory}.old"
+    # Each entry swapped in by a rename, what is loaded before what loads it, so a script started
+    # meanwhile finds the files of its own release: the pipelines' library, then the loader, then the
+    # scripts. The old one is moved aside before the new one takes its name, and removed once it has.
+    for entry in pipelines opensearch deploy; do
+        rm -rf "${PREFIX:?}/${entry}.old"
+        [ ! -e "${PREFIX}/${entry}" ] || mv "${PREFIX}/${entry}" "${PREFIX}/${entry}.old"
+        mv "${staging}/${entry}" "${PREFIX}/${entry}"
+        rm -rf "${PREFIX:?}/${entry}.old"
     done
     rmdir "$staging"
 

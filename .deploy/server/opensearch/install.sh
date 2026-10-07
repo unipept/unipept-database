@@ -61,13 +61,10 @@ OPENSEARCH_LOG_DIR=
 # Seconds to wait for the service to answer after it is started.
 OPENSEARCH_READY_TIMEOUT=180
 
-# The install server/install.sh makes, whose deploy.conf this reads too. Found before the arguments
-# are parsed, since read_conf comes first for a flag to win over it.
+# The install server/install.sh makes, whose deploy.conf this reads too.
+# shellcheck disable=SC2034 # read and set by read_install_conf
 PREFIX="$INSTALL_ROOT"
-for ((argument = 1; argument < $#; argument++)); do
-    [ "${!argument}" != --prefix ] || { next=$((argument + 1)); PREFIX="${!next}"; }
-done
-read_install_conf "$PREFIX"
+read_install_conf "$@"
 
 # The options this passes on to server/install.sh.
 HOST_ARGUMENTS=()
