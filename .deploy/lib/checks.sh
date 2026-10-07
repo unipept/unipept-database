@@ -166,10 +166,9 @@ check_db_table() {
 # Its deploy.sh, answering status in the format these scripts read: what a switch asks it, and the
 # stop and start it runs.
 check_api_status() {
-    local why
     [ -x "$API_DEPLOY" ] || { echo "FAIL there is no API here: ${API_DEPLOY} is missing. unipept-api's install puts it there." 1>&2; return 1; }
-    why=$(api_value status_format 2>&1 > /dev/null) \
-        || { printf '%s\n' "$why" 1>&2; echo "FAIL ${API_DEPLOY} status does not answer as these scripts read it (above)." 1>&2; return 1; }
+    api_status > /dev/null \
+        || { echo "FAIL ${API_DEPLOY} status does not answer as these scripts read it (above)." 1>&2; return 1; }
 }
 
 # The API's own check of a database's files, the memory for them and the index of its proteins.

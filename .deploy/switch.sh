@@ -103,15 +103,20 @@ preflight() {
     else
         problems=$((problems + 1))
     fi
-    # The API's lock, at the path its status names, so no deploy, rollback, stop or start of it runs
-    # until the switch ends; the deploy.sh stop and start it runs inherit it.
+    # What the API's status says, once it answers in a form these scripts read: where INDEX_LOCATION
+    # is, and where its lock is, held so no deploy, rollback, stop or start of it runs until the
+    # switch ends; the deploy.sh stop and start it runs inherit it.
     if check_api_status; then
-        api_lock=$(api_value api_lock)
-        take_api_lock "$api_lock" || { echo "FAIL $(api_lock_refused $? "$api_lock")" 1>&2; problems=$((problems + 1)); }
+        check_links_follows_current || problems=$((problems + 1))
+        if ! api_lock=$(api_value api_lock) || [ -z "$api_lock" ]; then
+            echo "FAIL ${API_DEPLOY} status names no api_lock, so a deploy of the API could run during the switch." 1>&2
+            problems=$((problems + 1))
+        else
+            take_api_lock "$api_lock" || { echo "FAIL $(api_lock_refused $? "$api_lock")" 1>&2; problems=$((problems + 1)); }
+        fi
     else
         problems=$((problems + 1))
     fi
-    check_links_follows_current || problems=$((problems + 1))
     check_links_movable || problems=$((problems + 1))
     check_links_previous || problems=$((problems + 1))
 
@@ -268,6 +273,8 @@ fi
 
 log "Checking that this host can switch from ${FROM} to ${TARGET}."
 preflight
+# A check changes nothing the API does, so it does not keep a deploy of it waiting while it asks.
+[ "$CHECK_ONLY" != true ] || exec 7<&-
 # A --check on a closed index has stopped above, so what is left can be checked.
 open_target_index
 # What the API itself needs of the new version, its files, the memory for them and the index of its

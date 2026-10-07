@@ -357,20 +357,28 @@ calls() { tr '\n' ' ' < "${SW_STATE}/$1" 2> /dev/null; }
 serves() { readlink "${SW_DATA}/current"; }
 
 # Every problem at once, and nothing stopped for any of them.
-api_status_lines "${SW_DATA}/uniprot-2027-01/suffix-array" uniprot_entries-2027-01 "$API_LOCK" \
-    | sed 's/^status_format=1$/status_format=2/' > "${SW_STATE}/status"
+api_status_lines "${SW_DATA}/uniprot-2027-01/suffix-array" uniprot_entries-2027-01 "$API_LOCK" > "${SW_STATE}/status"
 touch "${SW_STATE}/no-sudo"
 switch "${WORK}/switch-refused.log" --uniprot-version 2027-03
 check "a host that cannot switch stops it" "$rc" "2"
 check_true "its proteins not loaded" grep -q 'uniprot_entries-2027-03 is not in OpenSearch. Load it with load.sh --uniprot-version 2027-03' "${WORK}/switch-refused.log"
 check_true "an API that would not follow" grep -q "Set it to ${SW_DATA}/current/suffix-array" "${WORK}/switch-refused.log"
 check_true "no sudo for OpenSearch" grep -q 'may not stop and start OpenSearch through sudo' "${WORK}/switch-refused.log"
-check_true "an API whose status these scripts do not read" grep -q 'status does not answer as these scripts read it' "${WORK}/switch-refused.log"
-check_true "counted" grep -q '4 problem(s), so nothing was changed' "${WORK}/switch-refused.log"
+check_true "counted" grep -q '3 problem(s), so nothing was changed' "${WORK}/switch-refused.log"
 check "nothing is stopped" "$(calls api-calls)$(calls systemctl-calls)" ""
 check "it serves what it served" "$(serves)" "uniprot-2027-01"
-api_status_lines "${SW_DATA}/current/suffix-array" uniprot_entries-2027-01 "$API_LOCK" > "${SW_STATE}/status"
 rm -f "${SW_STATE:?}/no-sudo"
+
+# An API whose status these scripts do not read: what it says of INDEX_LOCATION and its lock is not
+# taken from it, and it is one problem, not one for each.
+sed 's/^status_format=1$/status_format=2/' "${SW_STATE}/status" > "${SW_STATE}/status.new" && mv "${SW_STATE}/status.new" "${SW_STATE}/status"
+chmod 644 "${SW_STATE}/status"
+switch "${WORK}/switch-format.log" --uniprot-version 2027-02
+check "an API whose status these scripts do not read stops it" "$rc" "2"
+check_true "and says so" grep -q 'status does not answer as these scripts read it' "${WORK}/switch-format.log"
+check_true "once" grep -q '1 problem(s), so nothing was changed' "${WORK}/switch-format.log"
+check "nothing is stopped" "$(calls api-calls)$(calls systemctl-calls)" ""
+api_status_lines "${SW_DATA}/current/suffix-array" uniprot_entries-2027-01 "$API_LOCK" > "${SW_STATE}/status"
 
 curl -s -X POST "${OPENSEARCH_URL}/uniprot_entries-2027-01/_close" > /dev/null
 switch "${WORK}/switch-fromclosed.log" --uniprot-version 2027-02
@@ -461,6 +469,14 @@ check_true "and says so" grep -q 'FAIL a deploy, rollback, start or stop of the 
 check "nothing is stopped" "$(calls lock-calls)$(calls systemctl-calls)" ""
 kill "$deployer"
 wait "$deployer" 2> /dev/null
+
+# A status that names no lock: the API's deploys could not be kept out.
+grep -v '^api_lock=' "${SW_STATE}/status" > "${SW_STATE}/status.new" && mv "${SW_STATE}/status.new" "${SW_STATE}/status"
+chmod 644 "${SW_STATE}/status"
+switch "${WORK}/switch-nolock.log" --uniprot-version 2027-02
+check "a status that names no API lock stops it" "$rc" "2"
+check_true "and says so" grep -q 'status names no api_lock' "${WORK}/switch-nolock.log"
+api_status_lines "${SW_DATA}/current/suffix-array" uniprot_entries-2027-01 "$API_LOCK" > "${SW_STATE}/status"
 
 # A lock it cannot open is said to be that, not taken for a load.
 mv "$LOCK" "${LOCK}.away"
