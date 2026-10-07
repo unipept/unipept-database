@@ -64,10 +64,13 @@ make_api_deploy() {
 }
 
 # What the API's deploy.sh status prints, in the format these scripts read, for an API whose
-# INDEX_LOCATION and OpenSearch index are the ones given, with its lock where it is given.
+# INDEX_LOCATION and OpenSearch index are the ones given, `-` for none, as for files without a
+# .version, with its lock where it is given. The version of the index, as the real one reports it.
 api_status_lines() {
+    local version='-'
+    [ "$2" = - ] || { version=${2#uniprot_entries-}; version=${version/-/.}; }
     printf 'status_format=1\nversion=2.7.0\nprevious=-\nvariant=hybrid\nport=8080\nactive=active\n'
-    printf 'index_location=%s\nindex_version=-\nopensearch_index=%s\napi_lock=%s\n' "$1" "$2" "${3:-/run/lock/unipept-api.lock}"
+    printf 'index_location=%s\nindex_version=%s\nopensearch_index=%s\napi_lock=%s\n' "$1" "$version" "$2" "${3:-/run/lock/unipept-api.lock}"
 }
 
 # A heading between suites, or between the steps of one.

@@ -99,6 +99,10 @@ check "and so is the version the API queries" "$?" "0"
 in_lib "${SERVED_HOST}; is_served 2026-04"
 check "another version is not" "$?" "1"
 
+api_status_lines "${TEMP_DIR}/served/uniprot-2026-02/suffix-array" - > "${API}.status"
+check "where the API's files have no .version, the version of the directory it reads" \
+    "$(in_lib "${SERVED_HOST}; served_versions" | tr '\n' ' ')" "2026-03 2026-02 "
+
 check "a host without an API serves what current points at" \
     "$(in_lib "OUTPUT_DIR='${TEMP_DIR}/served' API_DEPLOY='${TEMP_DIR}/no-deploy.sh'; served_versions" | tr '\n' ' ')" "2026-03 "
 

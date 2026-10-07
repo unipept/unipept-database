@@ -180,9 +180,15 @@ if ! take_load_lock "$UNIPROT_VERSION"; then
     rm -rf "${STAGING_DIR:?}"
     die "a load of ${UNIPROT_VERSION} is running on this host, and reads the files this would replace. The copy is removed; clone once it has finished."
 fi
-if [ -e "$BUILD_DIR" ] && is_served "$UNIPROT_VERSION"; then
-    rm -rf "${STAGING_DIR:?}"
-    die "${UNIPROT_VERSION} is the version this host serves, so its files are not replaced under the running API. The copy is removed. Switch this host to another version with switch.sh first."
+if [ -e "$BUILD_DIR" ]; then
+    if ! served=$(served_versions); then
+        rm -rf "${STAGING_DIR:?}"
+        die "the API's deploy.sh does not say which version this host serves (above), so the files of ${UNIPROT_VERSION} are not replaced. The copy is removed."
+    fi
+    if printf '%s\n' "$served" | grep -x "$UNIPROT_VERSION" > /dev/null; then
+        rm -rf "${STAGING_DIR:?}"
+        die "${UNIPROT_VERSION} is the version this host serves, so its files are not replaced under the running API. The copy is removed. Switch this host to another version with switch.sh first."
+    fi
 fi
 swap_into_place "$COPIED_DIR" "$BUILD_DIR"
 rm -rf "${STAGING_DIR:?}"

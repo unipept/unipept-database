@@ -12,10 +12,10 @@ API_DEPLOY=${API_DEPLOY:-/opt/unipept-api/lib/deploy.sh}
 # changes meaning or goes, so another one is refused rather than read wrongly.
 readonly API_STATUS_FORMAT=1
 
-# One value of what the API's `deploy.sh status` says. Fails with 3 where there is no deploy.sh, so
-# no API, on this host, and with 2, saying why, where it does not answer or answers in a format these
-# scripts do not read.
-api_value() {
+# What the API's `deploy.sh status` says, its key=value lines. Fails with 3 where there is no
+# deploy.sh, so no API, on this host, and with 2, saying why, where it does not answer or answers in a
+# format these scripts do not read.
+api_status() {
     local status format
 
     [ -x "$API_DEPLOY" ] || return 3
@@ -24,6 +24,13 @@ api_value() {
     format=$(printf '%s\n' "$status" | env_value status_format)
     [ "$format" = "$API_STATUS_FORMAT" ] \
         || { echo "Error: ${API_DEPLOY} status answers in format '${format}', and these scripts read ${API_STATUS_FORMAT}. Install the unipept-database release that goes with this API." 1>&2; return 2; }
+    printf '%s\n' "$status"
+}
+
+# One value of what the API's `deploy.sh status` says, failing as api_status does.
+api_value() {
+    local status
+    status=$(api_status) || return
     printf '%s\n' "$status" | env_value "$1"
 }
 
@@ -45,17 +52,25 @@ api_follows_current() {
     [ "$named" = "$output" ]
 }
 
-# The versions this host serves, one per line: what current points at, and the version of the index
-# the API queries, by its status, which differs only where INDEX_LOCATION names a version's
-# directory itself, as on a host not yet pointed through current. Often the same one twice. The one
+# The versions this host serves, one per line: what current points at, and what the API serves by
+# its status, which differs only where INDEX_LOCATION names a version's directory itself, as on a
+# host not yet pointed through current. That is the version of the index it queries, or, where its
+# files have no .version to name one, the version of the directory INDEX_LOCATION names: files the
+# API reads are served whether or not they would start it again. Often the same one twice. The one
 # definition of served, which load.sh, build.sh, clone.sh and prune.sh all go by. Fails, after
 # printing the first, where the API's deploy.sh is there and does not say.
 served_versions() {
-    local index
+    local status index
 
     linked_version "$(current_link)" 2> /dev/null || true
-    index=$(api_value opensearch_index) || [ $? -eq 3 ] || return 1
-    [ -z "$index" ] || version_of_index "$index"
+    status=$(api_status) || [ $? -eq 3 ] || return 1
+    [ -n "$status" ] || return 0
+    index=$(printf '%s\n' "$status" | env_value opensearch_index)
+    if [ -n "$index" ] && [ "$index" != - ]; then
+        version_of_index "$index"
+    else
+        database_version_of "$(printf '%s\n' "$status" | env_value index_location)" 2> /dev/null || true
+    fi
 }
 
 # Whether this host serves a version. Not grep -q: it would stop reading at the first match, and the
@@ -70,7 +85,11 @@ is_served() {
 
 # Replacing the files of a version this host serves, under an API that has them open, is not a
 # switch: it would serve other files from its next start, with nothing checked. Switch away first.
+# The second argument says what a refusal leaves behind, whichever the reason.
 refuse_replacing_served() {
-    ! is_served "$1" \
+    local versions
+    versions=$(served_versions) \
+        || die "the API's deploy.sh does not say which version this host serves (above), so the files of ${1} are not replaced. ${2}"
+    ! printf '%s\n' "$versions" | grep -x "$1" > /dev/null \
         || die "${1} is the version this host serves, so its files are not replaced under the running API. ${2}Switch this host to another version with switch.sh first."
 }

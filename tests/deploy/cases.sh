@@ -224,6 +224,16 @@ check_true "keeping the build" grep -qF "This build is in ${OUT}/.build" /work/l
 check_true "and the database that was there" test -f "${OUT}/uniprot-2026-03/marker"
 as_deployer unlink "${OUT}/current"
 
+# Nor while the API does not say what it serves, which may be this version.
+mkdir -p /opt/unipept-api/lib
+api_status_lines "${OUT}/uniprot-2026-03/suffix-array" uniprot_entries-2026-03 \
+    | sed 's/^status_format=1$/status_format=2/' > "$(make_api_deploy /opt/unipept-api/lib/deploy.sh).status"
+build --output-dir "$OUT" --scratch-dir /work/scratch --replace
+check "--replace with an API that does not say what it serves stops it" "$?" "2"
+check_true "and says so" grep -q "does not say which version this host serves" /work/last-output
+check_true "keeping the build" grep -qF "This build is in ${OUT}/.build" /work/last-output
+rm -f /opt/unipept-api/lib/deploy.sh*
+
 build --output-dir "$OUT" --scratch-dir /work/scratch --replace
 check "--replace succeeds" "$?" "0"
 check_true "the old database is gone" test ! -f "${OUT}/uniprot-2026-03/marker"
@@ -411,6 +421,24 @@ check_true "the files the API reads are untouched" test -f "${LOCAL}/uniprot-202
 as_deployer unlink "${LOCAL}/current"
 as_deployer rm -f "${LOCAL}/uniprot-2026-03/marker"
 rm "${STUBS}/scp"
+
+# The API ceasing to say what it serves during the copy: the copy is removed all the same.
+mkdir -p /opt/unipept-api/lib
+api_status_lines "${LOCAL}/current/suffix-array" uniprot_entries-2026-02 > "$(make_api_deploy /opt/unipept-api/lib/deploy.sh).status"
+chmod 666 /opt/unipept-api/lib/deploy.sh.status
+cat > "${STUBS}/scp" <<SCP
+#!/usr/bin/env bash
+/usr/bin/scp "\$@" || exit
+status=\$(sed 's/^status_format=1\$/status_format=2/' /opt/unipept-api/lib/deploy.sh.status)
+printf '%s\n' "\$status" > /opt/unipept-api/lib/deploy.sh.status
+SCP
+chmod +x "${STUBS}/scp"
+clone --remote-output-dir "$REMOTE" --output-dir "$LOCAL" --replace
+check "an API that stops saying what it serves during the copy stops it" "$?" "2"
+check_true "and says so" grep -q 'does not say which version this host serves' /work/last-output
+check_true "and that the copy is removed" grep -q 'The copy is removed' /work/last-output
+check_true "which it is" test ! -e "${LOCAL}/.clone"
+rm -f /opt/unipept-api/lib/deploy.sh* "${STUBS}/scp"
 
 # An scp that loses the k-mer table on the way, which the remote has.
 cat > "${STUBS}/scp" <<SCP
