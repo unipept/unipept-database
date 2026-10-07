@@ -46,6 +46,12 @@ if [ ! -f "$DEPLOY_CONF" ]; then
     fi
 fi
 
+# Reads one key out of the `key=value` lines on standard input, which is the shape the API's
+# `deploy.sh status` prints. The last line of that key wins, as in an environment file.
+env_value() {
+    sed -n "s/^${1}=//p" | tail -1
+}
+
 # Sources DEPLOY_CONF over the defaults, where there is one.
 read_conf() {
     if [ -f "$DEPLOY_CONF" ]; then

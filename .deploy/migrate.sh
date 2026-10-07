@@ -12,7 +12,7 @@
 # is set up is left as it is.
 #
 # Flow:
-#   1. Read the version the API serves from its INDEX_LOCATION.
+#   1. Read the version the API serves from its INDEX_LOCATION, which its deploy.sh status reports.
 #   2. Point `current` at that version's directory, unless there is a current link already, which
 #      is then switch.sh's to move.
 #   3. Keep the proteins of the version `current` points at in the index named after it: a clone of
@@ -66,11 +66,11 @@ refuse_root
 require flock:util-linux
 take_opensearch_lock -x || die "$(lock_refused $?)"
 
-[ -f "$API_ENV_FILE" ] || die "there is no ${API_ENV_FILE}, so this host runs no API and has nothing to switch."
-[ -r "$API_ENV_FILE" ] || die "cannot read ${API_ENV_FILE}. Run this as the user the API runs as."
-
 CURRENT=$(current_link)
-LOCATION=$(api_index_location)
+LOCATION=$(api_value index_location) || case $? in
+    3) die "there is no ${API_DEPLOY}, so this host runs no API and has nothing to switch." ;;
+    *) die "the API's deploy.sh does not say what it serves (above). Run this as the user the API runs as." ;;
+esac
 
 if [ -L "$CURRENT" ]; then
     # The proteins cloned below are the ones INDEX_LOCATION serves, so they have to be that version's.
@@ -81,7 +81,7 @@ if [ -L "$CURRENT" ]; then
     log "${CURRENT} points at $(readlink "$CURRENT") already, and is left as it is."
 else
     VERSION=$(database_version_of "$LOCATION") \
-        || die "INDEX_LOCATION in ${API_ENV_FILE} is '${LOCATION}', which names no version, so which one this host serves is not known. Point ${CURRENT} at it yourself: ln -s uniprot-YYYY-MM ${CURRENT}"
+        || die "INDEX_LOCATION in the API's settings is '${LOCATION}', which names no version, so which one this host serves is not known. Point ${CURRENT} at it yourself: ln -s uniprot-YYYY-MM ${CURRENT}"
     DIRECTORY="${LOCATION%/}"
     DIRECTORY="${DIRECTORY%/suffix-array}"
     TARGET="$DIRECTORY"
@@ -102,7 +102,7 @@ if api_follows_current; then
 else
     cat >&2 <<EOF
 
-Still to do, so the API follows switch.sh: set this in ${API_ENV_FILE},
+Still to do, so the API follows switch.sh: set this in the API's settings, unipept-api.env,
 
   INDEX_LOCATION=${CURRENT}/suffix-array
 

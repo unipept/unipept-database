@@ -163,32 +163,13 @@ check_db_table() {
 
 # The API on this host, as its install lays it out.
 
-# Its deploy.sh, with the stop and start a switch needs.
-check_api_stop_start() {
-    local usage_text
+# Its deploy.sh, answering status in the format these scripts read: what a switch asks it, and the
+# stop and start it runs.
+check_api_status() {
+    local why
     [ -x "$API_DEPLOY" ] || { echo "FAIL there is no API here: ${API_DEPLOY} is missing. unipept-api's install puts it there." 1>&2; return 1; }
-    usage_text=$("$API_DEPLOY" 2>&1 || true)
-    [[ "$usage_text" == *"deploy.sh start"* ]] \
-        || { echo "FAIL ${API_DEPLOY} has no stop and start: update unipept-api on this host first." 1>&2; return 1; }
-}
-
-# An older API queries uniprot_entries or its alias whatever version its files are: a switch would
-# move the files and not the proteins.
-check_api_version() {
-    api_state "$API_BINARY" || case $? in
-        1) echo "FAIL the API installed is $(api_binary_version "$API_BINARY"), older than ${API_VERSIONED_INDEX_SINCE}, and queries no version's own index. Roll out unipept-api ${API_VERSIONED_INDEX_SINCE} or newer first." 1>&2; return 1 ;;
-        *) echo "FAIL cannot run ${API_BINARY} --version to learn which API is installed. Set API_BINARY where it is elsewhere." 1>&2; return 1 ;;
-    esac
-}
-
-# The one deploy.sh rollback would go back to. An older one queries uniprot_entries or its alias,
-# which hold the proteins of the version served before any switch: after one, a rollback would pair
-# the new version's files with those proteins, and nothing would notice.
-check_api_rollback_version() {
-    local rollback
-    rollback=$(api_rollback_binary)
-    [ ! -e "$rollback" ] || api_state "$rollback" \
-        || { echo "FAIL deploy.sh rollback would go back to ${rollback}, which is not ${API_VERSIONED_INDEX_SINCE} or newer, and after a switch would serve this version's files with another's proteins. Remove it, as $(id -un), to give up rolling back past ${API_VERSIONED_INDEX_SINCE}: rm ${rollback}" 1>&2; return 1; }
+    why=$(api_value status_format 2>&1 > /dev/null) \
+        || { printf '%s\n' "$why" 1>&2; echo "FAIL ${API_DEPLOY} status does not answer as these scripts read it (above)." 1>&2; return 1; }
 }
 
 # The API's own check of a database's files, the memory for them and the index of its proteins.
@@ -202,7 +183,7 @@ check_api_accepts() {
 # INDEX_LOCATION goes through `current`, so the API follows a switch.
 check_links_follows_current() {
     api_follows_current \
-        || { echo "FAIL INDEX_LOCATION in ${API_ENV_FILE} is '$(api_index_location)', so the API would not follow the switch. Set it to $(current_link)/suffix-array." 1>&2; return 1; }
+        || { echo "FAIL INDEX_LOCATION in the API's settings is '$(api_index_location 2> /dev/null)', so the API would not follow the switch. Set it to $(current_link)/suffix-array." 1>&2; return 1; }
 }
 
 # OUTPUT_DIR is writable, so `current` can be moved: a switch moves it with the API and OpenSearch

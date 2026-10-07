@@ -519,7 +519,6 @@ case "\$*" in
         if [ -e /work/index-whole ]; then printf '{"_meta":{"unipept_load":"complete"}}\n200'
         elif [ -e /work/index-error ]; then printf 'too busy\n429'
         else printf '{}\n200'; fi ;;
-    *_cat/aliases*) ;;
     *) exit 7 ;;
 esac
 CURL
@@ -585,21 +584,21 @@ check "and so does its load, continued" "$?" "0"
 touch /work/index-whole
 as_deployer unlink "${OUT}/current"
 
-# A host that runs the API and has no current link yet: INDEX_LOCATION says what it serves.
-mkdir -p /opt/unipept-api/etc
-printf 'INDEX_LOCATION=%s/uniprot-2026-03/suffix-array\n' "$OUT" > /opt/unipept-api/etc/unipept-api.env
+# A host that runs the API and has no current link yet: its deploy.sh status says what it serves.
+mkdir -p /opt/unipept-api/lib
+api_status_lines "${OUT}/uniprot-2026-03/suffix-array" uniprot_entries-2026-03 > "$(make_api_deploy /opt/unipept-api/lib/deploy.sh).status"
 load_proteins --output-dir "$OUT"
-check "without current, the version INDEX_LOCATION names is refused too" "$?" "2"
+check "without current, the version the API serves is refused too" "$?" "2"
 check_true "and says why" grep -q '2026-03 is the version this host serves' /work/last-output
 as_deployer ln -s uniprot-2025-11 "${OUT}/current"
 load_proteins --output-dir "$OUT"
 check "and so it is where current points elsewhere" "$?" "2"
 as_deployer ln -sfn uniprot-2026-03 "${OUT}/current"
 load_proteins --output-dir "$OUT"
-check "and where current and INDEX_LOCATION name the same one" "$?" "2"
+check "and where current and the API name the same one" "$?" "2"
 check_true "saying so" grep -q '2026-03 is the version this host serves' /work/last-output
 as_deployer unlink "${OUT}/current"
-rm -f /opt/unipept-api/etc/unipept-api.env
+rm -f /opt/unipept-api/lib/deploy.sh*
 rm "${STUBS}/curl" /work/index-whole
 
 rm -f /work/loader-calls

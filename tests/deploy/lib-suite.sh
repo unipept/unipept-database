@@ -2,7 +2,7 @@
 #
 # The parts of .deploy/lib.sh, function by function, for what the scripts that use them seldom or
 # never reach: core.sh's cases, which every repository that shares it runs, and then this
-# repository's own: an API binary that says nothing useful, paths that resolve to nothing, and every
+# repository's own: what the API's deploy.sh status says, paths that resolve to nothing, and every
 # check in checks.sh, passing and failing. The rest each part does is checked through the scripts,
 # in the verify, deploy and opensearch suites. Needs no container and no network.
 
@@ -31,84 +31,81 @@ in_lib() {
 }
 
 
+section "api.sh: api_value"
+
+# The API's deploy.sh, a stand-in answering status from a file each case writes.
+API="$(make_api_deploy "${TEMP_DIR}/deploy.sh")"
+
+api_status_lines /srv/index uniprot_entries-2026-03 > "${API}.status"
+check "a value of what status says" "$(in_lib "API_DEPLOY='${API}'; api_value opensearch_index")" "uniprot_entries-2026-03"
+
+sed 's/^status_format=1$/status_format=2/' "${API}.status" > "${TEMP_DIR}/format-2"
+cp "${TEMP_DIR}/format-2" "${API}.status"
+output=$(in_lib "API_DEPLOY='${API}'; api_value opensearch_index" 2>&1)
+check "a format these scripts do not read is refused" "$?" "2"
+check_true "saying which" grep -qF "answers in format '2', and these scripts read 1" <<< "$output"
+
+in_lib "API_DEPLOY='${TEMP_DIR}/no-deploy.sh'; api_value opensearch_index" > /dev/null 2>&1
+check "a host without deploy.sh runs no API" "$?" "3"
+
+output=$(in_lib "API_DEPLOY='$(make_stub "${TEMP_DIR}/failing-deploy.sh" 'echo "Error: run this as unipept" 1>&2; exit 2')'; api_value opensearch_index" 2>&1)
+check "a deploy.sh whose status fails says nothing" "$?" "2"
+check_true "and why, after its own message" grep -qF "status did not answer (above)" <<< "$output"
+
+
 section "api.sh: api_follows_current"
 
 mkdir -p "${TEMP_DIR}/data"
-printf 'INDEX_LOCATION=%s/data/current/suffix-array/\n' "$TEMP_DIR" > "${TEMP_DIR}/api.env"
-in_lib "API_ENV_FILE='${TEMP_DIR}/api.env' OUTPUT_DIR='${TEMP_DIR}/data'; api_follows_current"
+api_status_lines "${TEMP_DIR}/data/current/suffix-array/" uniprot_entries-2026-03 > "${API}.status"
+in_lib "API_DEPLOY='${API}' OUTPUT_DIR='${TEMP_DIR}/data'; api_follows_current"
 check "an INDEX_LOCATION through current in OUTPUT_DIR follows it" "$?" "0"
 
 ln -s "${TEMP_DIR}/data" "${TEMP_DIR}/data-link"
-in_lib "API_ENV_FILE='${TEMP_DIR}/api.env' OUTPUT_DIR='${TEMP_DIR}/data-link/'; api_follows_current"
+in_lib "API_DEPLOY='${API}' OUTPUT_DIR='${TEMP_DIR}/data-link/'; api_follows_current"
 check "as does an OUTPUT_DIR that is a link to that directory" "$?" "0"
 
 mkdir -p "${TEMP_DIR}/elsewhere"
-in_lib "API_ENV_FILE='${TEMP_DIR}/api.env' OUTPUT_DIR='${TEMP_DIR}/elsewhere'; api_follows_current"
+in_lib "API_DEPLOY='${API}' OUTPUT_DIR='${TEMP_DIR}/elsewhere'; api_follows_current"
 check "a current in another directory is not followed" "$?" "1"
 
-printf 'INDEX_LOCATION=%s/gone/away/current/suffix-array\n' "$TEMP_DIR" > "${TEMP_DIR}/gone.env"
-in_lib "API_ENV_FILE='${TEMP_DIR}/gone.env' OUTPUT_DIR='${TEMP_DIR}/not/there'; api_follows_current"
-check "two paths that resolve to nothing are not the same one" "$?" "1"
-
-in_lib "API_ENV_FILE='${TEMP_DIR}/api.env' OUTPUT_DIR='${TEMP_DIR}/not/there'; api_follows_current"
+in_lib "API_DEPLOY='${API}' OUTPUT_DIR='${TEMP_DIR}/not/there'; api_follows_current"
 check "nor is an OUTPUT_DIR that resolves to nothing" "$?" "1"
 
-printf 'INDEX_LOCATION=%s/data/uniprot-2026-03/suffix-array\n' "$TEMP_DIR" > "${TEMP_DIR}/direct.env"
-in_lib "API_ENV_FILE='${TEMP_DIR}/direct.env' OUTPUT_DIR='${TEMP_DIR}/data'; api_follows_current"
+api_status_lines "${TEMP_DIR}/gone/away/current/suffix-array" uniprot_entries-2026-03 > "${API}.status"
+in_lib "API_DEPLOY='${API}' OUTPUT_DIR='${TEMP_DIR}/not/there'; api_follows_current"
+check "two paths that resolve to nothing are not the same one" "$?" "1"
+
+api_status_lines "${TEMP_DIR}/data/uniprot-2026-03/suffix-array" uniprot_entries-2026-03 > "${API}.status"
+in_lib "API_DEPLOY='${API}' OUTPUT_DIR='${TEMP_DIR}/data'; api_follows_current"
 check "an INDEX_LOCATION that names a version's directory itself does not follow current" "$?" "1"
 
-
-section "api.sh: api_binary_version and api_state"
-
-# A stand-in API binary that answers --version with what it is given.
-fake_api() { make_stub "${TEMP_DIR}/api-$1" "$2"; }
-
-check "the version is the last word of what --version prints" \
-    "$(in_lib "api_binary_version '$(fake_api plain 'echo unipept-api 2.7.0')'")" "2.7.0"
-check "without a pre-release suffix" \
-    "$(in_lib "api_binary_version '$(fake_api rc 'echo unipept-api 2.7.0-rc.1')'")" "2.7.0"
-
-in_lib "api_binary_version '$(fake_api failing 'echo unipept-api 2.7.0; exit 3')'" > /dev/null
-check "a binary whose --version fails has no version" "$?" "1"
-in_lib "api_binary_version '$(fake_api garbled 'echo unipept-api, built today')'" > /dev/null
-check "nor does one that prints no X.Y.Z" "$?" "1"
-in_lib "api_binary_version '${TEMP_DIR}/no-such-binary'" > /dev/null
-check "nor one that is not there" "$?" "1"
-
-in_lib "api_state '$(fake_api new 'echo unipept-api 2.7.0')'"
-check "a release since API_VERSIONED_INDEX_SINCE queries the versioned index" "$?" "0"
-in_lib "api_state '$(fake_api newer 'echo unipept-api 2.10.0')'"
-check "and so does a later one, compared as versions rather than text" "$?" "0"
-in_lib "api_state '$(fake_api old 'echo unipept-api 2.6.4')'"
-check "an older release does not" "$?" "1"
-in_lib "api_state '$(fake_api garbled 'echo unipept-api, built today')'"
-check "and one that cannot say is neither" "$?" "2"
+in_lib "API_DEPLOY='${TEMP_DIR}/no-deploy.sh' OUTPUT_DIR='${TEMP_DIR}/data'; api_follows_current"
+check "nor does a host without an API" "$?" "1"
 
 
-section "api.sh: is_served"
+section "api.sh: served_versions and is_served"
 
-# What OpenSearch says is replaced, so the links alone decide, and the case of an OpenSearch that
-# answers but does not say what the alias points at can be made.
 mkdir -p "${TEMP_DIR}/served/uniprot-2026-03"
 ln -s uniprot-2026-03 "${TEMP_DIR}/served/current"
-answers_without_alias="OUTPUT_DIR='${TEMP_DIR}/served' API_ENV_FILE=/nonexistent
-opensearch_answers() { return 0; }
-alias_targets() { return 1; }"
+api_status_lines "${TEMP_DIR}/served/uniprot-2026-02/suffix-array" uniprot_entries-2026-02 > "${API}.status"
+SERVED_HOST="OUTPUT_DIR='${TEMP_DIR}/served' API_DEPLOY='${API}'"
 
-in_lib "${answers_without_alias}; is_served 2026-03"
+check "what current points at, and the version of the index the API queries" \
+    "$(in_lib "${SERVED_HOST}; served_versions" | tr '\n' ' ')" "2026-03 2026-02 "
+in_lib "${SERVED_HOST}; is_served 2026-03"
 check "what current points at is served" "$?" "0"
-in_lib "${answers_without_alias}; is_served 2026-04"
+in_lib "${SERVED_HOST}; is_served 2026-02"
+check "and so is the version the API queries" "$?" "0"
+in_lib "${SERVED_HOST}; is_served 2026-04"
 check "another version is not" "$?" "1"
 
-output=$(in_lib "${answers_without_alias}; is_served 2026-04 strict" 2>&1)
-check "strict, an alias OpenSearch does not report stops the script" "$?" "2"
-check_true "and says what is not known" grep -q "so what this host serves is not known" <<< "$output"
+check "a host without an API serves what current points at" \
+    "$(in_lib "OUTPUT_DIR='${TEMP_DIR}/served' API_DEPLOY='${TEMP_DIR}/no-deploy.sh'; served_versions" | tr '\n' ' ')" "2026-03 "
 
-in_lib "OUTPUT_DIR='${TEMP_DIR}/served' API_ENV_FILE=/nonexistent
-opensearch_answers() { return 1; }
-alias_targets() { return 1; }
-is_served 2026-04 strict"
-check "an OpenSearch that does not answer at all leaves it to the links" "$?" "1"
+cp "${TEMP_DIR}/format-2" "${API}.status"
+output=$(in_lib "${SERVED_HOST}; is_served 2026-04" 2>&1)
+check "an API that does not say what it serves stops the script" "$?" "2"
+check_true "saying so" grep -qF "does not say which version this host serves" <<< "$output"
 
 
 section "checks.sh: each check, passing and failing"
@@ -189,28 +186,27 @@ if [ -r /proc/meminfo ]; then
     wait "$running" 2> /dev/null
 fi
 
-# The API, as its install lays it out: a deploy.sh that says what it takes, and a binary that says
-# its version.
-API_GOOD="API_DEPLOY='$(fake_api deploy-good 'echo "usage: deploy.sh start"')' API_BINARY='$(fake_api new-api 'echo unipept-api 2.7.0')'"
-API_BAD="API_DEPLOY='$(fake_api deploy-old 'echo "usage: deploy.sh deploy"; exit 1')' API_BINARY='$(fake_api old-api 'echo unipept-api 2.6.4')'"
-both_ways check_api_stop_start "${API_GOOD}; check_api_stop_start" "${API_BAD}; check_api_stop_start" "has no stop and start"
-both_ways check_api_version "${API_GOOD}; check_api_version" "${API_BAD}; check_api_version" "the API installed is 2.6.4, older than 2.7.0"
-cp "$(fake_api old-rollback 'echo unipept-api 2.6.4')" "$(fake_api new-api 'echo unipept-api 2.7.0').previous"
-both_ways check_api_rollback_version \
-    "API_BINARY='${TEMP_DIR}/api-no-rollback'; check_api_rollback_version" \
-    "API_BINARY='${TEMP_DIR}/api-new-api'; check_api_rollback_version" \
-    "deploy.sh rollback would go back to ${TEMP_DIR}/api-new-api.previous"
-both_ways check_api_accepts "${API_GOOD}; check_api_accepts '${DB}'" "API_DEPLOY='$(fake_api refuses 'exit 1')'; check_api_accepts '${DB}'" "the API's own check refuses ${DB}/suffix-array"
+# The API, as its install lays it out: a deploy.sh that answers status, and its own check.
+api_status_lines /srv/index uniprot_entries-2026-03 > "${API}.status"
+both_ways check_api_status "API_DEPLOY='${API}'; check_api_status" "API_DEPLOY='${TEMP_DIR}/no-deploy.sh'; check_api_status" \
+    "there is no API here: ${TEMP_DIR}/no-deploy.sh is missing"
+cp "${TEMP_DIR}/format-2" "${TEMP_DIR}/format-2-deploy.sh.status"
+fails_saying "check_api_status, on a status of another format," \
+    "API_DEPLOY='$(make_api_deploy "${TEMP_DIR}/format-2-deploy.sh")'; check_api_status" \
+    "${TEMP_DIR}/format-2-deploy.sh status does not answer as these scripts read it"
+both_ways check_api_accepts "API_DEPLOY='${API}'; check_api_accepts '${DB}'" \
+    "API_DEPLOY='$(make_stub "${TEMP_DIR}/refusing-deploy.sh" 'exit 1')'; check_api_accepts '${DB}'" \
+    "the API's own check refuses ${DB}/suffix-array"
 
 # The links of a host whose API follows current, and of one whose does not.
 LINKS="${TEMP_DIR}/checks/links"
 mkdir -p "${LINKS}/data/uniprot-2026-03"
 ln -sfn uniprot-2026-03 "${LINKS}/data/current"
-printf 'INDEX_LOCATION=%s/data/current/suffix-array\n' "$LINKS" > "${LINKS}/follows.env"
-printf 'INDEX_LOCATION=%s/data/uniprot-2026-03/suffix-array\n' "$LINKS" > "${LINKS}/fixed.env"
+api_status_lines "${LINKS}/data/current/suffix-array" uniprot_entries-2026-03 > "$(make_api_deploy "${LINKS}/follows.sh").status"
+api_status_lines "${LINKS}/data/uniprot-2026-03/suffix-array" uniprot_entries-2026-03 > "$(make_api_deploy "${LINKS}/fixed.sh").status"
 both_ways check_links_follows_current \
-    "OUTPUT_DIR='${LINKS}/data' API_ENV_FILE='${LINKS}/follows.env'; check_links_follows_current" \
-    "OUTPUT_DIR='${LINKS}/data' API_ENV_FILE='${LINKS}/fixed.env'; check_links_follows_current" \
+    "OUTPUT_DIR='${LINKS}/data' API_DEPLOY='${LINKS}/follows.sh'; check_links_follows_current" \
+    "OUTPUT_DIR='${LINKS}/data' API_DEPLOY='${LINKS}/fixed.sh'; check_links_follows_current" \
     "so the API would not follow the switch"
 mkdir -p "${LINKS}/locked" && chmod 555 "${LINKS}/locked"
 both_ways check_links_movable "OUTPUT_DIR='${LINKS}/data'; check_links_movable" "OUTPUT_DIR='${LINKS}/locked'; check_links_movable" "${LINKS}/locked is not writable"

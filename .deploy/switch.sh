@@ -13,16 +13,15 @@
 #
 # Flow:
 #   1. Check everything a switch depends on while both are still running, and report every problem
-#      rather than the first. A host with any is left exactly as it is. --check stops here.
+#      rather than the first. A host with any is left exactly as it is. --check stops here. Take the
+#      OpenSearch lock and the API's, held to the end, so no load and no deploy of the API runs
+#      during the switch; the API's deploy.sh stop and start below take it over.
 #   2. Stop the API, then OpenSearch.
 #   3. Point `current` at the new version, and `previous` at the one it pointed at.
 #   4. Start OpenSearch, and wait for it and for the new version's index.
 #   5. Start the API, which checks the host once more and waits until it serves.
-#   6. Remove the alias of the old name an earlier release left, which only an API from before
-#      versioned indices queried, and close the indices of versions older than both, which frees the
-#      memory they hold. Nothing is deleted: .deploy/prune.sh removes old versions. Neither the API
-#      nor the one deploy.sh would roll back to may predate versioned indices, which step 1 checks:
-#      after a switch, such a one would pair the new files with the old proteins.
+#   6. Close the indices of versions older than both, which frees the memory they hold. Nothing is
+#      deleted: .deploy/prune.sh removes old versions.
 #   A failure in 3, 4 or 5, or an interrupt from 2 on, points the links back and starts both on the
 #   version it left, so the host serves what it served before.
 
@@ -97,16 +96,21 @@ TARGET_STATUS=''
 # OpenSearch still run, so a host that cannot switch keeps serving exactly as it did. Every check
 # runs, and each problem is counted.
 preflight() {
-    local problems=0
+    local problems=0 api_lock
 
     if check_db_present "$TARGET_DIR"; then
         check_db_whole "$TARGET_DIR" || problems=$((problems + 1))
     else
         problems=$((problems + 1))
     fi
-    check_api_stop_start || problems=$((problems + 1))
-    check_api_version || problems=$((problems + 1))
-    check_api_rollback_version || problems=$((problems + 1))
+    # The API's lock, at the path its status names, so no deploy, rollback, stop or start of it runs
+    # until the switch ends; the deploy.sh stop and start it runs inherit it.
+    if check_api_status; then
+        api_lock=$(api_value api_lock)
+        take_api_lock "$api_lock" || { echo "FAIL $(api_lock_refused $? "$api_lock")" 1>&2; problems=$((problems + 1)); }
+    else
+        problems=$((problems + 1))
+    fi
     check_links_follows_current || problems=$((problems + 1))
     check_links_movable || problems=$((problems + 1))
     check_links_previous || problems=$((problems + 1))
@@ -170,31 +174,11 @@ start_opensearch() {
     wait_for_opensearch || { echo "OpenSearch did not answer within ${OPENSEARCH_START_TIMEOUT} seconds." 1>&2; return 1; }
 }
 
-# The alias of the old name an earlier release of these scripts left, which an API from before
-# versioned indices queries. An API that has just started on a switched version queries the index
-# of that version instead, so nothing needs the alias any more, and removing it lets prune.sh reclaim
-# what it points at. A failure is only reported.
-drop_old_alias() {
-    local target
-    if ! target=$(alias_targets 2> /dev/null | paste -sd ' ' -); then
-        echo "WARN OpenSearch did not say what the alias ${ALIAS} points at, so it is left; prune.sh keeps what it points at while it is there." 1>&2
-        return 0
-    fi
-    [ -n "$target" ] || return 0
-
-    if curl -s -f -o /dev/null -X POST "${OPENSEARCH_URL}/_aliases" -H 'Content-Type: application/json' \
-        -d "{\"actions\":[{\"remove\":{\"index\":\"*\",\"alias\":\"${ALIAS}\"}}]}"; then
-        log "Removed the alias ${ALIAS}, from ${target}, which nothing queries any more."
-    else
-        echo "WARN could not remove the alias ${ALIAS}; prune.sh keeps ${target} while it is there." 1>&2
-    fi
-}
-
 # The indices of versions older than both the one switched to and the one left: neither the API nor
 # a --back needs them, and an open index holds memory. Versions newer than the one switched to are
-# loaded ahead of a switch and stay open. uniprot_entries itself, which a host loaded before
-# versioned indices still has beside the clone migrate.sh made, counts as the oldest: an API that
-# switches queries the versioned one. Closing is not needed for the switch, so it happens once the
+# loaded ahead of a switch and stay open. uniprot_entries and uniprot_entries-legacy, which a host
+# loaded before versioned indices may still have beside the clone migrate.sh made, count as the
+# oldest: the API queries the versioned one. Closing is not needed for the switch, so it happens once the
 # API serves, and a failure is only reported.
 close_older_indices() {
     local oldest="$TARGET" index status version
@@ -312,8 +296,5 @@ log "${CURRENT} points at ${TARGET_LINK}."
 start_both || switch_back
 
 trap - INT TERM HUP
-# Nothing installed needs the alias any more: the checks made sure neither the API nor the one
-# deploy.sh would roll back to predates versioned indices.
-drop_old_alias
 close_older_indices
 log "This host serves ${TARGET}. ${FROM} is kept; switch back to it with --back."

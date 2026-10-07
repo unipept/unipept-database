@@ -1,27 +1,35 @@
 # shellcheck shell=bash
 #
-# What this repository knows of the API on the same host: which version it serves, which release of
-# it is installed, and whether it follows a switch. The one place that looks at the API's files.
-# Uses die from core.sh, OUTPUT_DIR from config.sh, the links of versions.sh, and alias_targets,
-# version_of_index, opensearch_answers and ALIAS from opensearch/lib.sh. Sourced through
-# .deploy/lib.sh.
+# What this repository knows of the API on the same host: what it serves, and whether it follows a
+# switch. All of it from the API's own `deploy.sh status`, never from its files. Uses die from
+# core.sh, env_value and OUTPUT_DIR from config.sh, the links of versions.sh, and version_of_index
+# from opensearch/lib.sh. Sourced through .deploy/lib.sh.
 
-# The API on this host, where its own install puts it: its settings, of which INDEX_LOCATION is read
-# here, and the script that stops and starts it. A host without them runs no API.
-API_ENV_FILE=${API_ENV_FILE:-/opt/unipept-api/etc/unipept-api.env}
-# shellcheck disable=SC2034 # read by the scripts that source this file
+# The API's deploy.sh, where its install puts it. A host without it runs no API.
 API_DEPLOY=${API_DEPLOY:-/opt/unipept-api/lib/deploy.sh}
-API_BINARY=${API_BINARY:-/opt/unipept-api/bin/unipept-api}
 
-# The first unipept-api release that queries uniprot_entries-<version>, the index of the version its
-# files are from. An older one queries uniprot_entries itself, or the alias of that name, and needs
-# what a host loaded before versioned indices kept.
-readonly API_VERSIONED_INDEX_SINCE=2.7.0
+# The status_format of `deploy.sh status` these scripts read. The API raises it only where a line
+# changes meaning or goes, so another one is refused rather than read wrongly.
+readonly API_STATUS_FORMAT=1
 
-# INDEX_LOCATION in the API's settings on this host, or nothing where there are none.
+# One value of what the API's `deploy.sh status` says. Fails with 3 where there is no deploy.sh, so
+# no API, on this host, and with 2, saying why, where it does not answer or answers in a format these
+# scripts do not read.
+api_value() {
+    local status format
+
+    [ -x "$API_DEPLOY" ] || return 3
+    status=$("$API_DEPLOY" status) \
+        || { echo "Error: ${API_DEPLOY} status did not answer (above)." 1>&2; return 2; }
+    format=$(printf '%s\n' "$status" | env_value status_format)
+    [ "$format" = "$API_STATUS_FORMAT" ] \
+        || { echo "Error: ${API_DEPLOY} status answers in format '${format}', and these scripts read ${API_STATUS_FORMAT}. Install the unipept-database release that goes with this API." 1>&2; return 2; }
+    printf '%s\n' "$status" | env_value "$1"
+}
+
+# INDEX_LOCATION in the API's settings on this host, or nothing where it runs no API.
 api_index_location() {
-    [ -r "$API_ENV_FILE" ] || return 0
-    sed -n 's/^INDEX_LOCATION=//p' "$API_ENV_FILE" | tail -n 1
+    api_value index_location || [ $? -eq 3 ]
 }
 
 # Whether INDEX_LOCATION names the suffix array through current, so the API follows a switch. By
@@ -29,7 +37,7 @@ api_index_location() {
 # link to OUTPUT_DIR says the same. Two paths that resolve to nothing are not the same one.
 api_follows_current() {
     local location named output
-    location=$(api_index_location)
+    location=$(api_index_location) || return 1
     location="${location%/}"
     [[ "$location" == */current/suffix-array ]] || return 1
     named=$(readlink -f "${location%/current/suffix-array}") || return 1
@@ -37,34 +45,26 @@ api_follows_current() {
     [ "$named" = "$output" ]
 }
 
-# The versions this host serves, one per line, in this order: what current points at, what
-# INDEX_LOCATION names where it names a version's directory itself, as on a host not yet pointed
-# through current, and what every alias of the old name an earlier release left points at, which an
-# API from before versioned indices queries, legacy included. The one definition of served, which
-# load.sh, build.sh, clone.sh and prune.sh all go by. Often the same one more than once. Fails, after
-# printing the rest, where OpenSearch does not say what the alias points at.
+# The versions this host serves, one per line: what current points at, and the version of the index
+# the API queries, by its status, which differs only where INDEX_LOCATION names a version's
+# directory itself, as on a host not yet pointed through current. Often the same one twice. The one
+# definition of served, which load.sh, build.sh, clone.sh and prune.sh all go by. Fails, after
+# printing the first, where the API's deploy.sh is there and does not say.
 served_versions() {
-    local targets index
+    local index
 
     linked_version "$(current_link)" 2> /dev/null || true
-    database_version_of "$(api_index_location)" 2> /dev/null || true
-    targets=$(alias_targets 2> /dev/null) || return 1
-    for index in $targets; do
-        version_of_index "$index"
-    done
+    index=$(api_value opensearch_index) || [ $? -eq 3 ] || return 1
+    [ -z "$index" ] || version_of_index "$index"
 }
 
-# Whether this host serves a version, by any of them. Not grep -q: it would stop reading at the first
-# match, and the write of a later line would then fail the pipeline under pipefail. With strict, what
-# the alias points at has to be known where OpenSearch answers: a load cannot take it for nothing.
-# Without, as for a build on a host whose OpenSearch is stopped for it, the links suffice.
+# Whether this host serves a version. Not grep -q: it would stop reading at the first match, and the
+# write of a later line would then fail the pipeline under pipefail. Dies where the API does not say
+# what it serves: what it may serve is not replaced or loaded into on a guess.
 is_served() {
     local versions
-    if ! versions=$(served_versions); then
-        # An OpenSearch that does not answer at all drops nothing either: the load fails on its own.
-        [ "${2:-}" != strict ] || ! opensearch_answers \
-            || die "OpenSearch does not say what the alias ${ALIAS} points at, so what this host serves is not known."
-    fi
+    versions=$(served_versions) \
+        || die "the API's deploy.sh does not say which version this host serves (above), so none is replaced or loaded into."
     printf '%s\n' "$versions" | grep -x "$1" > /dev/null
 }
 
@@ -73,39 +73,4 @@ is_served() {
 refuse_replacing_served() {
     ! is_served "$1" \
         || die "${1} is the version this host serves, so its files are not replaced under the running API. ${2}Switch this host to another version with switch.sh first."
-}
-
-# The X.Y.Z of an API binary, from its own --version, a pre-release or build suffix left off: 2.7.0 for
-# 2.7.0-rc.1, which already is that release's code. Fails where it cannot be run or says nothing so.
-api_binary_version() {
-    local reported
-    [ -x "$1" ] || return 1
-    reported=$("$1" --version 2> /dev/null | awk '{ print $NF }') || return 1
-    reported="${reported%%[-+]*}"
-    [[ "$reported" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || return 1
-    printf '%s\n' "$reported"
-}
-
-# Whether a version is API_VERSIONED_INDEX_SINCE or newer.
-queries_versioned_index() {
-    [ "$(printf '%s\n%s\n' "$API_VERSIONED_INDEX_SINCE" "$1" | sort -V | head -n 1)" = "$API_VERSIONED_INDEX_SINCE" ]
-}
-
-# Whether an API binary queries the index of the version it serves: 0 it does, 1 it is older than
-# API_VERSIONED_INDEX_SINCE, 2 it cannot be run to say. The one test switch.sh and prune.sh make.
-api_state() {
-    local version
-    version=$(api_binary_version "$1") || return 2
-    queries_versioned_index "$version" || return 1
-}
-
-# The binary the API keeps beside the installed one, for its rollback.
-api_rollback_binary() { echo "${API_BINARY}.previous"; }
-
-# Whether nothing installed still needs what a host loaded before versioned indices kept: the API
-# installed queries the index of its version, and so does the one deploy.sh would roll back to, where
-# there is one. A rollback to an older one would serve nothing without uniprot_entries or its alias.
-old_indices_unneeded() {
-    api_state "$API_BINARY" || return 1
-    [ ! -e "$(api_rollback_binary)" ] || api_state "$(api_rollback_binary)"
 }
