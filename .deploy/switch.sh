@@ -116,6 +116,9 @@ preflight() {
     if status=$(check_api_status); then
         check_links_follows_current "$(printf '%s\n' "$status" | env_value index_location)" || problems=$((problems + 1))
         hold_api_lock "$(printf '%s\n' "$status" | env_value api_lock)" || problems=$((problems + 1))
+        # A check changes nothing the API does: whether a deploy of it is running is all it needs to
+        # know, so it lets go at once rather than keep one waiting while it asks the rest.
+        [ "$CHECK_ONLY" != true ] || exec 7<&-
     else
         problems=$((problems + 1))
     fi
@@ -269,8 +272,6 @@ fi
 
 log "Checking that this host can switch from ${FROM} to ${TARGET}."
 preflight
-# A check changes nothing the API does, so it does not keep a deploy of it waiting while it asks.
-[ "$CHECK_ONLY" != true ] || exec 7<&-
 # A --check on a closed index has stopped above, so what is left can be checked.
 open_target_index
 # What the API itself needs of the new version, its files, the memory for them and the index of its

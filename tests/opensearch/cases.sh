@@ -295,15 +295,15 @@ chmod 1777 /run/lock
 api_status_lines "${SW_DATA}/current/suffix-array" uniprot_entries-2027-01 "$API_LOCK" > "${SW_STATE}/status"
 chmod 644 "${SW_STATE}/status"
 
-# Its stop and start record whether they run under the API lock, handed down on descriptor 7 and
-# held: another open of the file cannot take it.
+# Its check, stop and start record whether they run under the API lock: handed down on descriptor 7,
+# taken through it as the real one takes it, and so held against another open of the file.
 cat > "${SW_BIN}/deploy.sh" <<STUB
 #!/usr/bin/env bash
 [ "\${1:-}" = status ] && { cat "${SW_STATE}/status"; exit; }
 printf '%s\n' "\$*" >> "${SW_STATE}/api-calls"
 case "\${1:-}" in
-    stop | start)
-        if [ /dev/fd/7 -ef "$API_LOCK" ] && ! flock -n "$API_LOCK" true 2> /dev/null; then
+    check | stop | start)
+        if [ /dev/fd/7 -ef "$API_LOCK" ] && flock -n 7 && ! flock -n "$API_LOCK" true 2> /dev/null; then
             echo "\$1 held" >> "${SW_STATE}/lock-calls"
         else
             echo "\$1 free" >> "${SW_STATE}/lock-calls"
@@ -512,6 +512,7 @@ curl -s -X POST "${OPENSEARCH_URL}/uniprot_entries-2027-02/_open" > /dev/null
 switch "${WORK}/switch-check.log" --uniprot-version 2027-02 --check
 check "--check succeeds" "$rc" "0"
 check_true "and says the host can switch" grep -q 'can switch from 2027-01 to 2027-02' "${WORK}/switch-check.log"
+check "having let go of the API lock before the API's check, which a deploy could otherwise not run beside" "$(calls lock-calls)" "check free "
 check "asking the API's check" "$(calls api-calls)" "check --index ${SW_DATA}/uniprot-2027-02/suffix-array "
 check "changing nothing" "$(serves)" "uniprot-2027-01"
 curl -s -X POST "${OPENSEARCH_URL}/uniprot_entries-2027-02/_close" > /dev/null
@@ -520,7 +521,7 @@ switch "${WORK}/switch.log" --uniprot-version 2027-02
 check "a switch succeeds" "$rc" "0"
 check "the API checks the new version, is stopped and started" "$(calls api-calls)" "check --index ${SW_DATA}/uniprot-2027-02/suffix-array stop start "
 check "OpenSearch is stopped after it and started before it" "$(calls systemctl-calls)" "stop opensearch start opensearch "
-check "both under the API lock the switch hands down" "$(calls lock-calls)" "stop held start held "
+check "all under the API lock the switch hands down" "$(calls lock-calls)" "check held stop held start held "
 check "the API starts on the new version" "$(cat "${SW_STATE}/started-on")" "uniprot-2027-02"
 check "current points at it" "$(serves)" "uniprot-2027-02"
 check "previous at the one it left" "$(readlink "${SW_DATA}/previous")" "uniprot-2027-01"
