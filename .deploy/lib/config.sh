@@ -39,12 +39,16 @@ readonly INSTALL_ROOT=/opt/unipept-database
 # install.sh lays them out; and otherwise this host's installed one, so build.sh in a checkout reads
 # the same settings as the scripts installed beside it.
 #
-# etc/ is found from the path DEPLOY_DIR was reached by, not through `..`: installed, deploy/ is a link
-# into the release, and `..` from it is the release, not the install.
+# Installed, DEPLOY_DIR is the release's deploy/, ROOT/releases/ID/deploy, and etc/ is the install's,
+# beside releases/; in a checkout, it is beside .deploy/.
+case $DEPLOY_DIR in
+    */releases/*/deploy) installed_conf="${DEPLOY_DIR%/releases/*}/etc/deploy.conf" ;;
+    *) installed_conf="${DEPLOY_DIR%/*}/etc/deploy.conf" ;;
+esac
 DEPLOY_CONF="${DEPLOY_DIR}/deploy.conf"
 if [ ! -f "$DEPLOY_CONF" ]; then
-    if [ -f "${DEPLOY_DIR%/*}/etc/deploy.conf" ]; then
-        DEPLOY_CONF="${DEPLOY_DIR%/*}/etc/deploy.conf"
+    if [ -f "$installed_conf" ]; then
+        DEPLOY_CONF="$installed_conf"
     else
         DEPLOY_CONF="${INSTALL_ROOT}/etc/deploy.conf"
     fi

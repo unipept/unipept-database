@@ -3,8 +3,11 @@
 # Shared by the deploy scripts. Sourced, never run. Sourcing it sets the shell options and the traps
 # every script runs with: see lib/core.sh.
 
-# The directory of this file. Not HERE, which belongs to the script that sources it.
-DEPLOY_DIR="$(CDPATH='' cd -- "${BASH_SOURCE[0]%/*}" > /dev/null && pwd)"
+# The directory of this file. Not HERE, which belongs to the script that sources it. Resolved
+# through every link, so installed it names the release this run started from, not the link to
+# whichever is in place: an install that puts another in place meanwhile does not hand this run a
+# loader or a library of another release.
+DEPLOY_DIR="$(CDPATH='' cd -P -- "${BASH_SOURCE[0]%/*}" > /dev/null && pwd)"
 
 # Each part in its own file under lib/, and each says in its header what it uses of the others. They
 # define functions and settings, and run nothing that needs another part while being sourced, so
