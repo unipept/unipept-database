@@ -5,14 +5,8 @@
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Beside this script once install.sh has placed both in /opt/unipept-database/bin, one level up in
-# a repository checkout.
 # shellcheck source=../lib.sh
-if [ -f "${HERE}/lib.sh" ]; then
-    source "${HERE}/lib.sh"
-else
-    source "${HERE}/../lib.sh"
-fi
+source "${HERE}/../lib.sh" || exit 2
 
 read_conf
 
@@ -31,7 +25,7 @@ usage() {
     cat <<'USAGE'
 Checks a finished database against the files the API needs, and reports everything that is wrong.
 
-  bin/verify.sh [OPTIONS]
+  deploy/server/verify.sh [OPTIONS]
 
   --index-dir DIR            the directory the API is pointed at, checked as it is
   --uniprot-version YYYY-MM  check this one under OUTPUT_DIR, default the newest there

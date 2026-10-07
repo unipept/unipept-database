@@ -225,14 +225,14 @@ check_true "and the database that was there" test -f "${OUT}/uniprot-2026-03/mar
 as_deployer unlink "${OUT}/current"
 
 # Nor while the API does not say what it serves, which may be this version.
-mkdir -p /opt/unipept-api/lib
+mkdir -p /opt/unipept-api/deploy/server
 api_status_lines "${OUT}/uniprot-2026-03/suffix-array" uniprot_entries-2026-03 \
-    | sed 's/^status_format=1$/status_format=2/' > "$(make_api_deploy /opt/unipept-api/lib/deploy.sh).status"
+    | sed 's/^status_format=1$/status_format=2/' > "$(make_api_deploy /opt/unipept-api/deploy/server/deploy.sh).status"
 build --output-dir "$OUT" --scratch-dir /work/scratch --replace
 check "--replace with an API that does not say what it serves stops it" "$?" "2"
 check_true "and says so" grep -q "does not say which version this host serves" /work/last-output
 check_true "keeping the build" grep -qF "This build is in ${OUT}/.build" /work/last-output
-rm -f /opt/unipept-api/lib/deploy.sh*
+rm -f /opt/unipept-api/deploy/server/deploy.sh*
 
 build --output-dir "$OUT" --scratch-dir /work/scratch --replace
 check "--replace succeeds" "$?" "0"
@@ -259,10 +259,10 @@ check "a running API and OpenSearch stop it" "$?" "2"
 check_true "naming the API" grep -q 'The Unipept API is running' /work/last-output
 check_true "and OpenSearch" grep -q 'OpenSearch is running' /work/last-output
 # Each command on a line of its own, so a line copied from the message runs as it is.
-check_true "saying how to stop the API" grep -qx "  /opt/unipept-api/lib/deploy.sh stop" /work/last-output
+check_true "saying how to stop the API" grep -qx "  /opt/unipept-api/deploy/server/deploy.sh stop" /work/last-output
 check_true "and OpenSearch" grep -qx "  sudo systemctl stop opensearch" /work/last-output
 check_true "and to start them again afterwards" grep -qx "  sudo systemctl start opensearch" /work/last-output
-check_true "both of them" grep -qx "  /opt/unipept-api/lib/deploy.sh start" /work/last-output
+check_true "both of them" grep -qx "  /opt/unipept-api/deploy/server/deploy.sh start" /work/last-output
 check_true "nothing is built" test ! -e "${CHECK_OUT}/uniprot-2026-03"
 check_true "and before what an earlier build left is removed" test -e "${CHECK_OUT}/.build/kept"
 kill "$api_pid" 2> /dev/null; wait "$api_pid" 2> /dev/null
@@ -423,14 +423,14 @@ as_deployer rm -f "${LOCAL}/uniprot-2026-03/marker"
 rm "${STUBS}/scp"
 
 # The API ceasing to say what it serves during the copy: the copy is removed all the same.
-mkdir -p /opt/unipept-api/lib
-api_status_lines "${LOCAL}/current/suffix-array" uniprot_entries-2026-02 > "$(make_api_deploy /opt/unipept-api/lib/deploy.sh).status"
-chmod 666 /opt/unipept-api/lib/deploy.sh.status
+mkdir -p /opt/unipept-api/deploy/server
+api_status_lines "${LOCAL}/current/suffix-array" uniprot_entries-2026-02 > "$(make_api_deploy /opt/unipept-api/deploy/server/deploy.sh).status"
+chmod 666 /opt/unipept-api/deploy/server/deploy.sh.status
 cat > "${STUBS}/scp" <<SCP
 #!/usr/bin/env bash
 /usr/bin/scp "\$@" || exit
-status=\$(sed 's/^status_format=1\$/status_format=2/' /opt/unipept-api/lib/deploy.sh.status)
-printf '%s\n' "\$status" > /opt/unipept-api/lib/deploy.sh.status
+status=\$(sed 's/^status_format=1\$/status_format=2/' /opt/unipept-api/deploy/server/deploy.sh.status)
+printf '%s\n' "\$status" > /opt/unipept-api/deploy/server/deploy.sh.status
 SCP
 chmod +x "${STUBS}/scp"
 clone --remote-output-dir "$REMOTE" --output-dir "$LOCAL" --replace
@@ -438,7 +438,7 @@ check "an API that stops saying what it serves during the copy stops it" "$?" "2
 check_true "and says so" grep -q 'does not say which version this host serves' /work/last-output
 check_true "and that the copy is removed" grep -q 'The copy is removed' /work/last-output
 check_true "which it is" test ! -e "${LOCAL}/.clone"
-rm -f /opt/unipept-api/lib/deploy.sh* "${STUBS}/scp"
+rm -f /opt/unipept-api/deploy/server/deploy.sh* "${STUBS}/scp"
 
 # An scp that loses the k-mer table on the way, which the remote has.
 cat > "${STUBS}/scp" <<SCP
@@ -610,8 +610,8 @@ touch /work/index-whole
 as_deployer unlink "${OUT}/current"
 
 # A host that runs the API and has no current link yet: its deploy.sh status says what it serves.
-mkdir -p /opt/unipept-api/lib
-api_status_lines "${OUT}/uniprot-2026-03/suffix-array" uniprot_entries-2026-03 > "$(make_api_deploy /opt/unipept-api/lib/deploy.sh).status"
+mkdir -p /opt/unipept-api/deploy/server
+api_status_lines "${OUT}/uniprot-2026-03/suffix-array" uniprot_entries-2026-03 > "$(make_api_deploy /opt/unipept-api/deploy/server/deploy.sh).status"
 load_proteins --output-dir "$OUT"
 check "without current, the version the API serves is refused too" "$?" "2"
 check_true "and says why" grep -q '2026-03 is the version this host serves' /work/last-output
@@ -623,7 +623,7 @@ load_proteins --output-dir "$OUT"
 check "and where current and the API name the same one" "$?" "2"
 check_true "saying so" grep -q '2026-03 is the version this host serves' /work/last-output
 as_deployer unlink "${OUT}/current"
-rm -f /opt/unipept-api/lib/deploy.sh*
+rm -f /opt/unipept-api/deploy/server/deploy.sh*
 rm "${STUBS}/curl" /work/index-whole
 
 rm -f /work/loader-calls
@@ -1099,27 +1099,46 @@ PREFIX_A=/work/opt-a
 packaged_host
 install_opensearch --user "$DEPLOY" --output-dir "$OUT" --prefix "$PREFIX_A"
 check "it succeeds" "$?" "0"
-check_true "the scripts a host runs are there" \
-    test -x "${PREFIX_A}/bin/clone.sh" -a -x "${PREFIX_A}/bin/load.sh" -a -x "${PREFIX_A}/bin/verify.sh" -a -x "${PREFIX_A}/bin/prune.sh" \
-        -a -x "${PREFIX_A}/bin/switch.sh"
-check_true "and what they call" \
-    test -x "${PREFIX_A}/opensearch/load.sh" -a -f "${PREFIX_A}/opensearch/lib.sh" \
-        -a -f "${PREFIX_A}/opensearch/mappings/uniprot_entries.json" -a -f "${PREFIX_A}/pipelines/lib/common.sh"
-check "and every part of lib.sh" "$(ls "${PREFIX_A}/bin/lib")" "$(ls /repo/.deploy/lib)"
-check "all of them root's, as the scripts that load them are" \
-    "$(stat -c '%U' "${PREFIX_A}/bin/lib" "${PREFIX_A}/bin/lib.sh" "${PREFIX_A}/bin/lib/"*.sh | sort -u)" "root"
-check_true "but not build.sh, which needs the whole repository" test ! -e "${PREFIX_A}/bin/build.sh"
-check "and nothing else: not distribute.sh, nor install.sh itself" \
-    "$(find "${PREFIX_A}/bin" -mindepth 1 -maxdepth 1 -printf '%f\n' | sort | tr '\n' ' ')" "clone.sh lib lib.sh load.sh prune.sh switch.sh verify.sh "
-check "the scripts belong to root, which alone changes them" "$(stat -c %U "${PREFIX_A}/bin/load.sh")" "root"
+# What a checkout holds of what a host runs, by the path it has in the install, which mirrors it:
+# deploy/ for .deploy/, beside opensearch/ and pipelines/. Not build.sh and distribute.sh, which
+# need a checkout, nor the installs themselves.
+mirrored_files() {
+    {
+        echo deploy/lib.sh
+        find /repo/.deploy/lib -name '*.sh' -printf 'deploy/lib/%f\n'
+        printf 'deploy/server/%s.sh\n' clone load prune switch verify
+        printf 'opensearch/%s\n' bulk_load.py lib.sh load.sh mappings/uniprot_entries.json
+        echo pipelines/lib/common.sh
+    } | sort
+}
+installed_files() { (cd "$1" && find deploy opensearch pipelines -type f | sort); }
+
+check "the install mirrors the checkout, file for file" "$(installed_files "$PREFIX_A")" "$(mirrored_files)"
+check "beside its configuration and what it was installed from, and nothing else" \
+    "$(find "$PREFIX_A" -mindepth 1 -maxdepth 1 -printf '%f\n' | sort | tr '\n' ' ')" "INSTALLED deploy etc opensearch pipelines "
+check "all of it root's, as only install.sh changes it" \
+    "$(find "${PREFIX_A}/deploy" "${PREFIX_A}/opensearch" "${PREFIX_A}/pipelines" -printf '%u\n' | sort -u)" "root"
+check_true "the scripts runnable" test -x "${PREFIX_A}/deploy/server/load.sh" -a -x "${PREFIX_A}/opensearch/load.sh"
 # install.sh reads it as root, so a file the deploy user could write would hand that user root.
 check "and so does their configuration, which install.sh reads as root" "$(stat -c '%U %a' "${PREFIX_A}/etc/deploy.conf")" "root 644"
 check "with the output directory it was given" "$(sed -n 's/^OUTPUT_DIR=//p' "${PREFIX_A}/etc/deploy.conf")" "$OUT"
 check "INSTALLED names the commit" "$(sed -n 's/^commit: //p' "${PREFIX_A}/INSTALLED")" "$(as_deployer git -C "$CHECKOUT" rev-parse HEAD)"
 
-as_deployer "${PREFIX_A}/bin/verify.sh" > /work/last-output 2>&1
+as_deployer "${PREFIX_A}/deploy/server/verify.sh" > /work/last-output 2>&1
 check "the installed verify.sh runs, reading the installed deploy.conf" "$?" "0"
 check_true "and checks the newest database there" grep -qF "Checking ${OUT}/uniprot-2026-03/suffix-array" /work/last-output
+
+
+section "server/install.sh on its own prepares the host and installs the scripts"
+# What opensearch/install.sh runs first; on its own, it sets up nothing of OpenSearch.
+PREFIX_B=/work/opt-b
+PATH="${INSTALL_STUBS}:${PATH}" "${CHECKOUT}/.deploy/server/install.sh" --user "$DEPLOY" --output-dir "$OUT" \
+    --prefix "$PREFIX_B" > /work/last-output 2>&1
+check "it succeeds" "$?" "0"
+check "the install mirrors the checkout" "$(installed_files "$PREFIX_B")" "$(mirrored_files)"
+check_true "it says what is left to do" grep -q 'Still to do on this host' /work/last-output
+check_absent "and sets up nothing of OpenSearch" 'OpenSearch is ready' /work/last-output
+rm -rf "$PREFIX_B"
 
 
 section "install.sh replaces no script a load, switch or prune is running from"
@@ -1128,15 +1147,20 @@ section "install.sh replaces no script a load, switch or prune is running from"
 as_deployer flock -s /run/lock/unipept-opensearch.lock sleep 10 &
 holder=$!
 for _ in $(seq 50); do flock -n -x /run/lock/unipept-opensearch.lock true 2> /dev/null || break; sleep 0.1; done
-touch -d '2000-01-01' "${PREFIX_A}/bin/load.sh"
+touch -d '2000-01-01' "${PREFIX_A}/deploy/server/load.sh"
 install_opensearch --user "$DEPLOY" --output-dir "$OUT" --prefix "$PREFIX_A"
 check "it refuses while one runs" "$?" "2"
 check_true "and says what to wait for" grep -q "running on this host; wait for it to finish. Install once it has finished." /work/last-output
-check "and replaced nothing" "$(stat -c %Y "${PREFIX_A}/bin/load.sh")" "$(date -d '2000-01-01' +%s)"
+check "and replaced nothing" "$(stat -c %Y "${PREFIX_A}/deploy/server/load.sh")" "$(date -d '2000-01-01' +%s)"
 wait "$holder"
+# A script an earlier checkout had, and this one does not.
+touch "${PREFIX_A}/deploy/server/gone.sh" "${PREFIX_A}/opensearch/gone.py"
 install_opensearch --user "$DEPLOY" --output-dir "$OUT" --prefix "$PREFIX_A"
 check "once it is done, the install runs" "$?" "0"
-check_true "and replaces them" test "$(stat -c %Y "${PREFIX_A}/bin/load.sh")" -gt "$(date -d '2000-01-01' +%s)"
+check_true "and replaces them" test "$(stat -c %Y "${PREFIX_A}/deploy/server/load.sh")" -gt "$(date -d '2000-01-01' +%s)"
+check "leaving nothing the checkout no longer has" "$(installed_files "$PREFIX_A")" "$(mirrored_files)"
+check "nor anything staged or moved aside" \
+    "$(find "$PREFIX_A" -mindepth 1 -maxdepth 1 -printf '%f\n' | sort | tr '\n' ' ')" "INSTALLED deploy etc opensearch pipelines "
 check "leaving the lock the deploy user's" "$(stat -c %U /run/lock/unipept-opensearch.lock)" "$DEPLOY"
 
 
@@ -1161,7 +1185,7 @@ install_opensearch --user "$DEPLOY" --output-dir "$OUT" --prefix "$PREFIX_A"
 check "a second run succeeds" "$?" "0"
 check "and leaves the rule as it is" "$(stat -c %Y "$SUDOERS")" "$(date -d '2000-01-01' +%s)"
 rm -f /work/loader-calls
-as_deployer "${PREFIX_A}/bin/load.sh" --check > /work/last-output 2>&1
+as_deployer "${PREFIX_A}/deploy/server/load.sh" --check > /work/last-output 2>&1
 check "the installed load.sh reaches the installed loader" "$?" "0"
 check_true "which was asked about the newest version" grep -q -- '--index-name uniprot_entries-2026-03 --check-complete' /work/loader-calls
 
@@ -1262,7 +1286,7 @@ check "it succeeds" "$?" "0"
 check_true "a is copied to and loaded" row_says a copied loaded ready
 check_true "b is copied to and loaded" row_says b copied loaded ready
 check_true "the copy lands where a's own deploy.conf says" test -s /work/a-data/uniprot-2026-03/suffix-array/sa.bin
-check_true "and passes verify.sh there" as_deployer /work/server-a/bin/verify.sh --uniprot-version 2026-03
+check_true "and passes verify.sh there" as_deployer /work/server-a/deploy/server/verify.sh --uniprot-version 2026-03
 check_true "the load is of that copy, into the version's own index" \
     grep -qF -- "--uniprot-entries /work/a-data/uniprot-2026-03/tables/uniprot_entries.tsv.lz4 --index-name uniprot_entries-2026-03" \
     /work/a-loader-calls

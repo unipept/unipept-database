@@ -27,14 +27,8 @@
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Beside this script once install.sh has placed both in /opt/unipept-database/bin, one level up in
-# a repository checkout.
 # shellcheck source=../lib.sh
-if [ -f "${HERE}/lib.sh" ]; then
-    source "${HERE}/lib.sh"
-else
-    source "${HERE}/../lib.sh"
-fi
+source "${HERE}/../lib.sh" || exit 2
 
 read_conf
 
@@ -58,8 +52,8 @@ usage() {
     cat <<'USAGE'
 Switches the API on this host to another version it holds, stopping it and OpenSearch to do so.
 
-  bin/switch.sh --uniprot-version YYYY-MM [OPTIONS]
-  bin/switch.sh --back [OPTIONS]
+  deploy/server/switch.sh --uniprot-version YYYY-MM [OPTIONS]
+  deploy/server/switch.sh --back [OPTIONS]
 
   --uniprot-version YYYY-MM  the version to switch to. Its files and its proteins must be here
   --back                     switch to the version before, which `previous` points at

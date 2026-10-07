@@ -261,10 +261,10 @@ fails_saying "check_copy_kept_kmer_table, where it cannot ask," \
     "remote_sh() { return 255; }; REMOTE_ADDRESS=elsewhere; check_copy_kept_kmer_table '${DB}' '${DB}'" \
     "could not ask elsewhere whether it has a k-mer table"
 SERVER="on() { local host=\$1 root=\$2; shift 2; (cd \"\$root\" && \"\$@\"); }; SOURCE=source SOURCE_OUTPUT_DIR=/data"
-mkdir -p "${TEMP_DIR}/checks/server/bin" "${TEMP_DIR}/checks/bare"
+mkdir -p "${TEMP_DIR}/checks/server/deploy/server" "${TEMP_DIR}/checks/bare"
 # The server's clone.sh cannot clone the version named never.
 for script in verify clone load; do
-    make_stub "${TEMP_DIR}/checks/server/bin/${script}.sh" 'case "$*" in *never*) exit 1 ;; esac' > /dev/null
+    make_stub "${TEMP_DIR}/checks/server/deploy/server/${script}.sh" 'case "$*" in *never*) exit 1 ;; esac' > /dev/null
 done
 both_ways check_server_scripts "${SERVER}; check_server_scripts a host '${TEMP_DIR}/checks/server'" "${SERVER}; check_server_scripts b host '${TEMP_DIR}/checks/bare'" \
     "b cannot be reached, or has no scripts installed in ${TEMP_DIR}/checks/bare"

@@ -21,14 +21,8 @@
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Beside this script once install.sh has placed both in /opt/unipept-database/bin, one level up in
-# a repository checkout.
 # shellcheck source=../lib.sh
-if [ -f "${HERE}/lib.sh" ]; then
-    source "${HERE}/lib.sh"
-else
-    source "${HERE}/../lib.sh"
-fi
+source "${HERE}/../lib.sh" || exit 2
 
 # The settings only this script has, before read_conf, so deploy.conf can set them.
 
@@ -44,7 +38,7 @@ usage() {
     cat <<'USAGE'
 Removes old databases from this host, each version's files and its OpenSearch index together.
 
-  bin/prune.sh --keep N [OPTIONS]
+  deploy/server/prune.sh --keep N [OPTIONS]
 
   --keep N                   how many versions older than the one this host serves to keep, to go
                              back to. Required

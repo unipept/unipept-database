@@ -30,7 +30,7 @@
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # shellcheck source=lib.sh
-source "${HERE}/lib.sh"
+source "${HERE}/lib.sh" || exit 2
 
 # The servers to put the database on.
 SERVERS_FILE="${HERE}/servers.conf"
@@ -140,7 +140,7 @@ source_output_dir() {
 
     # To stderr, like everything else here that is not the answer, which the caller captures.
     log "Checking ${UNIPROT_VERSION} on ${SOURCE}." 1>&2
-    output=$(on "$SOURCE" "$INSTALL_ROOT" bin/verify.sh --uniprot-version "$UNIPROT_VERSION" 2>&1) || {
+    output=$(on "$SOURCE" "$INSTALL_ROOT" deploy/server/verify.sh --uniprot-version "$UNIPROT_VERSION" 2>&1) || {
         printf '%s\n' "$output" | sed 's/^/  /' 1>&2
         die "${SOURCE} does not have a whole ${UNIPROT_VERSION}. Build it there with .deploy/build.sh first; this script does not build."
     }
@@ -165,7 +165,7 @@ preflight_servers() {
         check_server_scripts "$name" "$host" "$root" || { problems=$((problems + 1)); continue; }
 
         status=0
-        on "$host" "$root" bin/verify.sh --uniprot-version "$UNIPROT_VERSION" > /dev/null 2>&1 || status=$?
+        on "$host" "$root" deploy/server/verify.sh --uniprot-version "$UNIPROT_VERSION" > /dev/null 2>&1 || status=$?
         case "$status" in
             0) FILES_OF[$name]=had; continue ;;
             3) FILES_OF[$name]=missing ;;
@@ -200,7 +200,7 @@ distribute_to() {
 
     if [ "${FILES_OF[$name]}" != had ]; then
         log "${name}: copying ${UNIPROT_VERSION} from ${SOURCE}." 1>&2
-        if on "$host" "$root" bin/clone.sh "${clone_arguments[@]}" 1>&2; then
+        if on "$host" "$root" deploy/server/clone.sh "${clone_arguments[@]}" 1>&2; then
             files=copied
         else
             echo "failed|-|the copy failed"
@@ -209,7 +209,7 @@ distribute_to() {
     fi
 
     status=0
-    on "$host" "$root" bin/load.sh --uniprot-version "$UNIPROT_VERSION" --check > /dev/null 2>&1 || status=$?
+    on "$host" "$root" deploy/server/load.sh --uniprot-version "$UNIPROT_VERSION" --check > /dev/null 2>&1 || status=$?
     # 1 is a load that is not whole, which loading again mends. 2 is an error, most often an
     # OpenSearch that did not say, where a load would drop an index that may be whole; which one,
     # load.sh --check on that server says.
@@ -219,7 +219,7 @@ distribute_to() {
         255) echo "${files}|failed|could not reach it to load"; return ;;
         *)
             log "${name}: loading the proteins of ${UNIPROT_VERSION}." 1>&2
-            if on "$host" "$root" bin/load.sh --uniprot-version "$UNIPROT_VERSION" 1>&2; then
+            if on "$host" "$root" deploy/server/load.sh --uniprot-version "$UNIPROT_VERSION" 1>&2; then
                 proteins=loaded
             else
                 echo "${files}|failed|the load failed"

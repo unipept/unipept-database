@@ -28,13 +28,14 @@ refuse_root() {
         || die "do not run this as root. Run it as ${DEPLOY_USER}, for example: sudo -iu ${DEPLOY_USER}. Only .deploy/server/opensearch/install.sh needs root."
 }
 
-# Where server/opensearch/install.sh installs the scripts a host runs, and their configuration. The
-# build host still builds from a checkout, which needs the whole repository.
+# Where server/install.sh installs the scripts a host runs, and their configuration, laid out as a
+# checkout lays them out: deploy/ as .deploy/, beside opensearch/ and pipelines/. The build host
+# still builds from a checkout, which needs the whole repository.
 readonly INSTALL_ROOT=/opt/unipept-database
 
 # What this host decides. Read after the defaults, so it wins over them, and before the arguments
 # are parsed, so a flag wins over both. One file per host: a checkout's own deploy.conf where it has
-# one, which is how a checkout is run on its own; the installed one beside these scripts, as
+# one, which is how a checkout is run on its own; the installed one in etc/ beside deploy/, as
 # install.sh lays them out; and otherwise this host's installed one, so build.sh in a checkout reads
 # the same settings as the scripts installed beside it.
 DEPLOY_CONF="${DEPLOY_DIR}/deploy.conf"
@@ -50,6 +51,22 @@ fi
 # `deploy.sh status` prints. The last line of that key wins, as in an environment file.
 env_value() {
     sed -n "s/^${1}=//p" | tail -1
+}
+
+# What an install reads, as root, for the install under PREFIX it makes or updates: a checkout's own
+# deploy.conf where it has one, as for any script, and otherwise that install's etc/deploy.conf, so
+# --prefix reads its own and not /opt/unipept-database's. Refused where anyone but root could write
+# it: this sources it as root, and such a file would hand that user root. Then read as read_conf
+# reads it.
+read_install_conf() {
+    [ -f "${DEPLOY_DIR}/deploy.conf" ] || DEPLOY_CONF="${1}/etc/deploy.conf"
+    if [ "$DEPLOY_CONF" != "${DEPLOY_DIR}/deploy.conf" ] && [ -e "$DEPLOY_CONF" ]; then
+        case "$(stat -c '%U %A' "$DEPLOY_CONF")" in
+            "root -rw-r--r--" | "root -rw-------" | "root -r--r--r--" | "root -r--------") ;;
+            *) die "${DEPLOY_CONF} can be written by someone other than root, and this runs as root and reads it. Make it root's, mode 0644, after checking what is in it." ;;
+        esac
+    fi
+    read_conf
 }
 
 # Sources DEPLOY_CONF over the defaults, where there is one.

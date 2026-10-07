@@ -7,7 +7,7 @@
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # shellcheck source=lib.sh
-source "${HERE}/lib.sh"
+source "${HERE}/lib.sh" || exit 2
 
 # The settings only this script has. lib/ holds the ones it shares.
 
