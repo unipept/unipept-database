@@ -19,11 +19,9 @@ source "${TESTS_DIR}/assertions.sh"
 copy_deploy_scripts() {
     local repo="$1" dest="$2"
 
-    mkdir -p "${dest}/.deploy/server/opensearch" "${dest}/opensearch"
+    mkdir -p "${dest}/.deploy" "${dest}/opensearch"
     cp "${repo}"/.deploy/*.sh "${repo}/.deploy/deploy.conf.example" "${dest}/.deploy/"
-    cp -R "${repo}/.deploy/lib" "${dest}/.deploy/"
-    cp "${repo}"/.deploy/server/*.sh "${dest}/.deploy/server/"
-    cp "${repo}"/.deploy/server/opensearch/*.sh "${dest}/.deploy/server/opensearch/"
+    cp -R "${repo}/.deploy/lib" "${repo}/.deploy/server" "${dest}/.deploy/"
     cp "${repo}/opensearch/lib.sh" "${dest}/opensearch/"
 }
 

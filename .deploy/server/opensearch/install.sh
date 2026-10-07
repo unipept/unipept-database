@@ -10,7 +10,7 @@
 #
 # For the Ubuntu 24.04 LTS the servers run: it installs through apt and starts through systemd.
 #
-# It loads nothing. opensearch/load.sh does that, here and after every build.
+# It loads nothing. load.sh does that, here and after every build.
 #
 # Flow:
 #   1. Check that this runs as root on a host with apt and systemd, and that the OpenSearch it has,
@@ -19,8 +19,8 @@
 #      over ssh as that user, and sshd needs a shell to run a remote command.
 #   3. Install the tools build.sh, clone.sh and load.sh use, the ones not installed already.
 #   4. Create OUTPUT_DIR owned by DEPLOY_USER, and hand it the databases a run as root left.
-#   5. Install clone.sh, load.sh, verify.sh, prune.sh, switch.sh and what they call
-#      into INSTALL_ROOT, from this checkout, and write etc/deploy.conf there unless it is already there.
+#   5. Install clone.sh, load.sh, verify.sh, prune.sh, switch.sh and what they call into
+#      INSTALL_ROOT, from this checkout, and write etc/deploy.conf there unless it is already there.
 #      Allow DEPLOY_USER to stop and start OpenSearch through sudo, and nothing else, which is what
 #      switch.sh needs to switch without root.
 #   6. Add the OpenSearch APT repository, unless it is already there.
@@ -265,15 +265,16 @@ prepare_output_dir() {
 }
 
 # The scripts every host runs, where they do not depend on a checkout: a host that only clones and
-# serves needs no clone of this repository, and the path is the same on every host, so
-# distribute.sh and the API's deploy can rely on it. The layout keeps the paths the scripts use
-# between each other. Owned by root, since only this script changes them; etc/ belongs to
-# root too, since install.sh reads deploy.conf as root.
+# serves needs no clone of this repository, and the path is the same on every host, so distribute.sh
+# and the API's deploy can rely on it. The scripts sit beside lib.sh here, where a checkout has it
+# one level up, and each looks in both places; the loader and lib/ keep their paths from lib.sh.
+# Owned by root, since only this script changes them; etc/ belongs to root too, since install.sh
+# reads deploy.conf as root.
 #
 # From the checkout this runs in, so a host is updated by running this again from a checkout of the
 # commit to install, which INSTALLED then names.
 install_scripts() {
-    local repository="${HERE}/../../.." commit
+    local repository="${DEPLOY_DIR}/.." commit
 
     # A load, a switch or a prune running from these files while they are replaced
     # could pair a new lib.sh with an old script, or start opensearch/load.sh from the new release
@@ -293,7 +294,7 @@ install_scripts() {
     install -m 0644 "${repository}/.deploy/lib/"*.sh "${PREFIX}/bin/lib/"
     install -m 0755 "${repository}/opensearch/load.sh" "${PREFIX}/opensearch/"
     install -m 0644 "${repository}/.deploy/lib.sh" "${PREFIX}/bin/"
-    install -m 0755 "${repository}/.deploy/server/"{clone.sh,load.sh,verify.sh,prune.sh,switch.sh} "${PREFIX}/bin/"
+    install -m 0755 "${repository}/.deploy/server/"*.sh "${PREFIX}/bin/"
 
     install -d -m 0755 -o root -g root "${PREFIX}/etc"
     if [ ! -f "${PREFIX}/etc/deploy.conf" ]; then
