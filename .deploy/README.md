@@ -4,8 +4,8 @@ These scripts build, distribute, load and check the database a Unipept API host 
 orchestrate; the pipeline itself lives in `pipelines/` and the loader in `opensearch/`.
 
 They are grouped by where they run, as unipept-api's are. `server/` holds what runs on every
-server: `clone.sh`, `load.sh`, `verify.sh`, `switch.sh`, `prune.sh`, and `opensearch/install.sh`,
-which prepares one. `build.sh`, which runs on the build host, and `distribute.sh`, which works on
+server: `clone.sh`, `load.sh`, `verify.sh`, `switch.sh`, `prune.sh`, and `install.sh` and
+`opensearch/install.sh`, which prepare one. `build.sh`, which runs on the build host, and `distribute.sh`, which works on
 the whole fleet, are at the top, beside `lib.sh` and the configuration examples.
 
 - `build.sh` builds a database on this host: the tables, the suffix array and the `datastore/`
@@ -30,11 +30,13 @@ copying again.
 `distribute.sh` does those two steps on every API server at once, from wherever it is run. See
 [Distributing a database](#distributing-a-database).
 
-`server/opensearch/install.sh` installs `clone.sh`, `load.sh`, `verify.sh`, `switch.sh` and
-`prune.sh` from `server/` in `/opt/unipept-database/bin`, side by side, so a host that only clones
-and serves needs no clone of this repository, and the path is the same on every host. `build.sh`
-runs from a clone, since it builds from the source, and `distribute.sh` from wherever its
-`servers.conf` is. Below, `bin/` is that installed directory and `.deploy/` a clone's.
+`server/install.sh` installs what a server runs in `/opt/unipept-database`, laid out as a clone
+lays it out, `deploy/` for `.deploy/`: `deploy/lib.sh`, `deploy/lib/` and `deploy/server/` with
+`clone.sh`, `load.sh`, `verify.sh`, `switch.sh` and `prune.sh`, beside `opensearch/` and
+`pipelines/lib/`. A host that only clones and serves needs no clone of this repository, the path is
+the same on every host, and a script finds what it uses by the same relative path in both.
+`build.sh` runs from a clone, since it builds from the source, and `distribute.sh` from wherever
+its `servers.conf` is. Below, `deploy/` is that installed directory and `.deploy/` a clone's.
 
 ## Preparing a host
 
@@ -42,19 +44,20 @@ runs from a clone, since it builds from the source, and `distribute.sh` from whe
 sudo .deploy/server/opensearch/install.sh --heap 8g
 ```
 
-This is the only step that needs root. It prepares everything the other scripts need, so they
-run without sudo:
+This is the only step that needs root. It runs `.deploy/server/install.sh` first, which prepares
+the host and can also run on its own, and then sets up OpenSearch. Together they prepare everything
+the other scripts need, so they run without sudo:
 
 - the `unipept` user (`DEPLOY_USER`), who builds, clones and owns the databases. The API on this
   host runs as the same user, and its own install creates it the same way, in either order;
 - the tools `build.sh` and `clone.sh` run, installed through apt when they are missing;
 - `OUTPUT_DIR`, owned by that user. Databases, staging directories and interrupted swaps an
   earlier run as root left there are handed over too; nothing else in the directory changes owner;
-- the scripts a host runs, in `/opt/unipept-database`: `bin/` with `clone.sh`, `load.sh`,
-  `verify.sh`, `switch.sh` and `prune.sh`, what they call beside it, `etc/deploy.conf`, written once
-  from the example and then root's to edit, since `install.sh` reads it as root, and `INSTALLED`,
-  which names the commit they came from. A host takes a newer version by running `install.sh` again
-  from a clone of it;
+- the scripts a host runs, in `/opt/unipept-database` as above, `etc/deploy.conf`, written once from
+  the example and then root's to edit, since `install.sh` reads it as root, and `INSTALLED`, which
+  names the commit they came from. A host takes a newer version by running `install.sh` again from
+  a clone of it. Each directory is built whole beside the one it replaces and swapped in by a
+  rename, so nothing a clone no longer has is left behind; `etc/` is not touched;
 - the OpenSearch instance this host loads its proteins into, configured and started.
 
 It ends with what is left to do: fill in `deploy.conf` as root, then as `unipept` add an ssh key for
@@ -121,7 +124,7 @@ installed scripts:
 ```sh
 sudo -iu unipept
 .deploy/build.sh                                                   # in the clone
-/opt/unipept-database/bin/clone.sh --remote-address selma.ugent.be --local-ssh-key ~/.ssh/id_unipept
+/opt/unipept-database/deploy/server/clone.sh --remote-address selma.ugent.be --local-ssh-key ~/.ssh/id_unipept
 ```
 
 Every script but `install.sh` refuses to run as root. A database written by root is one the
@@ -156,7 +159,7 @@ the build, and stops, naming every problem, when it does not:
 Stop both before building:
 
 ```sh
-/opt/unipept-api/lib/deploy.sh stop
+/opt/unipept-api/deploy/server/deploy.sh stop
 sudo systemctl stop opensearch
 ```
 
@@ -165,9 +168,9 @@ and start them again afterwards, OpenSearch first. `--skip-checks` builds anyway
 ## Loading the proteins
 
 ```sh
-bin/load.sh                                # the newest one under OUTPUT_DIR
-bin/load.sh --uniprot-version 2026-03
-bin/load.sh --uniprot-version 2026-03 --skip 120000000   # continue a load that stopped
+deploy/server/load.sh                                # the newest one under OUTPUT_DIR
+deploy/server/load.sh --uniprot-version 2026-03
+deploy/server/load.sh --uniprot-version 2026-03 --skip 120000000   # continue a load that stopped
 ```
 
 It checks the database as `verify.sh` does, and refuses one that fails, before it loads
@@ -178,7 +181,7 @@ and keeps the index as it is. The loader marks an index once its last row is in,
 `load.sh --check` asks for that mark, and exits 2 when OpenSearch does not say, which is not a "no".
 
 `opensearch/load.sh`, which this calls, is the loader alone: it drops and fills the index it is
-named, with none of these checks and no lock. Load through `bin/load.sh`.
+named, with none of these checks and no lock. Load through `deploy/server/load.sh`.
 
 Loading into a version this host serves is refused while its index is loaded to the end, from the
 start or continued with `--skip`: it would change what the running API answers with nothing stopped.
@@ -193,9 +196,9 @@ the same version never run at once: the second stops.
 As `unipept`, on the host, once the version is there and its proteins are loaded:
 
 ```sh
-bin/switch.sh --uniprot-version 2026-03 --check      # can it switch? changes nothing
-bin/switch.sh --uniprot-version 2026-03
-bin/switch.sh --back                                 # to the version before
+deploy/server/switch.sh --uniprot-version 2026-03 --check      # can it switch? changes nothing
+deploy/server/switch.sh --uniprot-version 2026-03
+deploy/server/switch.sh --back                                 # to the version before
 ```
 
 The API reads what it serves when it starts: `INDEX_LOCATION` names the suffix array through the
@@ -296,8 +299,8 @@ The copy and the load take hours, each over an ssh session. Run it in `tmux` or 
 ## Removing old versions
 
 ```sh
-bin/prune.sh --keep 2 --dry-run      # what it would remove
-bin/prune.sh --keep 2
+deploy/server/prune.sh --keep 2 --dry-run      # what it would remove
+deploy/server/prune.sh --keep 2
 ```
 
 Every version stays on a host until this removes it, its directory and its OpenSearch index
@@ -317,9 +320,9 @@ the warning is the time to prune.
 ## Checking a database
 
 ```sh
-bin/verify.sh                              # the newest one under OUTPUT_DIR
-bin/verify.sh --uniprot-version 2026-03
-bin/verify.sh --index-dir /srv/data/uniprot-2026-03/suffix-array
+deploy/server/verify.sh                              # the newest one under OUTPUT_DIR
+deploy/server/verify.sh --uniprot-version 2026-03
+deploy/server/verify.sh --index-dir /srv/data/uniprot-2026-03/suffix-array
 ```
 
 As `unipept`, like the others: it checks that the files can be read by the user the API runs
@@ -351,8 +354,8 @@ it uses of the others.
 | `lib/api.sh` | what this host serves, from the API's `deploy.sh status` |
 | `lib/checks.sh` | what has to be true before a script changes anything: one function per check, printing `FAIL …` |
 
-`install.sh` installs them as `/opt/unipept-database/bin/lib.sh` and `/opt/unipept-database/bin/lib/`,
-root's like the scripts beside them.
+`server/install.sh` installs them as `/opt/unipept-database/deploy/lib.sh` and
+`/opt/unipept-database/deploy/lib/`, root's like the scripts in `deploy/server/`.
 
 `lib/core.sh` is the same file in every repository that deploys Unipept. Its header lists what a script's exit status means, which is the same for every script.
 
