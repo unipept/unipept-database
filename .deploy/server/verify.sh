@@ -31,7 +31,7 @@ usage() {
     cat <<'USAGE'
 Checks a finished database against the files the API needs, and reports everything that is wrong.
 
-  .deploy/server/verify.sh [OPTIONS]
+  bin/verify.sh [OPTIONS]
 
   --index-dir DIR            the directory the API is pointed at, checked as it is
   --uniprot-version YYYY-MM  check this one under OUTPUT_DIR, default the newest there

@@ -52,7 +52,7 @@ usage() {
     cat <<'USAGE'
 Loads the proteins of a finished database into this host's OpenSearch.
 
-  .deploy/server/load.sh [OPTIONS]
+  bin/load.sh [OPTIONS]
 
   --uniprot-version YYYY-MM  load this one under OUTPUT_DIR, default the newest there
   --output-dir DIR           where the databases are

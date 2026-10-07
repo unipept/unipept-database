@@ -263,4 +263,4 @@ write_build_info "${STAGING_DIR}/suffix-array" "$UNIPROT_VERSION" "$DATABASE_COM
 
 swap_into_place "$STAGING_DIR" "$BUILD_DIR"
 
-log "The database is ready in ${BUILD_DIR}. Load its proteins with: .deploy/server/load.sh --uniprot-version ${UNIPROT_VERSION}"
+log "The database is ready in ${BUILD_DIR}. Load its proteins with: ${INSTALL_ROOT}/bin/load.sh --uniprot-version ${UNIPROT_VERSION}"

@@ -31,10 +31,10 @@ copying again.
 [Distributing a database](#distributing-a-database).
 
 `server/opensearch/install.sh` installs `clone.sh`, `load.sh`, `verify.sh`, `switch.sh` and
-`prune.sh` from `server/` in `/opt/unipept-database/bin`, side by side, so a host that only clones and serves needs no clone of this repository, and the path
-is the same on every host. `build.sh` runs from a clone, since it builds from the source, and
-`distribute.sh` from wherever its `servers.conf` is. Below, `bin/` is that installed directory and
-`.deploy/` a clone's.
+`prune.sh` from `server/` in `/opt/unipept-database/bin`, side by side, so a host that only clones
+and serves needs no clone of this repository, and the path is the same on every host. `build.sh`
+runs from a clone, since it builds from the source, and `distribute.sh` from wherever its
+`servers.conf` is. Below, `bin/` is that installed directory and `.deploy/` a clone's.
 
 ## Preparing a host
 
@@ -51,9 +51,9 @@ run without sudo:
 - `OUTPUT_DIR`, owned by that user. Databases, staging directories and interrupted swaps an
   earlier run as root left there are handed over too; nothing else in the directory changes owner;
 - the scripts a host runs, in `/opt/unipept-database`: `bin/` with `clone.sh`, `load.sh`,
-  `verify.sh`, `switch.sh` and `prune.sh`, what they call beside it, `etc/deploy.conf`, written once from the
-  example and then root's to edit, since `install.sh` reads it as root, and `INSTALLED`, which names
-  the commit they came from. A host takes a newer version by running `install.sh` again from a clone
+  `verify.sh`, `switch.sh` and `prune.sh`, what they call beside it, `etc/deploy.conf`, written once
+  from the example and then root's to edit, since `install.sh` reads it as root, and `INSTALLED`,
+  which names the commit they came from. A host takes a newer version by running `install.sh` again from a clone
   of it;
 - the OpenSearch instance this host loads its proteins into, configured and started.
 
@@ -62,8 +62,8 @@ a clone, and for a build, clone this repository and install Rust with rustup.
 
 Run it as root, once per host or again after changing a setting: a run that changes nothing
 restarts nothing. It pins a version of OpenSearch, `OPENSEARCH_VERSION` in
-`.deploy/server/opensearch/version.sh`, and holds it, so an unrelated `apt-get upgrade` cannot move a host
-onto a release nothing has been tested against.
+`.deploy/server/opensearch/version.sh`, and holds it, so an unrelated `apt-get upgrade` cannot move
+a host onto a release nothing has been tested against.
 
 Raising that pin is how a host is kept patched: run it again, and it upgrades an older release of
 the same major version to the pin, keeping the configuration it writes, and restarts OpenSearch. The

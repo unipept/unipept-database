@@ -199,7 +199,8 @@ check_links_previous() {
 
 # OpenSearch on this host, and the index of a version in it.
 
-# The sudo rule server/opensearch/install.sh writes, through which a switch stops and starts OpenSearch.
+# The sudo rule server/opensearch/install.sh writes, through which a switch stops and starts
+# OpenSearch.
 check_sudo_opensearch() {
     { sudo -n -l systemctl stop opensearch && sudo -n -l systemctl start opensearch; } > /dev/null 2>&1 \
         || { echo "FAIL ${DEPLOY_USER} may not stop and start OpenSearch through sudo. Run .deploy/server/opensearch/install.sh again, as root." 1>&2; return 1; }

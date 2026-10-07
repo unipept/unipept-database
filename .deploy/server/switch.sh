@@ -58,8 +58,8 @@ usage() {
     cat <<'USAGE'
 Switches the API on this host to another version it holds, stopping it and OpenSearch to do so.
 
-  .deploy/server/switch.sh --uniprot-version YYYY-MM [OPTIONS]
-  .deploy/server/switch.sh --back [OPTIONS]
+  bin/switch.sh --uniprot-version YYYY-MM [OPTIONS]
+  bin/switch.sh --back [OPTIONS]
 
   --uniprot-version YYYY-MM  the version to switch to. Its files and its proteins must be here
   --back                     switch to the version before, which `previous` points at

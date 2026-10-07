@@ -41,7 +41,7 @@ usage() {
 Copies a finished database from another host. .deploy/server/load.sh then loads its proteins into this
 host's OpenSearch.
 
-  .deploy/server/clone.sh --remote-address HOST --local-ssh-key KEY [OPTIONS]
+  bin/clone.sh --remote-address HOST --local-ssh-key KEY [OPTIONS]
 
   --remote-address HOST      the host to copy from, required
   --local-ssh-key KEY        the private key to reach it with, required

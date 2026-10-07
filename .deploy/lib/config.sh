@@ -14,8 +14,8 @@ OUTPUT_DIR=/mnt/data
 OPENSEARCH_URL=http://localhost:9200
 
 # Who builds, clones and owns the databases. The API on this host runs as the same user, which is
-# what makes every file a build writes one the API can read. server/opensearch/install.sh creates it and
-# gives it OUTPUT_DIR; after that, nothing here needs root.
+# what makes every file a build writes one the API can read. server/opensearch/install.sh creates it
+# and gives it OUTPUT_DIR; after that, nothing here needs root.
 DEPLOY_USER=unipept
 
 # build.sh and clone.sh write what the API serves, so they run as the user the API reads as. Run as
@@ -28,8 +28,8 @@ refuse_root() {
         || die "do not run this as root. Run it as ${DEPLOY_USER}, for example: sudo -iu ${DEPLOY_USER}. Only .deploy/server/opensearch/install.sh needs root."
 }
 
-# Where server/opensearch/install.sh installs the scripts a host runs, and their configuration. The build
-# host still builds from a checkout, which needs the whole repository.
+# Where server/opensearch/install.sh installs the scripts a host runs, and their configuration. The
+# build host still builds from a checkout, which needs the whole repository.
 readonly INSTALL_ROOT=/opt/unipept-database
 
 # What this host decides. Read after the defaults, so it wins over them, and before the arguments

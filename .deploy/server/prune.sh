@@ -44,7 +44,7 @@ usage() {
     cat <<'USAGE'
 Removes old databases from this host, each version's files and its OpenSearch index together.
 
-  .deploy/server/prune.sh --keep N [OPTIONS]
+  bin/prune.sh --keep N [OPTIONS]
 
   --keep N                   how many versions older than the one this host serves to keep, to go
                              back to. Required
