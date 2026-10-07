@@ -1132,6 +1132,12 @@ check "and so does their configuration, which install.sh reads as root" "$(stat 
 check "with the output directory it was given" "$(sed -n 's/^OUTPUT_DIR=//p' "${PREFIX_A}/etc/deploy.conf")" "$OUT"
 check "INSTALLED names the commit" "$(sed -n 's/^commit: //p' "${PREFIX_A}/INSTALLED")" "$(as_deployer git -C "$CHECKOUT" rev-parse HEAD)"
 
+# A run keeps to the release it started from: its paths resolve into it, not through the link, and
+# the install's own deploy.conf is still the one read.
+check "an installed script resolves into its own release" \
+    "$(as_deployer bash -c "source '${PREFIX_A}/deploy/lib.sh' && echo \"\${DEPLOY_DIR} \${DEPLOY_CONF}\"")" \
+    "$(readlink -f "${PREFIX_A}/release")/deploy ${PREFIX_A}/etc/deploy.conf"
+
 as_deployer "${PREFIX_A}/deploy/server/verify.sh" > /work/last-output 2>&1
 check "the installed verify.sh runs, reading the installed deploy.conf" "$?" "0"
 check_true "and checks the newest database there" grep -qF "Checking ${OUT}/uniprot-2026-03/suffix-array" /work/last-output
@@ -1171,7 +1177,10 @@ check_true "touching nothing of the service" not grep -q . /work/systemctl-calls
 wait "$holder"
 # A script an earlier checkout had, and this one does not.
 touch "${PREFIX_A}/deploy/server/gone.sh" "${PREFIX_A}/opensearch/gone.py"
-install_server --user "$DEPLOY" --output-dir "$OUT" --prefix "$PREFIX_A"
+# And /run/lock emptied, as at boot, with root's umask strict: the lock the install makes has to be
+# one every account can open.
+rm -f /run/lock/unipept-opensearch.lock
+(umask 077 && install_server --user "$DEPLOY" --output-dir "$OUT" --prefix "$PREFIX_A")
 check "once it is done, the install runs" "$?" "0"
 check_true "and replaces them" test "$(stat -c %Y "${PREFIX_A}/deploy/server/load.sh")" -gt "$(date -d '2000-01-01' +%s)"
 check "leaving nothing the checkout no longer has" "$(installed_files "$PREFIX_A")" "$(mirrored_files)"

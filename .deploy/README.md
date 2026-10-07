@@ -221,9 +221,10 @@ the files and the proteins always change together.
   version's index where it is closed, which the API's check needs, and it is only made once
   everything else has passed. `--check` makes no change at all, so on a closed index it says the
   API's check could not run.
-- **Loads and switches exclude each other**, through one lock per host,
-  `/run/lock/unipept-opensearch.lock`: `load.sh` holds it shared while it loads, and a switch
-  exclusively from its checks to its end. Whichever comes second stops, and says why.
+- **Loads, switches, prunes and installs exclude each other**, through one lock per host,
+  `/run/lock/unipept-opensearch.lock`: `load.sh` holds it shared while it loads, and a switch, a
+  prune or an install exclusively from its checks to its end. Whichever comes second stops, and
+  says why.
 - **Deploys of the API and switches exclude each other** too, through the API's own lock, at the
   path its `deploy.sh status` names: the API's `deploy`, `rollback`, `stop` and `start` hold it, and
   a switch holds it from its checks to its end, so no deploy or rollout restarts the API during a

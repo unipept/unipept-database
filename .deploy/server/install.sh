@@ -14,8 +14,8 @@
 # Flow:
 #   1. Check that this runs as root, and, through opensearch/install.sh --check, that the
 #      OpenSearch the host has, if any, can be brought to the pinned version: nothing is changed on
-#      a host where not. Then take the OpenSearch lock, refused while a load, a switch or a prune
-#      runs.
+#      a host where not. Then take the OpenSearch lock, refused while a load, a switch, a prune or
+#      another install runs.
 #   2. Create DEPLOY_USER, or give an account that already exists a login shell: clone.sh copies
 #      over ssh as that user, and sshd needs a shell to run a remote command.
 #   3. Install the tools build.sh, clone.sh and load.sh use, the ones not installed already.
@@ -177,10 +177,10 @@ prepare_output_dir() {
 # lib.sh, the loader and the rest by the same relative path in both. Owned by root, since only this
 # script changes them; etc/ belongs to root too, since this reads deploy.conf as root.
 #
-# A release, made whole in releases/ and put in place at once by switch_release: each file a script
-# opens is one whole release's, and a load, a switch or a prune, which would pair two, is refused the
-# lock this holds; an install stopped part way leaves the one before, and nothing the checkout no
-# longer has lingers. etc/ is not touched.
+# A release, made whole in releases/ and put in place at once by switch_release: a run keeps to the
+# release it started from, which lib.sh resolves its paths into and which stays until the next
+# install; an install stopped part way leaves the one before; and nothing the checkout no longer has
+# lingers. etc/ is not touched.
 #
 # From the checkout this runs in, so a host is updated by running this again from a checkout of the
 # commit to install, which INSTALLED then names.
@@ -206,7 +206,7 @@ install_scripts() {
     # In the release, so it names the scripts in place whatever stops the install.
     # As root, of a checkout another user owns, which git refuses to read unless told to trust it.
     commit=$(git -c safe.directory='*' -C "$repository" rev-parse HEAD 2>/dev/null || echo unknown)
-    printf 'commit: %s\ninstalled: %s\n' "$commit" "$(date -u +'%F %T UTC')" > "${release}/INSTALLED"
+    printf 'commit: %s\ninstalled: %s\n' "$commit" "$(date -u +'%F %T UTC')" | install -m 0644 /dev/stdin "${release}/INSTALLED"
     switch_release "$PREFIX" "$release_id" deploy opensearch pipelines INSTALLED
     log "Installed the scripts of ${commit} in ${PREFIX}."
 
@@ -245,11 +245,9 @@ require apt-get dpkg-query getent useradd usermod visudo:sudo flock:util-linux
 # Before anything on the host changes, so a refused run leaves it as it was.
 "${HERE}/opensearch/install.sh" --check "${OPENSEARCH_ARGUMENTS[@]}" || exit 2
 
-# A load, a switch or a prune running from the scripts while they are replaced could pair a new
-# lib.sh with an old script, or start opensearch/load.sh from the new release halfway through a run
-# of the old one, and the upgrade and the restart of OpenSearch would break a load part way. Each
-# holds this lock, so this holds it exclusively to the end, handing it to opensearch/install.sh, and
-# refuses while one runs.
+# The upgrade and the restart of OpenSearch would break a load part way, and a switch or a prune
+# could stop it, or remove what is being installed, in the middle. Each holds this lock, so this
+# holds it exclusively to the end, handing it to opensearch/install.sh, and refuses while one runs.
 take_opensearch_lock -x || die "$(lock_refused $?) Install once it has finished."
 
 ensure_user

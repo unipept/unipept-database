@@ -51,7 +51,8 @@ open_lock() {
 # for opensearch/install.sh, and this then takes that descriptor rather than open the file again:
 # flock ties a lock to the open file, not to the process, so a second open would conflict with the
 # caller's own lock. On the descriptor handed down, flock succeeds where the caller holds the lock,
-# and takes it where nobody does, for as long as the caller keeps the descriptor open.
+# and takes it where nobody does, for as long as the caller keeps the descriptor open. The two ask in
+# the same mode: on a shared open file, flock in another one changes the caller's lock as well.
 take_opensearch_lock() {
     [ /dev/fd/9 -ef "$OPENSEARCH_LOCK" ] || open_lock 9 "$OPENSEARCH_LOCK" || return 2
     if [ -n "${2:-}" ]; then
@@ -83,7 +84,7 @@ take_load_lock() {
 # it could not be opened.
 lock_refused() {
     case $1 in
-        1) echo "a load, a switch or a prune is running on this host; wait for it to finish." ;;
+        1) echo "a load, a switch, a prune, an install, or a build or a clone putting a database in place, is running on this host; wait for it to finish." ;;
         *) echo "without the lock, a load, a switch or a prune could run at the same time. Make ${OPENSEARCH_LOCK} readable by $(id -un)." ;;
     esac
 }
