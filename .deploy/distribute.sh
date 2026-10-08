@@ -103,16 +103,14 @@ valid_root() {
 }
 
 # Runs one of the installed scripts, or a command, in a host's install root, as SSH_USER. Each
-# argument is quoted for the remote shell, since some come from another host. BatchMode, so a host
-# that asks for a password fails at once rather than waiting; keepalives, so an idle hour of loading
-# is not taken for a dead connection.
+# argument is quoted for the remote shell, since some come from another host.
 on() {
     local host="$1" root="$2" command
     shift 2
     command=$(printf '%q ' "$@")
 
-    ssh -o BatchMode=yes -o ServerAliveInterval=60 -o ServerAliveCountMax=5 \
-        "${SSH_USER:+${SSH_USER}@}${host}" "cd ${root} && ${command}" < /dev/null
+    # shellcheck disable=SC2029  # the command is built here on purpose, not on the host.
+    ssh "${SSH_CONNECTION_BOUNDS[@]}" "${SSH_USER:+${SSH_USER}@}${host}" "cd ${root} && ${command}" < /dev/null
 }
 
 # The servers, one "name host root" line each, with what servers.conf gets wrong refused. The root is

@@ -359,6 +359,7 @@ it uses of the others.
 | `lib/versions.sh` | version names, `.version`, the `current` and `previous` links |
 | `lib/database.sh` | what a database holds, and how it is put in place |
 | `lib/api.sh` | what this host serves, from the API's `deploy.sh status` |
+| `lib/remote.sh` | the bounds on an ssh connection to another host |
 | `lib/checks.sh` | what has to be true before a script changes anything: one function per check, printing `FAIL …` |
 
 `server/install.sh` installs them as `/opt/unipept-database/deploy/lib.sh` and

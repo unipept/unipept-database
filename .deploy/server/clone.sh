@@ -77,7 +77,8 @@ parse_arguments() {
 }
 
 remote_sh() {
-    ssh -i "$LOCAL_SSH_KEY" -p "$REMOTE_PORT" "${REMOTE_USER}@${REMOTE_ADDRESS}" "$@"
+    # shellcheck disable=SC2029  # the command is built here on purpose, not on the host.
+    ssh "${SSH_CONNECTION_BOUNDS[@]}" -i "$LOCAL_SSH_KEY" -p "$REMOTE_PORT" "${REMOTE_USER}@${REMOTE_ADDRESS}" "$@"
 }
 
 # The newest database the remote host holds, as YYYY-MM. The remote host is the authority on what
@@ -114,7 +115,7 @@ copy_database() {
 
     # Into a directory this script made, so the copy lands where this script expects it whatever
     # the scp back-end makes of a trailing slash.
-    scp -i "$LOCAL_SSH_KEY" -P "$REMOTE_PORT" -r \
+    scp "${SSH_CONNECTION_BOUNDS[@]}" -i "$LOCAL_SSH_KEY" -P "$REMOTE_PORT" -r \
         "${REMOTE_USER}@${REMOTE_ADDRESS}:${remote_dir}" "$staging"
     log "Copied the database from ${REMOTE_ADDRESS}."
 }
