@@ -44,13 +44,13 @@ source "${HERE}/../lib.sh"
 
 read_install_conf "$@"
 
-# What build.sh, clone.sh and load.sh run, by package: git, cmake and a C toolchain for the index
-# build, lz4, pv, pigz, gawk, unzip, uuidgen, xmllint and curl for the pipeline, python3-requests
-# for the loader, ssh and scp for the clone, and gnupg for the key of the OpenSearch repository
-# opensearch/install.sh adds. The Rust toolchain is not here: the repository pins its own through
+# What build.sh, clone.sh and load.sh run, by package: git, cmake, a C toolchain and libclang for
+# the index build, whose bindgen loads libclang to generate the bindings to libsais; lz4, pv, pigz,
+# gawk, unzip, uuidgen, xmllint and curl for the pipeline, python3-requests for the loader, ssh and
+# scp for the clone, and gnupg for the key of the OpenSearch repository opensearch/install.sh adds. The Rust toolchain is not here: the repository pins its own through
 # rust-toolchain.toml, which rustup, installed as DEPLOY_USER, follows.
 readonly TOOL_PACKAGES=(
-    git cmake build-essential curl ca-certificates gnupg
+    git cmake build-essential libclang-dev curl ca-certificates gnupg
     lz4 pv pigz gawk unzip uuid-runtime libxml2-utils
     python3 python3-requests
     openssh-client

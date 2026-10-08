@@ -371,8 +371,8 @@ it uses of the others.
 
 `server/install.sh` installs all of it but Rust. For reference, or for a host prepared another way:
 
-- `build.sh` needs `git`, `cmake` and a Rust toolchain, and the pipeline needs `curl`, `uuidgen`,
-  `pigz`, `gawk`, `lz4`, `pv`, `unzip` and `xmllint`.
+- `build.sh` needs `git`, `cmake`, a C toolchain, `libclang` and a Rust toolchain, and the pipeline
+  needs `curl`, `uuidgen`, `pigz`, `gawk`, `lz4`, `pv`, `unzip` and `xmllint`.
 - `clone.sh` needs `ssh` and `scp`, and none of the build tools.
 - `load.sh` needs `lz4`, `pv`, and Python with `requests` for the OpenSearch loader, and an
   OpenSearch instance at `OPENSEARCH_URL`.
