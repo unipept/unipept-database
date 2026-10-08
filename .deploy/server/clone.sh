@@ -79,8 +79,7 @@ parse_arguments() {
 
 remote_sh() {
     # shellcheck disable=SC2029  # the command is built here on purpose, not on the host.
-    ssh "${SSH_CONNECTION_BOUNDS[@]}" ${REMOTE_PORT:+-p "$REMOTE_PORT"} ${LOCAL_SSH_KEY:+-i "$LOCAL_SSH_KEY"} \
-        "${REMOTE_USER}@${REMOTE_ADDRESS}" "$@"
+    ssh "${REMOTE_SSH_OPTIONS[@]}" "${REMOTE_USER}@${REMOTE_ADDRESS}" "$@"
 }
 
 # The newest database the remote host holds, as YYYY-MM. The remote host is the authority on what
@@ -117,7 +116,7 @@ copy_database() {
 
     # Into a directory this script made, so the copy lands where this script expects it whatever
     # the scp back-end makes of a trailing slash.
-    scp "${SSH_CONNECTION_BOUNDS[@]}" ${REMOTE_PORT:+-P "$REMOTE_PORT"} ${LOCAL_SSH_KEY:+-i "$LOCAL_SSH_KEY"} -r \
+    scp "${REMOTE_SSH_OPTIONS[@]}" -r \
         "${REMOTE_USER}@${REMOTE_ADDRESS}:${remote_dir}" "$staging"
     log "Copied the database from ${REMOTE_ADDRESS}."
 }
@@ -136,6 +135,9 @@ preflight_copy() {
 
 parse_arguments "$@"
 refuse_root
+
+# For ssh and scp alike, which is why the port is -o Port= rather than ssh's -p or scp's -P.
+REMOTE_SSH_OPTIONS=("${SSH_CONNECTION_BOUNDS[@]}" ${REMOTE_PORT:+-o "Port=${REMOTE_PORT}"} ${LOCAL_SSH_KEY:+-i "$LOCAL_SSH_KEY"})
 
 [ -n "$OUTPUT_DIR" ] || die "--output-dir requires a value."
 

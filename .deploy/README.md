@@ -273,12 +273,12 @@ cp .deploy/servers.conf.example .deploy/servers.conf     # once: the servers
 
 It checks that the source has the version whole, then that every server answers, has the scripts
 installed, and, where it needs a copy, could make one: `clone.sh --check` there, which checks that
-server's settings, its key, and that it reaches the source and finds the version whole. All of that
-before it touches any server. Then, one server at a time, it copies the version with that server's
-own `clone.sh` where the server does not have it, and loads it with that server's own `load.sh`
-where it is not loaded to the end. Where each server keeps its databases, and how it reaches the
-source, is that server's own installed `deploy.conf`. It ends with a table of what each server had
-and what was done.
+server's settings, its key where its `deploy.conf` names one, and that it reaches the source and
+finds the version whole. All of that before it touches any server. Then, one server at a time, it
+copies the version with that server's own `clone.sh` where the server does not have it, and loads it
+with that server's own `load.sh` where it is not loaded to the end. Where each server keeps its
+databases is that server's own installed `deploy.conf`. It ends with a table of what each server
+had and what was done.
 
 It logs in to the source and the servers as `unipept`, or `--ssh-user`, and leaves the port and the
 key to `~/.ssh/config` on the machine it runs on, as unipept-api's rollout does: a host reached on

@@ -296,7 +296,7 @@ done
 
 # The version clone.sh copies can come from deploy.conf, so it is checked there too.
 printf 'UNIPROT_VERSION=2026.03\n' > "${DEPLOY}/deploy.conf"
-output=$("${DEPLOY}/server/clone.sh" --remote-address host --local-ssh-key key 2>&1)
+output=$("${DEPLOY}/server/clone.sh" --remote-address host 2>&1)
 check "clone.sh refuses a version in deploy.conf not written YYYY-MM" "$?" "2"
 check "and says how to write it" "$output" "Error: a UniProtKB version is written YYYY-MM, not '2026.03'."
 : > "${DEPLOY}/deploy.conf"

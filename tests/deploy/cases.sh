@@ -379,8 +379,8 @@ check_true "it is the one that arrives" test -d "${LOCAL}/uniprot-2025-11"
 clone --remote-output-dir "$REMOTE" --output-dir "$LOCAL" --check --remote-port 22
 check "a port given as a flag is the one used" "$?" "2"
 clone --remote-output-dir "$REMOTE" --output-dir "$LOCAL" --check --uniprot-version 2026-03 --local-ssh-key /work/no-key
-check "a key given as a flag is the one used" "$?" "2"
-check_true "and one it cannot read is named" grep -qF 'cannot read the ssh key /work/no-key' /work/last-output
+check "a key given as a flag that cannot be read is refused" "$?" "2"
+check_true "and named" grep -qF 'cannot read the ssh key /work/no-key' /work/last-output
 clone --remote-output-dir "$REMOTE" --output-dir "$LOCAL" --check --uniprot-version 2026-03 --local-ssh-key "${DEPLOY_HOME}/.ssh/id_test" --remote-port 4840
 check "and both given as flags reach the host" "$?" "0"
 
@@ -1269,6 +1269,7 @@ check_true "and so checks the databases it names" grep -qF "Checking ${OUT}/unip
 # distribute.sh, with this container as the source and as every server, reached over the real sshd
 # as DEPLOY. The source is the install at /opt/unipept-database; each server is an install of its own,
 # made by install.sh under a prefix, with its own deploy.conf.
+
 # A server: install.sh's scripts under a prefix of its own, a deploy.conf that reaches the source,
 # and a loader stand-in that remembers a load that finished, as the real one marks the index, and
 # answers --check-complete from that.
@@ -1366,8 +1367,8 @@ check "--replace succeeds" "$?" "0"
 check_true "b is copied to again and loaded" row_says b copied loaded ready
 check_true "and whole" test -s /work/b-data/uniprot-2026-03/suffix-array/mapping.bin
 
-# A server whose deploy.conf gives clone.sh a key it cannot read. Found before anything
-# is touched, rather than after the servers before it have copied and loaded.
+# A server whose deploy.conf gives clone.sh a key it cannot read. Found before anything is touched,
+# rather than after the servers before it have copied and loaded.
 make_server c /work/c-data
 printf 'OUTPUT_DIR=/work/c-data\nLOCAL_SSH_KEY=/work/no-key\n' > /work/server-c/etc/deploy.conf
 printf 'a localhost /work/server-a\nc localhost /work/server-c\n' > /work/servers.conf
