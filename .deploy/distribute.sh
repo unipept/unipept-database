@@ -39,8 +39,8 @@ SERVERS_FILE="${HERE}/servers.conf"
 # Who to log in as on the source and the servers, as the API's rollout does. The port and the
 # key are ssh's own to decide, from ~/.ssh/config on the machine this runs on, so a host reached on
 # another port says so there once, for this and the API's rollout alike. Empty leaves the user to
-# ~/.ssh/config as well. How each server reaches the source is another connection, which its own
-# deploy.conf decides for its clone.sh.
+# ~/.ssh/config as well. How each server reaches the source is another connection, whose port and
+# key its own ~/.ssh/config decides for its clone.sh.
 SSH_USER="$DEPLOY_USER"
 
 read_conf
@@ -103,16 +103,14 @@ valid_root() {
 }
 
 # Runs one of the installed scripts, or a command, in a host's install root, as SSH_USER. Each
-# argument is quoted for the remote shell, since some come from another host. BatchMode, so a host
-# that asks for a password fails at once rather than waiting; keepalives, so an idle hour of loading
-# is not taken for a dead connection.
+# argument is quoted for the remote shell, since some come from another host.
 on() {
     local host="$1" root="$2" command
     shift 2
     command=$(printf '%q ' "$@")
 
-    ssh -o BatchMode=yes -o ServerAliveInterval=60 -o ServerAliveCountMax=5 \
-        "${SSH_USER:+${SSH_USER}@}${host}" "cd ${root} && ${command}" < /dev/null
+    # shellcheck disable=SC2029  # the command is built here on purpose, not on the host.
+    ssh "${SSH_CONNECTION_BOUNDS[@]}" "${SSH_USER:+${SSH_USER}@}${host}" "cd ${root} && ${command}" < /dev/null
 }
 
 # The servers, one "name host root" line each, with what servers.conf gets wrong refused. The root is

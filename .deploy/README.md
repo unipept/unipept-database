@@ -66,8 +66,9 @@ prepare everything the other scripts need, so they run without sudo:
   install, for a run that started from it; `etc/` is not touched;
 - the OpenSearch instance this host loads its proteins into, configured and started.
 
-It ends with what is left to do: fill in `deploy.conf` as root, then as `unipept` add an ssh key for
-a clone, and for a build, clone this repository and install Rust with rustup.
+It ends with what is left to do: fill in `deploy.conf` as root, then as `unipept` add an ssh key
+and a `~/.ssh/config` entry for a clone, and for a build, clone this repository and install Rust
+with rustup.
 
 Run it as root, once per host or again after changing a setting: a run that changes nothing
 restarts nothing. It pins a version of OpenSearch, `OPENSEARCH_VERSION` in
@@ -130,7 +131,7 @@ installed scripts:
 ```sh
 sudo -iu unipept
 .deploy/build.sh                                                   # in the clone
-/opt/unipept-database/deploy/server/clone.sh --remote-address selma.ugent.be --local-ssh-key ~/.ssh/id_unipept
+/opt/unipept-database/deploy/server/clone.sh --remote-address selma.ugent.be
 ```
 
 Every script but the two installs refuses to run as root. A database written by root is one the
@@ -273,18 +274,17 @@ cp .deploy/servers.conf.example .deploy/servers.conf     # once: the servers
 
 It checks that the source has the version whole, then that every server answers, has the scripts
 installed, and, where it needs a copy, could make one: `clone.sh --check` there, which checks that
-server's settings, its key, and that it reaches the source and finds the version whole. All of that
-before it touches any server. Then, one server at a time, it copies the version with that server's
-own `clone.sh` where the server does not have it, and loads it with that server's own `load.sh`
-where it is not loaded to the end. Where each server keeps its databases, and how it reaches the
-source, is that server's own installed `deploy.conf`. It ends with a table of what each server had
-and what was done.
+server's settings, and that it reaches the source and finds the version whole. All of that before
+it touches any server. Then, one server at a time, it copies the version with that server's own
+`clone.sh` where the server does not have it, and loads it with that server's own `load.sh` where it
+is not loaded to the end. Where each server keeps its databases is that server's own installed
+`deploy.conf`. It ends with a table of what each server had and what was done.
 
 It logs in to the source and the servers as `unipept`, or `--ssh-user`, and leaves the port and the
 key to `~/.ssh/config` on the machine it runs on, as unipept-api's rollout does: a host reached on
 another port says so there, once, for both. How each server then reaches the source is another
-connection, which that server's `deploy.conf` decides for its `clone.sh`, and which the preflight
-checks.
+connection: its port and key are that server's own `~/.ssh/config`, the user its `deploy.conf`'s
+`REMOTE_USER`, and the preflight checks it.
 
 Nothing it does changes what the API serves: the copy lands beside the database in use, and the
 load in an index of its own, so every server stays in rotation. `switch.sh` on each server switches
@@ -359,6 +359,7 @@ it uses of the others.
 | `lib/versions.sh` | version names, `.version`, the `current` and `previous` links |
 | `lib/database.sh` | what a database holds, and how it is put in place |
 | `lib/api.sh` | what this host serves, from the API's `deploy.sh status` |
+| `lib/remote.sh` | the bounds on an ssh connection to another host |
 | `lib/checks.sh` | what has to be true before a script changes anything: one function per check, printing `FAIL …` |
 
 `server/install.sh` installs them as `/opt/unipept-database/deploy/lib.sh` and

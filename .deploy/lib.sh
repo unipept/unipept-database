@@ -13,8 +13,8 @@ DEPLOY_DIR="$(CDPATH='' cd -P -- "${BASH_SOURCE[0]%/*}" > /dev/null && pwd)"
 # define functions and settings, and run nothing that needs another part while being sourced, so
 # their order matters only to config.sh, which needs DEPLOY_DIR above: what every script runs on,
 # the shared settings, versions and the links that name one, what a database holds, the locks, the
-# requests to OpenSearch, what is known of the API on this host, and the checks the scripts make
-# before they change anything.
+# requests to OpenSearch, what is known of the API on this host, how another host is reached, and
+# the checks the scripts make before they change anything.
 # shellcheck source=lib/core.sh
 source "${DEPLOY_DIR}/lib/core.sh"
 # shellcheck source=lib/config.sh
@@ -30,5 +30,7 @@ source "${DEPLOY_DIR}/lib/locks.sh"
 source "${DEPLOY_DIR}/../opensearch/lib.sh"
 # shellcheck source=lib/api.sh
 source "${DEPLOY_DIR}/lib/api.sh"
+# shellcheck source=lib/remote.sh
+source "${DEPLOY_DIR}/lib/remote.sh"
 # shellcheck source=lib/checks.sh
 source "${DEPLOY_DIR}/lib/checks.sh"

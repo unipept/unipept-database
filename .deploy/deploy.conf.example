@@ -18,10 +18,9 @@ OUTPUT_DIR=/mnt/data
 # build.sh: where the repositories are cloned and built.
 #SCRATCH_DIR=/srv/scratch
 
-# clone.sh: the host a finished database is copied from. Both are required to run clone.sh, here
-# or as a flag.
+# clone.sh: the host a finished database is copied from. Required to run clone.sh, here or as a
+# flag. Its port and key are ~/.ssh/config's.
 #REMOTE_ADDRESS=selma.ugent.be
-#LOCAL_SSH_KEY=/home/unipept/.ssh/id_unipept
 
 # .deploy/server/opensearch/install.sh: the heap the instance takes. See OPENSEARCH_HEAP there for
 # why it is low.
@@ -29,7 +28,6 @@ OUTPUT_DIR=/mnt/data
 
 # Uncomment to depart from the defaults.
 #DATABASE_SOURCES=swissprot,trembl
-#REMOTE_PORT=4840
 #REMOTE_USER=unipept
 #REMOTE_OUTPUT_DIR=/mnt/data
 
