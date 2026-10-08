@@ -1,0 +1,39 @@
+# The release rehearsed on a fleet in containers: tests/fleet/run.sh, against the latest release of
+# the API. Started by hand before a release, not on pull requests: it needs both repositories, a few
+# gigabytes of memory and about half an hour.
+name: Fleet rehearsal
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fleet:
+    name: Fleet rehearsal
+    # x86_64, where the API's release binaries run, and the release the servers run.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      # OpenSearch refuses to start below it, and a container cannot raise it for itself.
+      - name: Let OpenSearch start
+        run: sudo sysctl -w vm.max_map_count=262144
+
+      - name: Rehearse the release with the latest API
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          FLEET_LOGS: ${{ runner.temp }}/fleet-logs
+        run: tests/fleet/run.sh
+
+      - name: Keep every host's logs
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: fleet-logs
+          path: ${{ runner.temp }}/fleet-logs
+          if-no-files-found: ignore
