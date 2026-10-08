@@ -39,8 +39,8 @@ SERVERS_FILE="${HERE}/servers.conf"
 # Who to log in as on the source and the servers, as the API's rollout does. The port and the
 # key are ssh's own to decide, from ~/.ssh/config on the machine this runs on, so a host reached on
 # another port says so there once, for this and the API's rollout alike. Empty leaves the user to
-# ~/.ssh/config as well. How each server reaches the source is another connection, which its own
-# ~/.ssh/config decides for its clone.sh.
+# ~/.ssh/config as well. How each server reaches the source is another connection, whose port and
+# key its own ~/.ssh/config decides for its clone.sh.
 SSH_USER="$DEPLOY_USER"
 
 read_conf
