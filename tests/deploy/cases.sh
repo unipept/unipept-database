@@ -86,8 +86,8 @@ setup_stubs() {
 setup_sshd() {
     mkdir -p /run/sshd
     ssh-keygen -A > /dev/null 2>&1
-    # Only on 4840: clone.sh's default, and what ~/.ssh/config says for distribute.sh below. A
-    # script that assumed port 22 rather than following either cannot pass here by landing on it.
+    # Only on 4840, which ~/.ssh/config below says. A script that assumed port 22 rather than
+    # following it cannot pass here by landing on it.
     /usr/sbin/sshd -p 4840
 
     as_deployer mkdir -p "${DEPLOY_HOME}/.ssh"
@@ -98,6 +98,13 @@ setup_sshd() {
     # to be known before it runs.
     ssh-keyscan -H -p 4840 localhost 2>/dev/null \
         | as_deployer tee -a "${DEPLOY_HOME}/.ssh/known_hosts" > /dev/null
+
+    # Where clone.sh and distribute.sh find the port and the key, as on a real host.
+    as_deployer tee -a "${DEPLOY_HOME}/.ssh/config" > /dev/null <<'SSHCONFIG'
+Host localhost
+    IdentityFile ~/.ssh/id_test
+    Port 4840
+SSHCONFIG
 }
 
 # For check_true, which runs a command rather than evaluating an expression.
@@ -114,8 +121,7 @@ build() {
 
 clone() {
     as_deployer "${CHECKOUT}/.deploy/server/clone.sh" \
-        --remote-address localhost --remote-user "$DEPLOY" \
-        --local-ssh-key "${DEPLOY_HOME}/.ssh/id_test" "$@" > /work/last-output 2>&1
+        --remote-address localhost --remote-user "$DEPLOY" "$@" > /work/last-output 2>&1
 }
 
 load_proteins() {
@@ -143,8 +149,7 @@ check "build.sh refuses" "$?" "2"
 check_true "it names the user to run as" grep -q "Run it as ${DEPLOY}" /work/last-output
 check_true "before it writes anything" test ! -e /work/as-root
 
-"${CHECKOUT}/.deploy/server/clone.sh" --remote-address localhost --local-ssh-key "${DEPLOY_HOME}/.ssh/id_test" \
-    --output-dir /work/as-root > /work/last-output 2>&1
+"${CHECKOUT}/.deploy/server/clone.sh" --remote-address localhost --output-dir /work/as-root > /work/last-output 2>&1
 check "clone.sh refuses" "$?" "2"
 check_true "it names the user to run as" grep -q "Run it as ${DEPLOY}" /work/last-output
 
@@ -369,6 +374,15 @@ check_true "the staging directory is gone" test ! -d "${LOCAL}/.clone"
 clone --remote-output-dir "$REMOTE" --output-dir "$LOCAL" --uniprot-version 2025-11
 check "an older release can be named" "$?" "0"
 check_true "it is the one that arrives" test -d "${LOCAL}/uniprot-2025-11"
+
+# The port and the key come from ~/.ssh/config above; a flag wins over it.
+clone --remote-output-dir "$REMOTE" --output-dir "$LOCAL" --check --remote-port 22
+check "a port given as a flag is the one used" "$?" "2"
+clone --remote-output-dir "$REMOTE" --output-dir "$LOCAL" --check --uniprot-version 2026-03 --local-ssh-key /work/no-key
+check "a key given as a flag is the one used" "$?" "2"
+check_true "and one it cannot read is named" grep -qF 'cannot read the ssh key /work/no-key' /work/last-output
+clone --remote-output-dir "$REMOTE" --output-dir "$LOCAL" --check --uniprot-version 2026-03 --local-ssh-key "${DEPLOY_HOME}/.ssh/id_test" --remote-port 4840
+check "and both given as flags reach the host" "$?" "0"
 
 
 section "a clone that cannot be made"
@@ -1255,12 +1269,6 @@ check_true "and so checks the databases it names" grep -qF "Checking ${OUT}/unip
 # distribute.sh, with this container as the source and as every server, reached over the real sshd
 # as DEPLOY. The source is the install at /opt/unipept-database; each server is an install of its own,
 # made by install.sh under a prefix, with its own deploy.conf.
-as_deployer tee -a "${DEPLOY_HOME}/.ssh/config" > /dev/null <<'SSHCONFIG'
-Host localhost
-    IdentityFile ~/.ssh/id_test
-    Port 4840
-SSHCONFIG
-
 # A server: install.sh's scripts under a prefix of its own, a deploy.conf that reaches the source,
 # and a loader stand-in that remembers a load that finished, as the real one marks the index, and
 # answers --check-complete from that.
@@ -1358,10 +1366,10 @@ check "--replace succeeds" "$?" "0"
 check_true "b is copied to again and loaded" row_says b copied loaded ready
 check_true "and whole" test -s /work/b-data/uniprot-2026-03/suffix-array/mapping.bin
 
-# A server whose deploy.conf gives clone.sh no key to reach the source with. Found before anything
+# A server whose deploy.conf gives clone.sh a key it cannot read. Found before anything
 # is touched, rather than after the servers before it have copied and loaded.
 make_server c /work/c-data
-printf 'OUTPUT_DIR=/work/c-data\n' > /work/server-c/etc/deploy.conf
+printf 'OUTPUT_DIR=/work/c-data\nLOCAL_SSH_KEY=/work/no-key\n' > /work/server-c/etc/deploy.conf
 printf 'a localhost /work/server-a\nc localhost /work/server-c\n' > /work/servers.conf
 rm -f /work/a-loaded
 distribute --uniprot-version 2026-03

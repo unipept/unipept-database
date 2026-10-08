@@ -14,9 +14,11 @@ source "${HERE}/../lib.sh"
 
 # The host a finished database is copied from.
 REMOTE_ADDRESS=
-REMOTE_PORT=4840
 REMOTE_USER=unipept
 REMOTE_OUTPUT_DIR=/mnt/data
+# Its port and the key to reach it with. Empty leaves them to ~/.ssh/config, which says them once
+# for every script that reaches the host.
+REMOTE_PORT=
 LOCAL_SSH_KEY=
 
 # Which database to copy. Empty means the newest one the remote host has.
@@ -36,11 +38,11 @@ usage() {
 Copies a finished database from another host. load.sh then loads its proteins into this host's
 OpenSearch.
 
-  deploy/server/clone.sh --remote-address HOST --local-ssh-key KEY [OPTIONS]
+  deploy/server/clone.sh --remote-address HOST [OPTIONS]
 
   --remote-address HOST      the host to copy from, required
-  --local-ssh-key KEY        the private key to reach it with, required
-  --remote-port PORT         its SSH port
+  --local-ssh-key KEY        the private key to reach it with, default ~/.ssh/config's
+  --remote-port PORT         its SSH port, default ~/.ssh/config's
   --remote-user USER         the user to connect as
   --remote-output-dir DIR    where it keeps its databases
   --uniprot-version YYYY-MM  which database to copy, default the newest it has
@@ -71,14 +73,14 @@ parse_arguments() {
     done
 
     [ -n "$REMOTE_ADDRESS" ] || die "--remote-address is required."
-    [ -n "$LOCAL_SSH_KEY" ] || die "--local-ssh-key is required."
     # After the options rather than with them: deploy.conf can name the version this host clones.
     [ -z "$UNIPROT_VERSION" ] || valid_version "$UNIPROT_VERSION"
 }
 
 remote_sh() {
     # shellcheck disable=SC2029  # the command is built here on purpose, not on the host.
-    ssh "${SSH_CONNECTION_BOUNDS[@]}" -i "$LOCAL_SSH_KEY" -p "$REMOTE_PORT" "${REMOTE_USER}@${REMOTE_ADDRESS}" "$@"
+    ssh "${SSH_CONNECTION_BOUNDS[@]}" ${REMOTE_PORT:+-p "$REMOTE_PORT"} ${LOCAL_SSH_KEY:+-i "$LOCAL_SSH_KEY"} \
+        "${REMOTE_USER}@${REMOTE_ADDRESS}" "$@"
 }
 
 # The newest database the remote host holds, as YYYY-MM. The remote host is the authority on what
@@ -115,7 +117,7 @@ copy_database() {
 
     # Into a directory this script made, so the copy lands where this script expects it whatever
     # the scp back-end makes of a trailing slash.
-    scp "${SSH_CONNECTION_BOUNDS[@]}" -i "$LOCAL_SSH_KEY" -P "$REMOTE_PORT" -r \
+    scp "${SSH_CONNECTION_BOUNDS[@]}" ${REMOTE_PORT:+-P "$REMOTE_PORT"} ${LOCAL_SSH_KEY:+-i "$LOCAL_SSH_KEY"} -r \
         "${REMOTE_USER}@${REMOTE_ADDRESS}:${remote_dir}" "$staging"
     log "Copied the database from ${REMOTE_ADDRESS}."
 }
@@ -144,7 +146,7 @@ check_lock_usable "the copy" || die "nothing was copied (above)."
 [ -n "$UNIPROT_VERSION" ] || UNIPROT_VERSION=$(remote_latest_version)
 
 if [ "$CHECK" = true ]; then
-    [ -r "$LOCAL_SSH_KEY" ] || die "cannot read the ssh key ${LOCAL_SSH_KEY}."
+    [ -z "$LOCAL_SSH_KEY" ] || [ -r "$LOCAL_SSH_KEY" ] || die "cannot read the ssh key ${LOCAL_SSH_KEY}."
     preflight_remote "${REMOTE_OUTPUT_DIR}/uniprot-${UNIPROT_VERSION}"
     log "UniProtKB ${UNIPROT_VERSION} can be cloned from ${REMOTE_ADDRESS}."
     exit 0

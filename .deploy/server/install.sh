@@ -262,7 +262,8 @@ cat >&2 <<EOF
 Still to do on this host:
   1. As root, say what this host decides in ${PREFIX}/etc/deploy.conf.
 As ${DEPLOY_USER} (sudo -iu ${DEPLOY_USER}), none of it as root:
-  2. To clone from another host: an ssh key in ~/.ssh that ${DEPLOY_USER} on that host accepts.
+  2. To clone from another host: an ssh key that ${DEPLOY_USER} on that host accepts, and a Host
+     entry for it in ~/.ssh/config with its port and key.
      ${PREFIX}/deploy/server/clone.sh then copies a database, and ${PREFIX}/deploy/server/load.sh
      loads its proteins.
   3. To build: clone unipept-database, which build.sh needs whole, and install Rust with rustup

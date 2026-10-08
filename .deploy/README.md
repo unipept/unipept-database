@@ -66,8 +66,8 @@ prepare everything the other scripts need, so they run without sudo:
   install, for a run that started from it; `etc/` is not touched;
 - the OpenSearch instance this host loads its proteins into, configured and started.
 
-It ends with what is left to do: fill in `deploy.conf` as root, then as `unipept` add an ssh key for
-a clone, and for a build, clone this repository and install Rust with rustup.
+It ends with what is left to do: fill in `deploy.conf` as root, then as `unipept` add an ssh key and a
+`~/.ssh/config` entry for a clone, and for a build, clone this repository and install Rust with rustup.
 
 Run it as root, once per host or again after changing a setting: a run that changes nothing
 restarts nothing. It pins a version of OpenSearch, `OPENSEARCH_VERSION` in
@@ -130,7 +130,7 @@ installed scripts:
 ```sh
 sudo -iu unipept
 .deploy/build.sh                                                   # in the clone
-/opt/unipept-database/deploy/server/clone.sh --remote-address selma.ugent.be --local-ssh-key ~/.ssh/id_unipept
+/opt/unipept-database/deploy/server/clone.sh --remote-address selma.ugent.be
 ```
 
 Every script but the two installs refuses to run as root. A database written by root is one the
@@ -283,8 +283,8 @@ and what was done.
 It logs in to the source and the servers as `unipept`, or `--ssh-user`, and leaves the port and the
 key to `~/.ssh/config` on the machine it runs on, as unipept-api's rollout does: a host reached on
 another port says so there, once, for both. How each server then reaches the source is another
-connection, which that server's `deploy.conf` decides for its `clone.sh`, and which the preflight
-checks.
+connection, which that server's own `~/.ssh/config` decides for its `clone.sh`, or its `deploy.conf`,
+and which the preflight checks.
 
 Nothing it does changes what the API serves: the copy lands beside the database in use, and the
 load in an index of its own, so every server stays in rotation. `switch.sh` on each server switches
