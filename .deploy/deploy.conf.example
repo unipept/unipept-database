@@ -19,10 +19,8 @@ OUTPUT_DIR=/mnt/data
 #SCRATCH_DIR=/srv/scratch
 
 # clone.sh: the host a finished database is copied from. Required to run clone.sh, here or as a
-# flag. Its port and key are ~/.ssh/config's, unless set here.
+# flag. Its port and key are ~/.ssh/config's.
 #REMOTE_ADDRESS=selma.ugent.be
-#LOCAL_SSH_KEY=/home/unipept/.ssh/id_unipept
-#REMOTE_PORT=4840
 
 # .deploy/server/opensearch/install.sh: the heap the instance takes. See OPENSEARCH_HEAP there for
 # why it is low.

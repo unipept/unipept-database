@@ -12,14 +12,11 @@ source "${HERE}/../lib.sh"
 
 # The settings only this script has. lib/ holds the ones it shares.
 
-# The host a finished database is copied from.
+# The host a finished database is copied from. Its port and the key to reach it with are
+# ~/.ssh/config's, which says them once for every script that reaches the host.
 REMOTE_ADDRESS=
 REMOTE_USER=unipept
 REMOTE_OUTPUT_DIR=/mnt/data
-# Its port and the key to reach it with. Empty leaves them to ~/.ssh/config, which says them once
-# for every script that reaches the host.
-REMOTE_PORT=
-LOCAL_SSH_KEY=
 
 # Which database to copy. Empty means the newest one the remote host has.
 UNIPROT_VERSION=
@@ -27,8 +24,8 @@ UNIPROT_VERSION=
 # Whether a database of that version already here may be replaced.
 REPLACE=false
 
-# Whether to only check that a copy could be made: the settings, the key, the remote host, and its
-# copy of the version. What distribute.sh asks every server before it touches any.
+# Whether to only check that a copy could be made: the settings, the remote host, and its copy of
+# the version. What distribute.sh asks every server before it touches any.
 CHECK=false
 
 read_conf
@@ -41,8 +38,6 @@ OpenSearch.
   deploy/server/clone.sh --remote-address HOST [OPTIONS]
 
   --remote-address HOST      the host to copy from, required
-  --local-ssh-key KEY        the private key to reach it with, default ~/.ssh/config's
-  --remote-port PORT         its SSH port, default ~/.ssh/config's
   --remote-user USER         the user to connect as
   --remote-output-dir DIR    where it keeps its databases
   --uniprot-version YYYY-MM  which database to copy, default the newest it has
@@ -59,10 +54,8 @@ parse_arguments() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --remote-address) need_value "$1" "${2-}"; REMOTE_ADDRESS="$2"; shift 2 ;;
-            --remote-port) need_value "$1" "${2-}"; REMOTE_PORT="$2"; shift 2 ;;
             --remote-user) need_value "$1" "${2-}"; REMOTE_USER="$2"; shift 2 ;;
             --remote-output-dir) need_value "$1" "${2-}"; REMOTE_OUTPUT_DIR="$2"; shift 2 ;;
-            --local-ssh-key) need_value "$1" "${2-}"; LOCAL_SSH_KEY="$2"; shift 2 ;;
             --output-dir) need_value "$1" "${2-}"; OUTPUT_DIR="$2"; shift 2 ;;
             --uniprot-version) need_value "$1" "${2-}"; valid_version "$2"; UNIPROT_VERSION="$2"; shift 2 ;;
             --replace) REPLACE=true; shift ;;
@@ -79,7 +72,7 @@ parse_arguments() {
 
 remote_sh() {
     # shellcheck disable=SC2029  # the command is built here on purpose, not on the host.
-    ssh "${REMOTE_SSH_OPTIONS[@]}" "${REMOTE_USER}@${REMOTE_ADDRESS}" "$@"
+    ssh "${SSH_CONNECTION_BOUNDS[@]}" "${REMOTE_USER}@${REMOTE_ADDRESS}" "$@"
 }
 
 # The newest database the remote host holds, as YYYY-MM. The remote host is the authority on what
@@ -116,7 +109,7 @@ copy_database() {
 
     # Into a directory this script made, so the copy lands where this script expects it whatever
     # the scp back-end makes of a trailing slash.
-    scp "${REMOTE_SSH_OPTIONS[@]}" -r \
+    scp "${SSH_CONNECTION_BOUNDS[@]}" -r \
         "${REMOTE_USER}@${REMOTE_ADDRESS}:${remote_dir}" "$staging"
     log "Copied the database from ${REMOTE_ADDRESS}."
 }
@@ -136,9 +129,6 @@ preflight_copy() {
 parse_arguments "$@"
 refuse_root
 
-# For ssh and scp alike, which is why the port is -o Port= rather than ssh's -p or scp's -P.
-REMOTE_SSH_OPTIONS=("${SSH_CONNECTION_BOUNDS[@]}" ${REMOTE_PORT:+-o "Port=${REMOTE_PORT}"} ${LOCAL_SSH_KEY:+-i "$LOCAL_SSH_KEY"})
-
 [ -n "$OUTPUT_DIR" ] || die "--output-dir requires a value."
 
 require ssh scp flock:util-linux
@@ -148,7 +138,6 @@ check_lock_usable "the copy" || die "nothing was copied (above)."
 [ -n "$UNIPROT_VERSION" ] || UNIPROT_VERSION=$(remote_latest_version)
 
 if [ "$CHECK" = true ]; then
-    [ -z "$LOCAL_SSH_KEY" ] || [ -r "$LOCAL_SSH_KEY" ] || die "cannot read the ssh key ${LOCAL_SSH_KEY}."
     preflight_remote "${REMOTE_OUTPUT_DIR}/uniprot-${UNIPROT_VERSION}"
     log "UniProtKB ${UNIPROT_VERSION} can be cloned from ${REMOTE_ADDRESS}."
     exit 0

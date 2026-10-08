@@ -273,8 +273,7 @@ cp .deploy/servers.conf.example .deploy/servers.conf     # once: the servers
 
 It checks that the source has the version whole, then that every server answers, has the scripts
 installed, and, where it needs a copy, could make one: `clone.sh --check` there, which checks that
-server's settings, its key where its `deploy.conf` names one, and that it reaches the source and
-finds the version whole. All of that before it touches any server. Then, one server at a time, it
+server's settings, and that it reaches the source and finds the version whole. All of that before it touches any server. Then, one server at a time, it
 copies the version with that server's own `clone.sh` where the server does not have it, and loads it
 with that server's own `load.sh` where it is not loaded to the end. Where each server keeps its
 databases is that server's own installed `deploy.conf`. It ends with a table of what each server
@@ -283,8 +282,8 @@ had and what was done.
 It logs in to the source and the servers as `unipept`, or `--ssh-user`, and leaves the port and the
 key to `~/.ssh/config` on the machine it runs on, as unipept-api's rollout does: a host reached on
 another port says so there, once, for both. How each server then reaches the source is another
-connection, which that server's own `~/.ssh/config` decides for its `clone.sh`, or its `deploy.conf`,
-and which the preflight checks.
+connection, which that server's own `~/.ssh/config` decides for its `clone.sh`, and which the
+preflight checks.
 
 Nothing it does changes what the API serves: the copy lands beside the database in use, and the
 load in an index of its own, so every server stays in rotation. `switch.sh` on each server switches

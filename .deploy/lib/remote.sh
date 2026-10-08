@@ -8,6 +8,6 @@
 # waits on it indefinitely. The keepalives are what end it; they are answered by sshd, so an idle
 # hour of loading is not taken for a dead connection.
 #
-# The port, the key and the user are left to ~/.ssh/config, or to the caller.
+# The port and the key are left to ~/.ssh/config, the user to the caller.
 # shellcheck disable=SC2034  # read by the scripts that source this file.
 readonly SSH_CONNECTION_BOUNDS=(-o BatchMode=yes -o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=4)

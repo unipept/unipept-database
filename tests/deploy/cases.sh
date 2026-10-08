@@ -375,15 +375,6 @@ clone --remote-output-dir "$REMOTE" --output-dir "$LOCAL" --uniprot-version 2025
 check "an older release can be named" "$?" "0"
 check_true "it is the one that arrives" test -d "${LOCAL}/uniprot-2025-11"
 
-# The port and the key come from ~/.ssh/config above; a flag wins over it.
-clone --remote-output-dir "$REMOTE" --output-dir "$LOCAL" --check --remote-port 22
-check "a port given as a flag is the one used" "$?" "2"
-clone --remote-output-dir "$REMOTE" --output-dir "$LOCAL" --check --uniprot-version 2026-03 --local-ssh-key /work/no-key
-check "a key given as a flag that cannot be read is refused" "$?" "2"
-check_true "and named" grep -qF 'cannot read the ssh key /work/no-key' /work/last-output
-clone --remote-output-dir "$REMOTE" --output-dir "$LOCAL" --check --uniprot-version 2026-03 --local-ssh-key "${DEPLOY_HOME}/.ssh/id_test" --remote-port 4840
-check "and both given as flags reach the host" "$?" "0"
-
 
 section "a clone that cannot be made"
 
@@ -1279,8 +1270,7 @@ make_server() {
 
     rm -rf "$root" "/work/${name}-loaded" "/work/${name}-loader-calls"
     install_server --user "$DEPLOY" --output-dir "$output_dir" --prefix "$root" || return 1
-    printf 'OUTPUT_DIR=%s\nLOCAL_SSH_KEY=%s/.ssh/id_test\nREMOTE_USER=%s\n' \
-        "$output_dir" "$DEPLOY_HOME" "$DEPLOY" > "${root}/etc/deploy.conf"
+    printf 'OUTPUT_DIR=%s\nREMOTE_USER=%s\n' "$output_dir" "$DEPLOY" > "${root}/etc/deploy.conf"
     cat > "${root}/opensearch/load.sh" <<LOADER
 #!/usr/bin/env bash
 printf '%s\n' "\$*" >> /work/${name}-loader-calls
@@ -1367,10 +1357,10 @@ check "--replace succeeds" "$?" "0"
 check_true "b is copied to again and loaded" row_says b copied loaded ready
 check_true "and whole" test -s /work/b-data/uniprot-2026-03/suffix-array/mapping.bin
 
-# A server whose deploy.conf gives clone.sh a key it cannot read. Found before anything is touched,
-# rather than after the servers before it have copied and loaded.
+# A server whose deploy.conf has clone.sh log in to the source as a user the source refuses. Found
+# before anything is touched, rather than after the servers before it have copied and loaded.
 make_server c /work/c-data
-printf 'OUTPUT_DIR=/work/c-data\nLOCAL_SSH_KEY=/work/no-key\n' > /work/server-c/etc/deploy.conf
+printf 'OUTPUT_DIR=/work/c-data\nREMOTE_USER=nobody-here\n' > /work/server-c/etc/deploy.conf
 printf 'a localhost /work/server-a\nc localhost /work/server-c\n' > /work/servers.conf
 rm -f /work/a-loaded
 distribute --uniprot-version 2026-03
