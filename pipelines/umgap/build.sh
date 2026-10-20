@@ -52,6 +52,38 @@ trap errorAndExit ERR
 trap clean EXIT
 
 ################################################################################
+# FIFO writers                                                                 #
+#                                                                              #
+# Commands for start_writer: each reads the lz4 file $2 and writes rows into   #
+# the FIFO $1. The steps read these FIFOs, and a failed writer fails the step. #
+################################################################################
+feed_original_sequences() {
+	$CMD_LZ4CAT "$2" | cut -f 3 | LC_ALL=C $CMD_SORT | uniq > "$1"
+}
+
+feed_equalized_sequences() {
+	$CMD_LZ4CAT "$2" | cut -f 2 | uniq > "$1"
+}
+
+feed_equalized_fas() {
+	$CMD_LZ4CAT "$2" | cut -f2,5 > "$1"
+}
+
+feed_original_fas() {
+	$CMD_LZ4CAT "$2" | cut -f3,5 > "$1"
+}
+
+# join stops reading when its first input ends, so this writer can get SIGPIPE.
+feed_padded_ids() {
+	accept_sigpipe pad_ids "$1" "$2"
+}
+
+# shellcheck disable=SC2016 # the single-quoted string is an awk program
+pad_ids() {
+	$CMD_LZ4CAT "$2" | $CMD_AWK '{ printf("%012d\t%s\n", $1, $2) }' > "$1"
+}
+
+################################################################################
 #                           TABLE GENERATION FUNCTIONS                         #
 #                                                                              #
 # This section contains functions responsible for generating the required      #
@@ -200,22 +232,20 @@ download_and_process_uniprot_tryptic() {
 number_sequences() {
   local temp_dir="$1"
   local temp_constant="$2"
-  
-  have "$temp_dir/$temp_constant/peptides-equalized.tsv.lz4" || return
+  local dir="$temp_dir/$temp_constant"
+  local peptides="$dir/peptides-equalized.tsv.lz4"
+
+  have "$peptides" || return
 	log "Started the numbering of sequences."
 
-  rm -f "p_eq" "p_or"
-	mkfifo "p_eq" "p_or"
+	LC_ALL=C $CMD_SORT -u -m \
+		"$(start_writer "$peptides" "reading the original sequences of $peptides" feed_original_sequences)" \
+		"$(start_writer "$peptides" "reading the equalized sequences of $peptides" feed_equalized_sequences)" \
+		| cat -n \
+		| sed 's/^ *//' | $CMD_LZ4 - > "$dir/sequences.tsv.lz4"
+	wait_for_writers || { rm -f "$dir/sequences.tsv.lz4"; return 1; }
 
-	$CMD_LZ4CAT "$temp_dir/$temp_constant/peptides-equalized.tsv.lz4" | cut -f 3 | LC_ALL=C $CMD_SORT | uniq > "p_or" &
-	$CMD_LZ4CAT "$temp_dir/$temp_constant/peptides-equalized.tsv.lz4" | cut -f 2 | uniq > "p_eq" &
-
-	LC_ALL=C $CMD_SORT -u -m "p_or" "p_eq" | cat -n \
-		| sed 's/^ *//' | $CMD_LZ4 - > "$temp_dir/$temp_constant/sequences.tsv.lz4"
-
-	rm "p_eq" "p_or"
-
-	log "Finished the numbering of sequences with status $?."
+	log "Finished the numbering of sequences."
 }
 
 ################################################################################
@@ -379,16 +409,16 @@ calculate_original_lcas() {
 calculate_equalized_fas() {
   local temp_dir="$1"
   local temp_constant="$2"
+  local dir="$temp_dir/$temp_constant"
 
-	have "$temp_dir/$temp_constant/peptides_by_equalized.tsv.lz4" || return
+	have "$dir/peptides_by_equalized.tsv.lz4" || return
 
 	log "Started the calculation of equalized FA's."
-	rm -f "peptides_eq"
-	mkfifo "peptides_eq"
-	$CMD_LZ4CAT "$temp_dir/$temp_constant/peptides_by_equalized.tsv.lz4" | cut -f2,5 > "peptides_eq" &
-	"$RUST_BIN_DIR"/function-calculator --input-file "peptides_eq" > "$(lz "$temp_dir/$temp_constant/FAs_equalized.tsv.lz4")"
-	rm "peptides_eq"
-	log "Finished the calculation of equalized FA's with status $?."
+	"$RUST_BIN_DIR"/function-calculator \
+		--input-file "$(start_writer "$dir/peptides_by_equalized.tsv.lz4" "reading $dir/peptides_by_equalized.tsv.lz4" feed_equalized_fas)" \
+		> "$(lz "$dir/FAs_equalized.tsv.lz4")"
+	wait_for_writers || { rm -f "$dir/FAs_equalized.tsv.lz4"; return 1; }
+	log "Finished the calculation of equalized FA's."
 }
 
 ################################################################################
@@ -419,15 +449,15 @@ calculate_equalized_fas() {
 calculate_original_fas() {
   local temp_dir="$1"
   local temp_constant="$2"
+  local dir="$temp_dir/$temp_constant"
 
-	have "$temp_dir/$temp_constant/peptides_by_original.tsv.lz4" || return
-	
+	have "$dir/peptides_by_original.tsv.lz4" || return
+
 	log "Started the calculation of original FA's."
-	rm -f "peptides_orig"
-	mkfifo "peptides_orig"
-	$CMD_LZ4CAT "$temp_dir/$temp_constant/peptides_by_original.tsv.lz4" | cut -f3,5 > "peptides_orig" &
-	"$RUST_BIN_DIR"/function-calculator --input-file "peptides_orig" > "$(lz "$temp_dir/$temp_constant/FAs_original.tsv.lz4")"
-	rm "peptides_orig"
+	"$RUST_BIN_DIR"/function-calculator \
+		--input-file "$(start_writer "$dir/peptides_by_original.tsv.lz4" "reading $dir/peptides_by_original.tsv.lz4" feed_original_fas)" \
+		> "$(lz "$dir/FAs_original.tsv.lz4")"
+	wait_for_writers || { rm -f "$dir/FAs_original.tsv.lz4"; return 1; }
 	log "Finished the calculation of original FA's."
 }
 
@@ -466,24 +496,19 @@ create_sequence_table() {
   local temp_dir="$1"
   local temp_constant="$2"
   local output_dir="$3"
+  local dir="$temp_dir/$temp_constant"
 
-	have "$temp_dir/$temp_constant/LCAs_original.tsv.lz4" "$temp_dir/$temp_constant/LCAs_equalized.tsv.lz4" "$temp_dir/$temp_constant/FAs_original.tsv.lz4" "$temp_dir/$temp_constant/FAs_equalized.tsv.lz4" "$temp_dir/$temp_constant/sequences.tsv.lz4" || return
+	have "$dir/LCAs_original.tsv.lz4" "$dir/LCAs_equalized.tsv.lz4" "$dir/FAs_original.tsv.lz4" "$dir/FAs_equalized.tsv.lz4" "$dir/sequences.tsv.lz4" || return
 	log "Started the creation of the sequences table."
 	mkdir -p "$output_dir"
-	rm -f "olcas" "elcas" "ofas" "efas"
-	mkfifo "olcas" "elcas" "ofas" "efas"
-	$CMD_LZ4CAT "$temp_dir/$temp_constant/LCAs_original.tsv.lz4"  | $CMD_AWK '{ printf("%012d\t%s\n", $1, $2) }' > "olcas" &
-	$CMD_LZ4CAT "$temp_dir/$temp_constant/LCAs_equalized.tsv.lz4" | $CMD_AWK '{ printf("%012d\t%s\n", $1, $2) }' > "elcas" &
-	$CMD_LZ4CAT "$temp_dir/$temp_constant/FAs_original.tsv.lz4"   | $CMD_AWK '{ printf("%012d\t%s\n", $1, $2) }' > "ofas" &
-	$CMD_LZ4CAT "$temp_dir/$temp_constant/FAs_equalized.tsv.lz4"  | $CMD_AWK '{ printf("%012d\t%s\n", $1, $2) }' > "efas" &
-	$CMD_LZ4CAT "$temp_dir/$temp_constant/sequences.tsv.lz4"      | $CMD_AWK '{ printf("%012d\t%s\n", $1, $2) }' \
-		| join --nocheck-order -a1 -e '\N' -t '	' -o "1.1 1.2 2.2" - "olcas" \
-		| join --nocheck-order -a1 -e '\N' -t '	' -o "1.1 1.2 1.3 2.2" - "elcas" \
-		| join --nocheck-order -a1 -e '\N' -t '	' -o '1.1 1.2 1.3 1.4 2.2' - "ofas" \
-		| join --nocheck-order -a1 -e '\N' -t '	' -o '1.1 1.2 1.3 1.4 1.5 2.2' - "efas" \
+	$CMD_LZ4CAT "$dir/sequences.tsv.lz4" | $CMD_AWK '{ printf("%012d\t%s\n", $1, $2) }' \
+		| join --nocheck-order -a1 -e '\N' -t '	' -o "1.1 1.2 2.2" - "$(start_writer "$dir/LCAs_original.tsv.lz4" "reading $dir/LCAs_original.tsv.lz4" feed_padded_ids)" \
+		| join --nocheck-order -a1 -e '\N' -t '	' -o "1.1 1.2 1.3 2.2" - "$(start_writer "$dir/LCAs_equalized.tsv.lz4" "reading $dir/LCAs_equalized.tsv.lz4" feed_padded_ids)" \
+		| join --nocheck-order -a1 -e '\N' -t '	' -o '1.1 1.2 1.3 1.4 2.2' - "$(start_writer "$dir/FAs_original.tsv.lz4" "reading $dir/FAs_original.tsv.lz4" feed_padded_ids)" \
+		| join --nocheck-order -a1 -e '\N' -t '	' -o '1.1 1.2 1.3 1.4 1.5 2.2' - "$(start_writer "$dir/FAs_equalized.tsv.lz4" "reading $dir/FAs_equalized.tsv.lz4" feed_padded_ids)" \
 		| sed 's/^0*//' \
 		| $CMD_LZ4 - > "$output_dir/sequences.tsv.lz4"
-	rm "olcas" "elcas" "ofas" "efas"
+	wait_for_writers || { rm -f "$output_dir/sequences.tsv.lz4"; return 1; }
 	log "Finished the creation of the sequences table."
 }
 
