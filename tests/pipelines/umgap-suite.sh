@@ -60,10 +60,10 @@ check_true "the build succeeds" [ "$kmer_rc" -eq 0 ]
 check_true "taxons.tsv is the fixture" cmp -s <(table kmer taxons) "${FIXTURES}/taxons.tsv"
 check "uniprot_entries.tsv has the fixture rows" \
     "$(table kmer uniprot_entries | rows_without_id)" "$(rows_without_id < "${FIXTURES}/uniprot_entries.tsv")"
-check "the index has every 9-mer of the corpus" \
-    "$(wc -l < "${WORK}/kmer-index.tsv")" \
+check "the index has every 9-mer of the corpus and no other" \
+    "$(cut -f 1 "${WORK}/kmer-index.tsv" | LC_ALL=C sort)" \
     "$(cut -f 7 "${FIXTURES}/uniprot_entries.tsv" \
-        | gawk '{ for (i = 1; i + 8 <= length($0); i++) print substr($0, i, 9) }' | LC_ALL=C sort -u | wc -l)"
+        | gawk '{ for (i = 1; i + 8 <= length($0); i++) print substr($0, i, 9) }' | LC_ALL=C sort -u)"
 check "a 9-mer of one protein maps to its taxon" \
     "$(grep '^AAGGKEIVW' "${WORK}/kmer-index.tsv")" $'AAGGKEIVW\t9503'
 check "a 9-mer of three taxa maps to their LCA" \
