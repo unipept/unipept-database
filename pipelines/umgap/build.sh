@@ -41,9 +41,6 @@ UNIPEPT_TEMP_CONSTANT="unipept_temp"
 # accepted by the sort command.
 SORT_MEMORY="2G"
 
-# Which sort command should I use?
-CMD_SORT="sort --buffer-size=$SORT_MEMORY --parallel=4"
-
 # What is the minimum length (inclusive) for tryptic peptides?"
 PEPTIDE_MIN_LENGTH=5
 # What is the maximum length (inclusive) for tryptic peptides?"
@@ -781,6 +778,20 @@ print_help() {
 }
 
 ################################################################################
+# set_sort_command                                                             #
+#                                                                              #
+# Sets CMD_SORT from SORT_MEMORY. Call it after the arguments are parsed, so   #
+# --sort-memory is used.                                                       #
+#                                                                              #
+# Globals:                                                                     #
+#   SORT_MEMORY - Amount of memory to be used by the sort utility              #
+#   CMD_SORT    - Set to the sort command                                      #
+################################################################################
+set_sort_command() {
+  CMD_SORT="sort --buffer-size=$SORT_MEMORY --parallel=4"
+}
+
+################################################################################
 # Main                                                                         #
 ################################################################################
 
@@ -804,6 +815,7 @@ checkdep umgap "umgap crate (for umgap buildindex)"
 
 if [[ "$MODE" == "kmer" ]]; then
   parse_kmer_arguments "$@"
+  set_sort_command
   checkDirectoryAndCreate "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT"
   build_binaries "taxdmp-parser" "uniprot-parser"
   run_step create_taxon_tables "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT" "$OUTPUT_DIR"
@@ -811,6 +823,7 @@ if [[ "$MODE" == "kmer" ]]; then
   run_step create_kmer_index "$OUTPUT_DIR" "$KMER_LENGTH"
 elif [[ "$MODE" == "tryptic" ]]; then
   parse_tryptic_arguments "$@"
+  set_sort_command
   checkDirectoryAndCreate "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT"
   build_binaries "taxdmp-parser" "uniprot-parser-tryptic" "function-calculator" "lca-calculator"
   run_step create_taxon_tables "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT" "$OUTPUT_DIR"
