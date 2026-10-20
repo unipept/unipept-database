@@ -100,7 +100,8 @@ download_and_process_uniprot_kmer() {
   download_uniprot "$db_types" \
   | "$RUST_BIN_DIR"/uniprot-parser \
       --taxa "$(luz "$output_dir/taxons.tsv.lz4")" \
-      --uniprot-entries "$(lz "$output_dir/uniprot_entries.tsv.lz4")"
+      --uniprot-entries "$(lz "$output_dir/uniprot_entries.tsv.lz4")" \
+      --proteomes /dev/null
 
   log "Finished generating the uniprot_entries file."
 }
