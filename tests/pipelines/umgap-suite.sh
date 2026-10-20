@@ -78,9 +78,10 @@ check "uniprot_entries.tsv has the fixture rows" \
 check "a peptide of one taxon maps to it" "$(pept2lca YSEDVFR)" "8503"
 check "a peptide of several taxa maps to their LCA" "$(pept2lca AAGGK)" "1"
 check_true "tryptic.index is not empty" [ -s "${WORK}/tryptic-index.tsv" ]
-check "every indexed peptide has its LCA from sequences.tsv" \
-    "$(LC_ALL=C comm -23 <(LC_ALL=C sort "${WORK}/tryptic-index.tsv") \
-        <(table tryptic sequences | cut -f 2,3 | LC_ALL=C sort))" ""
+check "a peptide with an asparagine maps to its taxon" "$(pept2lca WNDET)" "8502"
+check "the index has every peptide with an LCA in sequences.tsv and no other" \
+    "$(LC_ALL=C sort "${WORK}/tryptic-index.tsv")" \
+    "$(table tryptic sequences | cut -f 2,3 | grep -vF '\N' | LC_ALL=C sort)"
 
 
 summary
