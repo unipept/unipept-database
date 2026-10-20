@@ -117,8 +117,8 @@ jobs:
         run: env --default-signal=PIPE tests/run-tests.sh umgap
 
       # .deploy/build.sh over the real pipeline. The container suite stubs the pipeline, so this is
-      # what holds the contract between the two. Even when the one above failed, so one run
-      # reports both.
+      # what holds the contract between the two. Even when the suites above failed, so one run
+      # reports all of them.
       - name: Run the seam suite
         if: ${{ !cancelled() }}
         run: env --default-signal=PIPE tests/run-tests.sh seam
