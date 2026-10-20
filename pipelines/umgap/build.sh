@@ -207,10 +207,10 @@ number_sequences() {
   rm -f "p_eq" "p_or"
 	mkfifo "p_eq" "p_or"
 
-	$CMD_LZ4CAT "$temp_dir/$temp_constant/peptides-equalized.tsv.lz4" | cut -f 3 | $CMD_SORT | uniq > "p_or" &
+	$CMD_LZ4CAT "$temp_dir/$temp_constant/peptides-equalized.tsv.lz4" | cut -f 3 | LC_ALL=C $CMD_SORT | uniq > "p_or" &
 	$CMD_LZ4CAT "$temp_dir/$temp_constant/peptides-equalized.tsv.lz4" | cut -f 2 | uniq > "p_eq" &
 
-	$CMD_SORT -u -m "p_or" "p_eq" | cat -n \
+	LC_ALL=C $CMD_SORT -u -m "p_or" "p_eq" | cat -n \
 		| sed 's/^ *//' | $CMD_LZ4 - > "$temp_dir/$temp_constant/sequences.tsv.lz4"
 
 	rm "p_eq" "p_or"
@@ -255,7 +255,7 @@ substitute_aas() {
 
   log "Started the substitution of equalized AA's by ID's for the peptides."
   $CMD_LZ4CAT "$temp_dir/$temp_constant/peptides-equalized.tsv.lz4" \
-    | join -t '	' -o '1.1,2.1,1.3,1.4,1.5,1.6' -1 2 -2 2 - "$(luz "$temp_dir/$temp_constant/sequences.tsv.lz4")" \
+    | LC_ALL=C join -t '	' -o '1.1,2.1,1.3,1.4,1.5,1.6' -1 2 -2 2 - "$(luz "$temp_dir/$temp_constant/sequences.tsv.lz4")" \
     | $CMD_LZ4 - > "$temp_dir/$temp_constant/peptides_by_equalized.tsv.lz4"
 
   rm "$temp_dir/$temp_constant/peptides-equalized.tsv.lz4"
@@ -264,7 +264,7 @@ substitute_aas() {
   log "Started the substitution of original AA's by ID's for the peptides."
   $CMD_LZ4CAT "$temp_dir/$temp_constant/peptides_by_equalized.tsv.lz4" \
     | LC_ALL=C $CMD_SORT -k 3b,3 \
-    | join -t '	' -o '1.1,1.2,2.1,1.4,1.5,1.6' -1 3 -2 2 - "$(luz "$temp_dir/$temp_constant/sequences.tsv.lz4")" \
+    | LC_ALL=C join -t '	' -o '1.1,1.2,2.1,1.4,1.5,1.6' -1 3 -2 2 - "$(luz "$temp_dir/$temp_constant/sequences.tsv.lz4")" \
     | $CMD_LZ4 - > "$temp_dir/$temp_constant/peptides_by_original.tsv.lz4"
 
   log "Finished the substitution of original AA's by ID's for the peptides with status $?."
