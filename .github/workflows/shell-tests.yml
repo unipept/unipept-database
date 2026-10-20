@@ -81,12 +81,12 @@ jobs:
         run: tests/run-tests.sh shell
 
   build:
-    # pipelines/suffix-array/build.sh end to end, with every source replaced by a local file, and
-    # then .deploy/build.sh over that same pipeline. One job, so the second reuses what the first
-    # compiled rather than installing Rust and building the workspace again on another runner.
-    name: Build and seam suites
+    # pipelines/suffix-array/build.sh and pipelines/umgap/build.sh end to end, with every source
+    # replaced by a local file, and then .deploy/build.sh over the suffix-array pipeline. One job, so
+    # the later suites reuse what the first compiled rather than building the workspace again.
+    name: Build, umgap and seam suites
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     env:
       RUSTUP_TOOLCHAIN: stable
 
@@ -107,9 +107,18 @@ jobs:
       - name: Run the build suite
         run: env --default-signal=PIPE tests/run-tests.sh build
 
+      # rust-cache keeps ~/.cargo/bin, so a cached run skips the install.
+      - name: Install umgap
+        if: ${{ !cancelled() }}
+        run: cargo install --locked umgap --version 1.2.0
+
+      - name: Run the umgap suite
+        if: ${{ !cancelled() }}
+        run: env --default-signal=PIPE tests/run-tests.sh umgap
+
       # .deploy/build.sh over the real pipeline. The container suite stubs the pipeline, so this is
-      # what holds the contract between the two. Even when the one above failed, so one run
-      # reports both.
+      # what holds the contract between the two. Even when the suites above failed, so one run
+      # reports all of them.
       - name: Run the seam suite
         if: ${{ !cancelled() }}
         run: env --default-signal=PIPE tests/run-tests.sh seam
