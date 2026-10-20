@@ -43,7 +43,7 @@ table() { lz4 -dc "${WORK}/$1/$2.tsv.lz4" 2> /dev/null; }
 rows_without_id() { cut -f 2- | LC_ALL=C sort; }
 
 # The taxon umgap finds for each peptide, one per line.
-pept2lca() { printf '>q\n%s\n' "$@" | umgap pept2lca "${WORK}/tryptic/tryptic.index" | tail -n +2; }
+pept2lca() { { echo '>q'; printf '%s\n' "$@"; } | umgap pept2lca "${WORK}/tryptic/tryptic.index" | tail -n +2; }
 
 build kmer
 kmer_rc=$?
