@@ -107,7 +107,7 @@ download_and_process_uniprot_kmer() {
 }
 
 ################################################################################
-# download_and_process_uniprot_tryptic                                        #
+# download_and_process_uniprot_tryptic                                         #
 #                                                                              #
 # Downloads and parses UniProtKB databases specified as a comma-separated list #
 # in the first argument ($1). The function supports "swissprot" and "trembl".  #
