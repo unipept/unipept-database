@@ -497,10 +497,27 @@ luz() {
 }
 
 decompress_to_pipe() {
+	# shellcheck disable=SC2086 # CMD_LZ4CAT is a command and its options
+	accept_sigpipe $CMD_LZ4CAT "$2" > "$1"
+}
+
+################################################################################
+# accept_sigpipe                                                               #
+#                                                                              #
+# Runs a command that writes into a FIFO. Status 141 is SIGPIPE: the reader    #
+# closed the FIFO before the end, which is not a failure of the command.       #
+#                                                                              #
+# Arguments:                                                                   #
+#   $@ - The command and its arguments                                         #
+#                                                                              #
+# Returns:                                                                     #
+#   0 if the command succeeded or got SIGPIPE, its status otherwise            #
+################################################################################
+accept_sigpipe() {
 	local status=0
-	$CMD_LZ4CAT "$2" > "$1" || status=$?
-	# 141 is SIGPIPE: the reader closed the FIFO before the end of the file.
-	[[ "$status" -eq 0 || "$status" -eq 141 ]]
+	"$@" || status=$?
+	[[ "$status" -eq 141 ]] && return 0
+	return "$status"
 }
 
 ################################################################################
