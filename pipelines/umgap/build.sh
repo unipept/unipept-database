@@ -568,7 +568,7 @@ create_tryptic_index() {
 	pv "$output_dir/sequences.tsv.lz4" \
 		| $CMD_LZ4CAT \
 		| cut -f2,3 \
-		| grep -v "\\N" \
+		| grep -vF '\N' \
 		| umgap buildindex \
 		> "$output_dir/tryptic.index"
 	log "Finished the construction of the tryptic index."
