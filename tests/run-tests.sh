@@ -6,6 +6,7 @@
 #   run-tests.sh lz         lz() and the compressors it starts
 #   run-tests.sh shell      the helpers in pipelines/lib/common.sh
 #   run-tests.sh build      pipelines/suffix-array/build.sh end to end, offline
+#   run-tests.sh umgap      pipelines/umgap/build.sh end to end, offline
 #   run-tests.sh opensearch opensearch/load.sh, against a real OpenSearch
 #   run-tests.sh verify     .deploy/server/verify.sh against a fixture index
 #   run-tests.sh lib        the parts of .deploy/lib.sh, function by function
@@ -39,6 +40,11 @@ suite_build() {
     "${HERE}/pipelines/build-suite.sh" || status=1
 }
 
+suite_umgap() {
+    heading "umgap build suite"
+    "${HERE}/pipelines/umgap-suite.sh" || status=1
+}
+
 suite_opensearch() {
     "${HERE}/opensearch/load-suite.sh" || status=1
 }
@@ -65,8 +71,8 @@ suite_seam() {
 status=0
 
 case ${1:-all} in
-    all) suite_lz; suite_shell; suite_verify; suite_lib; suite_build; suite_seam; suite_deploy; suite_opensearch ;;
-    lz | shell | verify | lib | build | seam | deploy | opensearch) "suite_${1}" ;;
+    all) suite_lz; suite_shell; suite_verify; suite_lib; suite_build; suite_umgap; suite_seam; suite_deploy; suite_opensearch ;;
+    lz | shell | verify | lib | build | umgap | seam | deploy | opensearch) "suite_${1}" ;;
     *) echo "unknown suite '${1}'" >&2; exit 1 ;;
 esac
 
