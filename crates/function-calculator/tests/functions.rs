@@ -23,15 +23,15 @@ fn test_counts_the_annotations_of_each_peptide() {
         .output()
         .unwrap();
 
-    // The keys of "data" come out sorted, and every row is followed by an empty line.
+    // The keys of "data" come out sorted.
     assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
     assert_eq!(
         String::from_utf8(output.stdout).unwrap(),
         concat!(
             r#"AAGGK	{"num":{"all":3,"EC":1,"GO":2,"IPR":1},"data":{"EC:1.1.1.1":1,"GO:0005515":1,"GO:0009279":1,"IPR:IPR016364":1}}"#,
-            "\n\n",
+            "\n",
             r#"EK	{"num":{"all":1,"EC":1,"GO":0,"IPR":0},"data":{"EC:1.1.1.1":1}}"#,
-            "\n\n"
+            "\n"
         )
     );
 }

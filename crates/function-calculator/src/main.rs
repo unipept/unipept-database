@@ -95,7 +95,7 @@ fn write_entry(
     let data = m.iter().map(|(key, value)| format!(r#""{key}":{value}"#)).collect::<Vec<String>>().join(",");
 
     println!(
-        "{current_peptide}\t{{\"num\":{{\"all\":{num_prot},\"EC\":{num_ec},\"GO\":{num_go},\"IPR\":{num_ip}}},\"data\":{{{data}}}}}\n"
+        "{current_peptide}\t{{\"num\":{{\"all\":{num_prot},\"EC\":{num_ec},\"GO\":{num_go},\"IPR\":{num_ip}}},\"data\":{{{data}}}}}"
     );
 }
 
