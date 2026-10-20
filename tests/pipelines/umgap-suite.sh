@@ -50,6 +50,10 @@ kmer_rc=$?
 build tryptic
 tryptic_rc=$?
 
+# The contents of each index, as kmer<TAB>taxon rows. Empty when the index is missing.
+umgap printindex "${WORK}/kmer/9-mer.index" > "${WORK}/kmer-index.tsv" 2> /dev/null
+umgap printindex "${WORK}/tryptic/tryptic.index" > "${WORK}/tryptic-index.tsv" 2> /dev/null
+
 
 section "kmer mode"
 check_true "the build succeeds" [ "$kmer_rc" -eq 0 ]
@@ -57,13 +61,13 @@ check_true "taxons.tsv is the fixture" cmp -s <(table kmer taxons) "${FIXTURES}/
 check "uniprot_entries.tsv has the fixture rows" \
     "$(table kmer uniprot_entries | rows_without_id)" "$(rows_without_id < "${FIXTURES}/uniprot_entries.tsv")"
 check "the index has every 9-mer of the corpus" \
-    "$(umgap printindex "${WORK}/kmer/9-mer.index" 2> /dev/null | wc -l)" \
+    "$(wc -l < "${WORK}/kmer-index.tsv")" \
     "$(cut -f 7 "${FIXTURES}/uniprot_entries.tsv" \
         | gawk '{ for (i = 1; i + 8 <= length($0); i++) print substr($0, i, 9) }' | LC_ALL=C sort -u | wc -l)"
 check "a 9-mer of one protein maps to its taxon" \
-    "$(umgap printindex "${WORK}/kmer/9-mer.index" 2> /dev/null | grep '^AAGGKEIVW')" $'AAGGKEIVW\t9503'
+    "$(grep '^AAGGKEIVW' "${WORK}/kmer-index.tsv")" $'AAGGKEIVW\t9503'
 check "a 9-mer of three taxa maps to their LCA" \
-    "$(umgap printindex "${WORK}/kmer/9-mer.index" 2> /dev/null | grep '^GEFIHPWQC')" $'GEFIHPWQC\t8287'
+    "$(grep '^GEFIHPWQC' "${WORK}/kmer-index.tsv")" $'GEFIHPWQC\t8287'
 
 
 section "tryptic mode"
@@ -74,7 +78,7 @@ check "uniprot_entries.tsv has the fixture rows" \
 check "a peptide of one taxon maps to it" "$(pept2lca YSEDVFR)" "8503"
 check "a peptide of several taxa maps to their LCA" "$(pept2lca AAGGK)" "1"
 check "every indexed peptide has its LCA from sequences.tsv" \
-    "$(LC_ALL=C comm -23 <(umgap printindex "${WORK}/tryptic/tryptic.index" 2> /dev/null | LC_ALL=C sort) \
+    "$(LC_ALL=C comm -23 <(LC_ALL=C sort "${WORK}/tryptic-index.tsv") \
         <(table tryptic sequences | cut -f 2,3 | LC_ALL=C sort))" ""
 
 
