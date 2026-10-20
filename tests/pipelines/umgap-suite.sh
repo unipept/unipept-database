@@ -31,13 +31,14 @@ use_fixture_sources "$WORK" || exit 1
 mkdir "${WORK}/cwd" && chmod a-w "${WORK}/cwd"
 [ "$(id -u)" -ne 0 ] || echo "running as root: a write to the current directory is not detected" >&2
 
+# Builds a mode into WORK/NAME, NAME being the mode unless given.
 build() {
-    local mode="$1"
+    local mode="$1" name="${2:-$1}"
 
     (cd "${WORK}/cwd" && "${REPO}/pipelines/umgap/build.sh" "$mode" --database-sources swissprot \
-        --output-dir "${WORK}/${mode}" --temp-dir "${WORK}/temp-${mode}") > "${WORK}/${mode}.log" 2>&1
+        --output-dir "${WORK}/${name}" --temp-dir "${WORK}/temp-${name}") > "${WORK}/${name}.log" 2>&1
     local rc=$?
-    [ "$rc" -eq 0 ] || tail -n 20 "${WORK}/${mode}.log" >&2
+    [ "$rc" -eq 0 ] || tail -n 20 "${WORK}/${name}.log" >&2
     return "$rc"
 }
 
@@ -53,6 +54,12 @@ build kmer
 kmer_rc=$?
 build tryptic
 tryptic_rc=$?
+
+# An lz4 that fails to read LCAs_equalized.tsv.lz4, which create_sequence_table reads through a FIFO.
+mkdir "${WORK}/bin"
+make_stub "${WORK}/bin/lz4" "case \"\$*\" in *LCAs_equalized*) exit 1 ;; esac; exec '$(command -v lz4)' \"\$@\"" > /dev/null
+PATH="${WORK}/bin:${PATH}" build tryptic feeder-fails 2> /dev/null
+feeder_rc=$?
 
 # The contents of each index, as kmer<TAB>taxon rows. Empty when the index is missing.
 umgap printindex "${WORK}/kmer/9-mer.index" > "${WORK}/kmer-index.tsv" 2> /dev/null
@@ -86,6 +93,14 @@ check "a peptide with an asparagine maps to its taxon" "$(pept2lca WNDET)" "8502
 check "the index has every peptide with an LCA in sequences.tsv and no other" \
     "$(LC_ALL=C sort "${WORK}/tryptic-index.tsv")" \
     "$(table tryptic sequences | cut -f 2,3 | grep -vF '\N' | LC_ALL=C sort)"
+
+
+
+section "a failed read into a FIFO"
+check_true "stops the build" [ "$feeder_rc" -ne 0 ]
+check "names the file" \
+    "$(grep -c 'Error: reading .*/LCAs_equalized.tsv.lz4 failed' "${WORK}/feeder-fails.log")" "1"
+check_true "leaves no sequences.tsv.lz4" [ ! -e "${WORK}/feeder-fails/sequences.tsv.lz4" ]
 
 
 summary
