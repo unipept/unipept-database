@@ -817,6 +817,8 @@ if [[ "$MODE" == "kmer" ]]; then
   parse_kmer_arguments "$@"
   set_sort_command
   checkDirectoryAndCreate "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT"
+  # sort writes its temporary files to TMPDIR. clean() restores it.
+  export TMPDIR="$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT"
   build_binaries "taxdmp-parser" "uniprot-parser"
   run_step create_taxon_tables "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT" "$OUTPUT_DIR"
   run_step download_and_process_uniprot_kmer "$DB_TYPES" "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT" "$OUTPUT_DIR"
@@ -825,6 +827,8 @@ elif [[ "$MODE" == "tryptic" ]]; then
   parse_tryptic_arguments "$@"
   set_sort_command
   checkDirectoryAndCreate "$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT"
+  # sort writes its temporary files to TMPDIR. clean() restores it.
+  export TMPDIR="$TEMP_DIR/$UNIPEPT_TEMP_CONSTANT"
   build_binaries "taxdmp-parser" "uniprot-parser-tryptic" "function-calculator" "lca-calculator"
   run_step create_taxon_tables "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT" "$OUTPUT_DIR"
   run_step download_and_process_uniprot_tryptic "$DB_TYPES" "$TEMP_DIR" "$UNIPEPT_TEMP_CONSTANT" "$OUTPUT_DIR" "$PEPTIDE_MIN_LENGTH" "$PEPTIDE_MAX_LENGTH"
