@@ -26,11 +26,15 @@ trap 'rm -rf "${WORK}"' EXIT
 
 use_fixture_sources "$WORK" || exit 1
 
-# From WORK, because build.sh makes its FIFOs in the current directory.
+# From a directory build.sh cannot write to, so a file it makes in the current directory fails the
+# build. Root ignores the mode.
+mkdir "${WORK}/cwd" && chmod a-w "${WORK}/cwd"
+[ "$(id -u)" -ne 0 ] || echo "running as root: a write to the current directory is not detected" >&2
+
 build() {
     local mode="$1"
 
-    (cd "$WORK" && "${REPO}/pipelines/umgap/build.sh" "$mode" --database-sources swissprot \
+    (cd "${WORK}/cwd" && "${REPO}/pipelines/umgap/build.sh" "$mode" --database-sources swissprot \
         --output-dir "${WORK}/${mode}" --temp-dir "${WORK}/temp-${mode}") > "${WORK}/${mode}.log" 2>&1
     local rc=$?
     [ "$rc" -eq 0 ] || tail -n 20 "${WORK}/${mode}.log" >&2
