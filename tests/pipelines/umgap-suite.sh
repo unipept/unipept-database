@@ -26,11 +26,12 @@ trap 'rm -rf "${WORK}"' EXIT
 
 use_fixture_sources "$WORK" || exit 1
 
+# From WORK, because build.sh makes its FIFOs in the current directory.
 build() {
     local mode="$1"
 
-    "${REPO}/pipelines/umgap/build.sh" "$mode" --database-sources swissprot \
-        --output-dir "${WORK}/${mode}" --temp-dir "${WORK}/temp-${mode}" > "${WORK}/${mode}.log" 2>&1
+    (cd "$WORK" && "${REPO}/pipelines/umgap/build.sh" "$mode" --database-sources swissprot \
+        --output-dir "${WORK}/${mode}" --temp-dir "${WORK}/temp-${mode}") > "${WORK}/${mode}.log" 2>&1
     local rc=$?
     [ "$rc" -eq 0 ] || tail -n 20 "${WORK}/${mode}.log" >&2
     return "$rc"
