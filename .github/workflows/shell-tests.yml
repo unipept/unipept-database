@@ -110,7 +110,7 @@ jobs:
       # rust-cache keeps ~/.cargo/bin, so a cached run skips the install.
       - name: Install umgap
         if: ${{ !cancelled() }}
-        run: cargo install umgap --version 1.2.0
+        run: cargo install --locked umgap --version 1.2.0
 
       - name: Run the umgap suite
         if: ${{ !cancelled() }}
