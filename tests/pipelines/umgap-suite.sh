@@ -31,12 +31,13 @@ use_fixture_sources "$WORK" || exit 1
 mkdir "${WORK}/cwd" && chmod a-w "${WORK}/cwd"
 [ "$(id -u)" -ne 0 ] || echo "running as root: a write to the current directory is not detected" >&2
 
-# Builds a mode into WORK/NAME, NAME being the mode unless given.
+# Builds a mode into WORK/NAME, NAME being the mode unless given. Further arguments go to build.sh.
 build() {
     local mode="$1" name="${2:-$1}"
+    shift 2 2> /dev/null || shift
 
     (cd "${WORK}/cwd" && "${REPO}/pipelines/umgap/build.sh" "$mode" --database-sources swissprot \
-        --output-dir "${WORK}/${name}" --temp-dir "${WORK}/temp-${name}") > "${WORK}/${name}.log" 2>&1
+        --output-dir "${WORK}/${name}" --temp-dir "${WORK}/temp-${name}" "$@") > "${WORK}/${name}.log" 2>&1
     local rc=$?
     [ "$rc" -eq 0 ] || tail -n 20 "${WORK}/${name}.log" >&2
     return "$rc"
@@ -52,8 +53,16 @@ pept2lca() { { echo '>q'; printf '%s\n' "$@"; } | umgap pept2lca "${WORK}/trypti
 
 build kmer
 kmer_rc=$?
+build kmer kmer-one-job --jobs 1
+one_job_rc=$?
 build tryptic
 tryptic_rc=$?
+
+# A cat that fails to read the unsorted L k-mers, which join_kmers concatenates.
+mkdir "${WORK}/join-bin"
+make_stub "${WORK}/join-bin/cat" "case \"\$*\" in *-L.lz4*) exit 1 ;; esac; exec '$(command -v cat)' \"\$@\"" > /dev/null
+PATH="${WORK}/join-bin:${PATH}" build kmer join-fails 2> /dev/null
+join_rc=$?
 
 # An lz4 that fails to read LCAs_equalized.tsv.lz4, which create_sequence_table reads through a FIFO.
 mkdir "${WORK}/bin"
@@ -79,6 +88,15 @@ check "a 9-mer of one protein maps to its taxon" \
     "$(grep '^AAGGKEIVW' "${WORK}/kmer-index.tsv")" $'AAGGKEIVW\t9503'
 check "a 9-mer of three taxa maps to their LCA" \
     "$(grep '^GEFIHPWQC' "${WORK}/kmer-index.tsv")" $'GEFIHPWQC\t8287'
+check_true "the build with one job succeeds" [ "$one_job_rc" -eq 0 ]
+check_true "one job builds the same index" cmp -s "${WORK}/kmer/9-mer.index" "${WORK}/kmer-one-job/9-mer.index"
+
+
+section "a failed k-mer join"
+check_true "stops the build" [ "$join_rc" -ne 0 ]
+check "names the amino acid" \
+    "$(grep -c 'Error: joining the L 9-mers failed' "${WORK}/join-fails.log")" "1"
+check_true "leaves no 9-mer.index" [ ! -e "${WORK}/join-fails/9-mer.index" ]
 
 
 section "tryptic mode"
