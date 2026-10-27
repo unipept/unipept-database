@@ -58,9 +58,9 @@ one_job_rc=$?
 build tryptic
 tryptic_rc=$?
 
-# A cat that fails to read the unsorted L k-mers, which join_kmers concatenates.
+# A sed that fails to keep the L k-mers in join_kmers.
 mkdir "${WORK}/join-bin"
-make_stub "${WORK}/join-bin/cat" "case \"\$*\" in *-L.lz4*) exit 1 ;; esac; exec '$(command -v cat)' \"\$@\"" > /dev/null
+make_stub "${WORK}/join-bin/sed" "case \"\$*\" in *'s/^L//p'*) exit 1 ;; esac; exec '$(command -v sed)' \"\$@\"" > /dev/null
 PATH="${WORK}/join-bin:${PATH}" build kmer join-fails 2> /dev/null
 join_rc=$?
 
