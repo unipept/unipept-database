@@ -8,8 +8,6 @@
 #     ghcr.io/unipept/unipept-database:<version> \
 #     opensearch/load.sh --opensearch-url http://localhost:9200 ...
 
-ARG UNIPEPT_INDEX_COMMIT=07ab4f2f834cf7f85d696a2d8fa210b95d611f99
-
 # The programs of this workspace, with stable Rust as CI builds them: rust-toolchain.toml, whose
 # nightly is for rustfmt, is not copied. Every program the build makes goes to /out.
 FROM rust:1-trixie AS workspace
@@ -23,7 +21,7 @@ RUN cargo build --release --locked \
 # rust-toolchain.toml, whose nightly is for rustfmt, is removed. Its libsais64-rs builds libsais
 # with cmake and generates the bindings with bindgen, which needs libclang.
 FROM rust:1-trixie AS sa-builder
-ARG UNIPEPT_INDEX_COMMIT
+ARG UNIPEPT_INDEX_COMMIT=07ab4f2f834cf7f85d696a2d8fa210b95d611f99
 RUN apt-get update -qq \
  && apt-get install -y -qq --no-install-recommends clang cmake libclang-dev \
  && rm -rf /var/lib/apt/lists/*
@@ -53,7 +51,3 @@ COPY --from=workspace /out/ target/release/
 COPY pipelines pipelines
 COPY opensearch opensearch
 COPY assets assets
-# build-info.txt records these commits. Last, so a new commit rebuilds no other layer.
-ARG UNIPEPT_INDEX_COMMIT
-ARG UNIPEPT_DATABASE_COMMIT=unknown
-ENV UNIPEPT_INDEX_COMMIT=$UNIPEPT_INDEX_COMMIT UNIPEPT_DATABASE_COMMIT=$UNIPEPT_DATABASE_COMMIT

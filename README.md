@@ -49,7 +49,8 @@ This script runs the steps above and builds a whole database in `<output-dir>/un
 
 ```sh
 docker run --rm --user "$(id -u):$(id -g)" -v /mnt/data:/mnt/data ghcr.io/unipept/unipept-database:<version> \
-  pipelines/suffix-array/build-database.sh --output-dir /mnt/data
+  pipelines/suffix-array/build-database.sh --output-dir /mnt/data \
+  --sparseness-factor 2 --kmer-size 5 --construction-algorithm lib-sais
 ```
 
 ### pipelines/umgap/build.sh

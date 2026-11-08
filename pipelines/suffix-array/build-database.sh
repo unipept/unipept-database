@@ -15,16 +15,20 @@ source "${CURRENT_LOCATION}/../lib/common.sh"
 
 DATABASE_SOURCES="swissprot,trembl"
 OUTPUT_DIR=""
+SPARSENESS_FACTOR=""
+KMER_SIZE=""
+CONSTRUCTION_ALGORITHM=""
 
 print_help() {
-  echo "Usage: $0 --output-dir DIR [OPTIONS]"
+  echo "Usage: $0 --output-dir DIR --sparseness-factor N --kmer-size K --construction-algorithm NAME [OPTIONS]"
   echo ""
   echo "Options:"
-  echo "  --output-dir        Directory that holds the databases (required)."
-  echo "  --database-sources  Comma-separated list of database sources ('swissprot', 'trembl'), (optional, default: 'swissprot,trembl')."
-  echo "  --help              Prints this help message."
-  echo ""
-  echo "build-info.txt records the commits in UNIPEPT_DATABASE_COMMIT and UNIPEPT_INDEX_COMMIT, which the image sets."
+  echo "  --output-dir              Directory that holds the databases (required)."
+  echo "  --sparseness-factor       Index every N-th position of the protein text (required)."
+  echo "  --kmer-size               The k of the k-mer table (required)."
+  echo "  --construction-algorithm  The algorithm sa-builder builds the suffix array with (required)."
+  echo "  --database-sources        Comma-separated list of database sources ('swissprot', 'trembl'), (optional, default: 'swissprot,trembl')."
+  echo "  --help                    Prints this help message."
   echo ""
 }
 
@@ -42,12 +46,18 @@ parse_arguments() {
     case "$1" in
       --output-dir) option_value "$1" "${2-}"; OUTPUT_DIR="$2"; shift 2 ;;
       --database-sources) option_value "$1" "${2-}"; DATABASE_SOURCES="$2"; shift 2 ;;
+      --sparseness-factor) option_value "$1" "${2-}"; SPARSENESS_FACTOR="$2"; shift 2 ;;
+      --kmer-size) option_value "$1" "${2-}"; KMER_SIZE="$2"; shift 2 ;;
+      --construction-algorithm) option_value "$1" "${2-}"; CONSTRUCTION_ALGORITHM="$2"; shift 2 ;;
       --help) print_help; exit 0 ;;
       *) fail "unknown option '$1'. Run with --help for the options." ;;
     esac
   done
 
   [ -n "$OUTPUT_DIR" ] || fail "--output-dir is required."
+  [ -n "$SPARSENESS_FACTOR" ] || fail "--sparseness-factor is required."
+  [ -n "$KMER_SIZE" ] || fail "--kmer-size is required."
+  [ -n "$CONSTRUCTION_ALGORITHM" ] || fail "--construction-algorithm is required."
 }
 
 parse_arguments "$@"
@@ -66,7 +76,10 @@ mkdir -p "$STAGING"/{tables,suffix-array,temp}
 
 "$CURRENT_LOCATION/build-index.sh" \
   --uniprot-entries "$STAGING/tables/uniprot_entries.tsv.lz4" \
-  --output-dir "$STAGING/suffix-array"
+  --output-dir "$STAGING/suffix-array" \
+  --sparseness-factor "$SPARSENESS_FACTOR" \
+  --kmer-size "$KMER_SIZE" \
+  --construction-algorithm "$CONSTRUCTION_ALGORITHM"
 
 "$CURRENT_LOCATION/fill-datastore.sh" \
   --tables-dir "$STAGING/tables" \
@@ -87,14 +100,6 @@ VERSION=$(tr -d '[:space:]' < "$STAGING/suffix-array/.version" | tr '.' '-')
 
 TARGET="$OUTPUT_DIR/uniprot-$VERSION"
 [ ! -e "$TARGET" ] || fail "$TARGET already exists. The build is in $STAGING."
-
-cat > "$STAGING/suffix-array/build-info.txt" <<INFO
-built: $(date -u +'%F %T UTC')
-uniprot: ${VERSION}
-unipept-database: ${UNIPEPT_DATABASE_COMMIT:-unknown}
-unipept-index: ${UNIPEPT_INDEX_COMMIT:-unknown}
-sources: ${DATABASE_SOURCES}
-INFO
 
 rm -rf "$STAGING/temp"
 mv "$STAGING" "$TARGET"
