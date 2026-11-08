@@ -16,15 +16,17 @@ COPY crates crates
 RUN cargo build --release --locked \
  && mkdir /out && find target/release -maxdepth 1 -type f -executable -exec cp {} /out/ \;
 
-# sa-builder, at the unipept-index commit this image records. Its libsais64-rs builds libsais with
-# cmake and generates the bindings with bindgen, which needs libclang.
+# sa-builder, at the unipept-index commit this image records, with stable Rust: the clone's
+# rust-toolchain.toml, whose nightly is for rustfmt, is removed. Its libsais64-rs builds libsais
+# with cmake and generates the bindings with bindgen, which needs libclang.
 FROM rust:1-bookworm AS sa-builder
 ARG UNIPEPT_INDEX_COMMIT=07ab4f2f834cf7f85d696a2d8fa210b95d611f99
 RUN apt-get update -qq \
  && apt-get install -y -qq --no-install-recommends clang cmake libclang-dev \
  && rm -rf /var/lib/apt/lists/*
 RUN git clone --quiet https://github.com/unipept/unipept-index.git /src \
- && git -C /src checkout --quiet "$UNIPEPT_INDEX_COMMIT"
+ && git -C /src checkout --quiet "$UNIPEPT_INDEX_COMMIT" \
+ && rm /src/rust-toolchain.toml
 WORKDIR /src
 RUN cargo build --release --locked -p sa-builder
 
