@@ -37,6 +37,23 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      # A tag publishes the image, so it must be a version on reviewed code.
+      - name: Check the tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! $GITHUB_REF_NAME =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::$GITHUB_REF_NAME is not vX.Y.Z or vX.Y.Z-<pre>."
+            exit 1
+          fi
+          if ! git merge-base --is-ancestor "$GITHUB_REF_NAME" origin/main; then
+            echo "::error::$GITHUB_REF_NAME is not on main. Merge first, then tag."
+            exit 1
+          fi
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
