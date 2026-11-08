@@ -35,6 +35,7 @@ setup_checkout() {
 
     copy_deploy_scripts /repo "$CHECKOUT"
     cp /repo/pipelines/lib/common.sh "${CHECKOUT}/pipelines/lib/"
+    cp /repo/pipelines/suffix-array/build-index.sh "${CHECKOUT}/pipelines/suffix-array/"
     # What install.sh installs beside the loader, which is a stand-in below.
     cp /repo/opensearch/bulk_load.py "${CHECKOUT}/opensearch/"
     cp /repo/opensearch/mappings/uniprot_entries.json "${CHECKOUT}/opensearch/mappings/"
