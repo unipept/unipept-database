@@ -7,14 +7,14 @@
 #   docker run --rm --network host -v /mnt/data:/mnt/data ghcr.io/unipept/unipept-database:<version> \
 #     opensearch/load.sh --opensearch-url http://localhost:9200 ...
 
-# The programs of this workspace, with stable Rust as CI builds them; rust-toolchain.toml's nightly
-# is only for rustfmt.
+# The programs of this workspace, with stable Rust as CI builds them: rust-toolchain.toml, whose
+# nightly is for rustfmt, is not copied. Every program the build makes goes to /out.
 FROM rust:1-bookworm AS workspace
-ENV RUSTUP_TOOLCHAIN=stable
 WORKDIR /src
 COPY Cargo.toml Cargo.lock ./
 COPY crates crates
-RUN cargo build --release --locked
+RUN cargo build --release --locked \
+ && mkdir /out && find target/release -maxdepth 1 -type f -executable -exec cp {} /out/ \;
 
 # sa-builder, at the unipept-index commit this image records. Its libsais64-rs builds libsais with
 # cmake and generates the bindings with bindgen, which needs libclang.
@@ -36,17 +36,14 @@ RUN cargo install --locked --version "$UMGAP_VERSION" umgap
 FROM debian:bookworm-slim
 RUN apt-get update -qq \
  && apt-get install -y -qq --no-install-recommends \
-      bash ca-certificates coreutils curl gawk libxml2-utils lz4 pigz procps pv python3 \
-      python3-requests unzip uuid-runtime zip \
+      ca-certificates curl gawk libxml2-utils lz4 pigz pv python3 python3-requests unzip \
+      uuid-runtime zip \
  && rm -rf /var/lib/apt/lists/*
 WORKDIR /opt/unipept-database
-COPY pipelines pipelines
-COPY opensearch opensearch
-# Where the pipelines look for the workspace's programs (RUST_BIN_DIR in pipelines/lib/common.sh).
-COPY --from=workspace \
-     /src/target/release/function-calculator /src/target/release/lca-calculator \
-     /src/target/release/taxdmp-parser /src/target/release/uniprot-parser \
-     /src/target/release/uniprot-parser-tryptic \
-     target/release/
+# The pipelines use these programs instead of building them (build_binaries in pipelines/lib/common.sh).
+ENV PREBUILT_BINARIES=true
 COPY --from=sa-builder /src/target/release/sa-builder /usr/local/bin/
 COPY --from=umgap /usr/local/cargo/bin/umgap /usr/local/bin/
+COPY --from=workspace /out/ target/release/
+COPY pipelines pipelines
+COPY opensearch opensearch

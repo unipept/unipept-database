@@ -5,7 +5,7 @@ This collection of scripts is provided to download and process that database (or
 
 ## The image
 
-`ghcr.io/unipept/unipept-database:<version>` holds the data tools in one image: `pipelines/`, the Rust programs they run, `sa-builder` from unipept-index, `umgap`, and `opensearch/`, the loader. `Dockerfile` builds it; a version tag (`v2.0.0`, …) publishes it through `.github/workflows/image.yml`, which also builds and checks it on every pull request that changes it. Mount the host's database directory at the same path:
+`ghcr.io/unipept/unipept-database:<version>` holds the data tools in one image: `pipelines/`, the Rust programs they run, `sa-builder` from unipept-index, `umgap`, and `opensearch/`, the loader. `Dockerfile` builds it; a version tag (`v2.0.0`, …) publishes it through `.github/workflows/image.yml`, which also builds and checks it on every pull request that changes it. Push the tag only (`git tag v2.0.0 && git push origin v2.0.0`), without a GitHub release: unipept-desktop reads the release marked Latest, which `static_database.yml` sets on the monthly static database. A release for a version tag, if there is one, needs `--latest=false` (or *Set as the latest release* unticked). Mount the host's database directory at the same path:
 
 ```sh
 docker run --rm --network host -v /mnt/data:/mnt/data ghcr.io/unipept/unipept-database:<version> \
@@ -13,7 +13,7 @@ docker run --rm --network host -v /mnt/data:/mnt/data ghcr.io/unipept/unipept-da
   --uniprot-entries /mnt/data/uniprot-2026-03/tables/uniprot_entries.tsv.lz4
 ```
 
-Without `cargo`, as in the image, the pipelines use the programs already built in `target/release`.
+With `PREBUILT_BINARIES=true`, as the image sets, the pipelines use the programs in `target/release` instead of building them with `cargo`.
 
 ## Most important scripts
 

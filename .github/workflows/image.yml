@@ -4,7 +4,7 @@ name: Image
 
 on:
   push:
-    tags: ["v*"]
+    tags: ["v[0-9]*"]
   pull_request:
     paths:
       - Dockerfile
@@ -38,22 +38,30 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      - name: Build the image
-        run: docker build --tag unipept-database:check .
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
 
+      - name: Build the image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          tags: unipept-database:check
+          load: true
+          cache-from: type=gha,scope=image
+          cache-to: type=gha,scope=image,mode=max
+
+      # The tools and programs the scripts check for, read from the scripts themselves, through
+      # their own checkdep and build_binaries.
       - name: Check the tools in the image
         run: |
           docker run --rm unipept-database:check bash -euo pipefail -c '
-            for program in function-calculator lca-calculator taxdmp-parser uniprot-parser uniprot-parser-tryptic; do
-              test -x "target/release/$program"
+            . pipelines/lib/common.sh
+            for tool in $(grep -h -o -E "checkdep \"?[a-z0-9_-]+" pipelines/*/build.sh opensearch/load.sh | grep -o -E "[a-z0-9_-]+$" | sort -u); do
+              checkdep "$tool"
             done
-            sa-builder --help > /dev/null
-            umgap --version
-            opensearch/load.sh --help > /dev/null
-            for tool in curl gawk lz4 pigz pv python3 unzip uuidgen xmllint zip; do
-              command -v "$tool" > /dev/null
-            done
-            python3 -c "import requests"'
+            build_binaries $(grep -h -o -E "build_binaries( \"[a-z-]+\")+" pipelines/*/build.sh | grep -o -E "[a-z-]+\"" | tr -d "\"" | sort -u)
+            python3 -c "import requests"
+            sa-builder --help > /dev/null'
 
       - name: Push the image
         if: startsWith(github.ref, 'refs/tags/v')
