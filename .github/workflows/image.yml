@@ -1,0 +1,94 @@
+# Builds the image of the data tools (Dockerfile) and checks its tools. A version tag also pushes it
+# as ghcr.io/unipept/unipept-database:<version>, which unipept-apps' playbooks run.
+name: Image
+
+on:
+  push:
+    tags: ["v[0-9]*"]
+  pull_request:
+    paths:
+      - Dockerfile
+      - .dockerignore
+      - Cargo.toml
+      - Cargo.lock
+      - "crates/**"
+      - "pipelines/**"
+      - "opensearch/**"
+      - .github/workflows/image.yml
+  workflow_dispatch:
+
+# A new push to a pull request cancels the older run.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  image:
+    name: Image
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      # A tag publishes the image, so it must be a version on reviewed code.
+      - name: Check the tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! $GITHUB_REF_NAME =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::$GITHUB_REF_NAME is not vX.Y.Z or vX.Y.Z-<pre>."
+            exit 1
+          fi
+          if ! git merge-base --is-ancestor "$GITHUB_REF_NAME" origin/main; then
+            echo "::error::$GITHUB_REF_NAME is not on main. Merge first, then tag."
+            exit 1
+          fi
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build the image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          tags: unipept-database:check
+          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          load: true
+          cache-from: type=gha,scope=image
+          cache-to: type=gha,scope=image,mode=max
+
+      # The tools and programs the scripts check for, read from the scripts themselves, through
+      # their own checkdep and build_binaries.
+      - name: Check the tools in the image
+        run: |
+          docker run --rm unipept-database:check bash -euo pipefail -c '
+            . pipelines/lib/common.sh
+            for tool in $(grep -h -o -E "checkdep \"?[a-z0-9_-]+" pipelines/*/build.sh opensearch/load.sh | grep -o -E "[a-z0-9_-]+$" | sort -u); do
+              checkdep "$tool"
+            done
+            build_binaries $(grep -h -o -E "build_binaries( \"[a-z-]+\")+" pipelines/*/build.sh | grep -o -E "[a-z-]+\"" | tr -d "\"" | sort -u)
+            python3 -c "import requests"
+            sa-builder --help > /dev/null'
+
+      - name: Push the image
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          image="ghcr.io/${GITHUB_REPOSITORY}:${GITHUB_REF_NAME#v}"
+          docker tag unipept-database:check "$image"
+          echo "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          docker push "$image"

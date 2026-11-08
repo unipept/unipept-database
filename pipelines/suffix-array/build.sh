@@ -249,7 +249,6 @@ print_help() {
 # Now, start running the actual script and all of it's functions
 
 # Check if all the dependencies are installed
-checkdep cargo "Rust toolchain"
 checkdep curl
 checkdep uuidgen
 checkdep pv

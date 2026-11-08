@@ -588,25 +588,38 @@ $CMD_AWK '
 ################################################################################
 # build_binaries                                                               #
 #                                                                              #
-# Builds the release binaries of the Cargo workspace                           #
-# This function ensures that all the required binaries are available for the   #
-# database building process.                                                   #
+# Builds the release binaries of the given Cargo packages. With                #
+# PREBUILT_BINARIES=true, as the image of the data tools sets, it builds       #
+# nothing and checks that the binaries are already in RUST_BIN_DIR.            #
 #                                                                              #
 # Globals:                                                                     #
-#   CURRENT_LOCATION - Directory where the script is currently running         #
+#   RUST_BIN_DIR      - Where the release binaries are                         #
+#   PREBUILT_BINARIES - true to use those binaries instead of building them    #
 #                                                                              #
 # Arguments:                                                                   #
-#   None                                                                       #
+#   $@ - The Cargo packages                                                    #
 #                                                                              #
 # Outputs:                                                                     #
 #   None                                                                       #
 #                                                                              #
 # Returns:                                                                     #
-#   None                                                                       #
+#   None; exits with status code 6 if cargo or a prebuilt binary is missing    #
 ################################################################################
 build_binaries() {
-  local packages=()
   local package
+  if [ "${PREBUILT_BINARIES:-false}" = true ]
+  then
+    for package in "$@"
+    do
+      [ -x "$RUST_BIN_DIR/$package" ] || {
+        echo "PREBUILT_BINARIES is true, but there is no $RUST_BIN_DIR/$package." >&2
+        exit 6
+      }
+    done
+    return
+  fi
+  checkdep cargo "Rust toolchain"
+  local packages=()
   for package in "$@"
   do
     packages+=(-p "$package")

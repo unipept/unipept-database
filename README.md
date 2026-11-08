@@ -3,6 +3,19 @@
 The Unipept [metaproteomics] and [metagenomics] pipelines operate on data found in the [UniProtKB](https://www.uniprot.org/) database. 
 This collection of scripts is provided to download and process that database (or others) into range of `tsv`-files that can directly be used by the Unipept pipeline.
 
+## The image
+
+`ghcr.io/unipept/unipept-database:<version>` holds the data tools in one image: `pipelines/`, the Rust programs they run, `sa-builder` from unipept-index, `umgap`, and `opensearch/`, the loader. `Dockerfile` builds it; a version tag on `main` (`v2.0.0`, `v2.0.0-rc.1`, …) publishes it through `.github/workflows/image.yml`, which also builds and checks it on every pull request that changes it. Push the tag only (`git tag v2.0.0 && git push origin v2.0.0`), without a GitHub release: unipept-desktop reads the release marked Latest, which `static_database.yml` sets on the monthly static database. A release for a version tag, if there is one, needs `--latest=false` (or *Set as the latest release* unticked). Mount the host's database directory at the same path, and run as the user who owns it: the image's default user is root, and a build as root leaves a database that user cannot replace.
+
+```sh
+docker run --rm --user "$(id -u):$(id -g)" --network host -v /mnt/data:/mnt/data \
+  ghcr.io/unipept/unipept-database:<version> \
+  opensearch/load.sh --opensearch-url http://localhost:9200 --index-name uniprot_entries-2026-03 \
+  --uniprot-entries /mnt/data/uniprot-2026-03/tables/uniprot_entries.tsv.lz4
+```
+
+With `PREBUILT_BINARIES=true`, as the image sets, the pipelines use the programs in `target/release` instead of building them with `cargo`.
+
 ## Most important scripts
 
 ### pipelines/suffix-array/build.sh
