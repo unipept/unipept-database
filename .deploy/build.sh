@@ -136,19 +136,11 @@ build_suffix_array() {
 
 # The tables the API reads, uncompressed, beside the index.
 fill_datastore() {
-    local build_dir="$1" datastore="$1/suffix-array/datastore"
+    local build_dir="$1"
 
-    mkdir -p "$datastore"
-
-    local table
-    for table in "${DATASTORE_TABLES[@]}"; do
-        lz4cat "${build_dir}/tables/${table}.tsv.lz4" > "${datastore}/${table}.tsv"
-        rm "${build_dir}/tables/${table}.tsv.lz4"
-    done
-
-    cp "${HERE}/../assets/sampledata.json" "${datastore}/sampledata.json"
-    cp "${build_dir}/tables/.version" "${build_dir}/suffix-array/.version"
-    log "Filled the datastore."
+    "${HERE}/../pipelines/suffix-array/fill-datastore.sh" \
+        --tables-dir "${build_dir}/tables" \
+        --output-dir "${build_dir}/suffix-array"
 }
 
 # Stops a build the host has no room for, before anything is removed or built. The suffix array is

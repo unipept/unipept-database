@@ -15,8 +15,8 @@ readonly ENTRIES_TABLE=tables/uniprot_entries.tsv.lz4
 
 # What the API needs under the directory it is pointed at, relative to it. The API checks for
 # exactly these before it starts, so adding or removing one needs the same change on the API side.
-# The tables come from DATASTORE_TABLES, so one fill_datastore writes is one check_index_files
-# checks.
+# The tables come from DATASTORE_TABLES, which has to match the list in
+# pipelines/suffix-array/fill-datastore.sh.
 INDEX_FILES=(.version sa.bin proteins.bin mapping.bin datastore/sampledata.json)
 for datastore_table in "${DATASTORE_TABLES[@]}"; do
     INDEX_FILES+=("datastore/${datastore_table}.tsv")

@@ -43,6 +43,16 @@ pipelines/suffix-array/build-index.sh --uniprot-entries /mnt/data/build/tables/u
   --sparseness-factor 2 --kmer-size 5 --construction-algorithm lib-sais
 ```
 
+### pipelines/suffix-array/build-database.sh
+
+This script runs the steps above and builds a whole database in `<output-dir>/uniprot-<YYYY-MM>`: `suffix-array/` is the directory the API reads, and `tables/` holds the entries for OpenSearch. The version comes from the UniProtKB release it downloads. It stops if a database of that version already exists. It loads nothing into OpenSearch.
+
+```sh
+docker run --rm --user "$(id -u):$(id -g)" -v /mnt/data:/mnt/data ghcr.io/unipept/unipept-database:<version> \
+  pipelines/suffix-array/build-database.sh --output-dir /mnt/data \
+  --sparseness-factor 2 --kmer-size 5 --construction-algorithm lib-sais
+```
+
 ### pipelines/umgap/build.sh
 
 This script is responsible for parsing datasets to generate files required by the Unipept metagenomics pipeline, which constructs a metagenomics index. 

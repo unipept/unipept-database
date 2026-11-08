@@ -48,5 +48,6 @@ ENV PREBUILT_BINARIES=true
 COPY --from=sa-builder /src/target/release/sa-builder /usr/local/bin/
 COPY --from=umgap /usr/local/cargo/bin/umgap /usr/local/bin/
 COPY --from=workspace /out/ target/release/
+COPY assets assets
 COPY pipelines pipelines
 COPY opensearch opensearch
