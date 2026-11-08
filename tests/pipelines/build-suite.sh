@@ -117,4 +117,43 @@ check "a missing table is refused" "$?" "1"
 check_true "before anything is written" test ! -e "${WORK}/refused"
 
 
+section "a whole database, with a stand-in sa-builder"
+build_database() {
+    UNIPEPT_DATABASE_COMMIT=database-commit UNIPEPT_INDEX_COMMIT=index-commit PATH="${WORK}/bin:${PATH}" \
+        "${REPO}/pipelines/suffix-array/build-database.sh" --database-sources swissprot \
+        --output-dir "${WORK}/databases" > "${WORK}/database.log" 2>&1
+}
+
+database="${WORK}/databases/uniprot-2026-09"
+build_database
+rc=$?
+[ "$rc" -eq 0 ] || tail -n 20 "${WORK}/database.log" >&2
+check "the build succeeds" "$rc" "0"
+for file in .version sa.bin proteins.bin mapping.bin kmer_table.bin build-info.txt datastore/sampledata.json \
+    datastore/{taxons,lineages,interpro_entries,go_terms,ec_numbers,proteomes}.tsv; do
+    check_true "suffix-array/${file} is there" test -s "${database}/suffix-array/${file}"
+done
+check "the .version beside the index" "$(cat "${database}/suffix-array/.version")" "2026.09"
+check_true "the entries for OpenSearch are kept" test -s "${database}/tables/uniprot_entries.tsv.lz4"
+check_true "the compressed datastore tables are removed" test ! -e "${database}/tables/taxons.tsv.lz4"
+check_true "the temporary files are removed" test ! -e "${database}/temp"
+check_true "the staging directory is gone" test ! -e "${WORK}/databases/.build"
+check "build-info.txt names the version" "$(grep '^uniprot:' "${database}/suffix-array/build-info.txt")" "uniprot: 2026-09"
+check "and this repository's commit" \
+    "$(grep '^unipept-database:' "${database}/suffix-array/build-info.txt")" "unipept-database: database-commit"
+check "and the commit of unipept-index" \
+    "$(grep '^unipept-index:' "${database}/suffix-array/build-info.txt")" "unipept-index: index-commit"
+check "and the sources" "$(grep '^sources:' "${database}/suffix-array/build-info.txt")" "sources: swissprot"
+
+printf 'do not lose me\n' > "${database}/marker"
+build_database
+check "a version that is already there is refused" "$?" "1"
+check_true "the database that was there is kept" test -f "${database}/marker"
+check_true "and so is the build" test -s "${WORK}/databases/.build/suffix-array/sa.bin"
+
+SA_BUILDER_STATUS=3 build_database
+check "a failed sa-builder fails the build" "$?" "3"
+check_true "and leaves no build-info.txt" test ! -e "${WORK}/databases/.build/suffix-array/build-info.txt"
+
+
 summary
