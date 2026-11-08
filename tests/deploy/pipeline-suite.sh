@@ -91,7 +91,7 @@ check_true "the staging directory is gone" test ! -d "${OUT}/.build"
 
 section "the tables the pipeline actually writes"
 
-# build.sh names these in PIPELINE_TABLES and DATASTORE_TABLES. If the pipeline renamed one, the
+# .deploy/lib/database.sh names these in PIPELINE_TABLES and DATASTORE_TABLES. If the pipeline renamed one, the
 # build would have stopped above; these say which side of the seam the names came from.
 for table in taxons lineages interpro_entries go_terms ec_numbers proteomes; do
     check_true "datastore/${table}.tsv has rows" test -s "${INDEX_DIR}/datastore/${table}.tsv"
@@ -104,7 +104,7 @@ check_true "the entries table is kept for clone.sh" \
 
 section "the columns handed to sa-builder"
 
-# build.sh cuts fields 2,4,7,8 out of uniprot_entries.tsv. The column layout is a contract three
+# build-index.sh cuts fields 2,4,7,8 out of uniprot_entries.tsv. The column layout is a contract three
 # consumers slice by position, and this is the one that no parser test covers.
 given="${WORK}/proteins-given-to-sa-builder.tsv"
 entries="$(lz4 -dc "${OUT}/uniprot-2026-09/tables/uniprot_entries.tsv.lz4" | wc -l | tr -d ' ')"

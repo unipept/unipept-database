@@ -94,6 +94,32 @@ checkdep() {
 }
 
 ################################################################################
+# fail                                                                         #
+#                                                                              #
+# Prints an error message to stderr and exits with status code 1.              #
+#                                                                              #
+# Arguments:                                                                   #
+#   $1 - The error message                                                     #
+################################################################################
+fail() {
+    echo "Error: $1" >&2
+    exit 1
+}
+
+################################################################################
+# option_value                                                                 #
+#                                                                              #
+# Fails if a command line option has no value.                                 #
+#                                                                              #
+# Arguments:                                                                   #
+#   $1 - The option                                                            #
+#   $2 - The value that follows the option, if any                             #
+################################################################################
+option_value() {
+    { [ -n "${2-}" ] && [[ "$2" != --* ]]; } || fail "$1 requires a value."
+}
+
+################################################################################
 # log                                                                          #
 #                                                                              #
 # Logs a timestamped message to standard output. The format includes an epoch  #

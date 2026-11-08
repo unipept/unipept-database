@@ -126,24 +126,12 @@ build_suffix_array() {
 
     cargo build --release --quiet --manifest-path "${index_dir}/Cargo.toml"
 
-    # The four columns sa-builder reads: accession, taxon, sequence, annotations.
-    lz4cat "${build_dir}/${ENTRIES_TABLE}" | cut -f2,4,7,8 > "${build_dir}/suffix-array/proteins.tsv"
-
-    log "Started building the suffix array."
-    "${index_dir}/target/release/sa-builder" \
-        --database-file "${build_dir}/suffix-array/proteins.tsv" \
-        --output-sa "${build_dir}/suffix-array/sa.bin" \
-        --output-proteins "${build_dir}/suffix-array/proteins.bin" \
-        --output-mapping "${build_dir}/suffix-array/mapping.bin" \
-        --output-kmer-table "${build_dir}/suffix-array/kmer_table.bin" \
-        --kmer-size "$SA_KMER_SIZE" \
+    PATH="${index_dir}/target/release:${PATH}" "${HERE}/../pipelines/suffix-array/build-index.sh" \
+        --uniprot-entries "${build_dir}/${ENTRIES_TABLE}" \
+        --output-dir "${build_dir}/suffix-array" \
         --sparseness-factor "$SA_SPARSENESS" \
-        --construction-algorithm "$SA_ALGORITHM" \
-        --compress-sa
-    log "Finished building the suffix array."
-
-    # Around 100 GB on full UniProt, and read by nothing after this point.
-    rm -f "${build_dir}/suffix-array/proteins.tsv"
+        --kmer-size "$SA_KMER_SIZE" \
+        --construction-algorithm "$SA_ALGORITHM"
 }
 
 # The tables the API reads, uncompressed, beside the index.

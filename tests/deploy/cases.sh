@@ -4,7 +4,7 @@
 # read-only and everything this writes under /work.
 #
 # What is real here: build.sh, clone.sh, load.sh, verify.sh, distribute.sh and both installs
-# themselves, git, ssh and scp. What is stood in for: the pipeline, sa-builder and the OpenSearch
+# themselves, git, ssh and scp. What is stood in for: the table pipeline, sa-builder and the OpenSearch
 # loader, each of which has a suite of its own, and the apt, dpkg, systemd and instance the installs
 # drive.
 #
@@ -35,6 +35,7 @@ setup_checkout() {
 
     copy_deploy_scripts /repo "$CHECKOUT"
     cp /repo/pipelines/lib/common.sh "${CHECKOUT}/pipelines/lib/"
+    cp /repo/pipelines/suffix-array/build-index.sh "${CHECKOUT}/pipelines/suffix-array/"
     # What install.sh installs beside the loader, which is a stand-in below.
     cp /repo/opensearch/bulk_load.py "${CHECKOUT}/opensearch/"
     cp /repo/opensearch/mappings/uniprot_entries.json "${CHECKOUT}/opensearch/mappings/"
@@ -180,6 +181,8 @@ check_true "the k-mer table is built" \
     test -s "${OUT}/uniprot-2026-03/suffix-array/kmer_table.bin"
 check "sa-builder was asked for the k-mer table" \
     "$(grep -c -- '--output-kmer-table' /work/sa-builder-calls)" "1"
+check "with the settings of a production index" \
+    "$(grep -c -- '--kmer-size 5 --sparseness-factor 2 --construction-algorithm lib-sais' /work/sa-builder-calls)" "1"
 # Loading is load.sh's, which is what lets a load that fails be rerun without building again.
 check_true "nothing is loaded into OpenSearch" test ! -e /work/loader-calls
 check_true "it says how to load it, with this checkout's load.sh" grep -qF "${CHECKOUT}/.deploy/server/load.sh --uniprot-version 2026-03" /work/last-output
