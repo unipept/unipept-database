@@ -1,11 +1,11 @@
 # The data tools in one image: the pipelines that build a database, the Rust programs they run,
 # sa-builder from unipept-index, umgap, and the loader that puts the proteins into OpenSearch. One
 # version for all of them, so the tables a build writes fit the mapping the loader uses.
-# .github/workflows/image.yml builds it; a version tag publishes it to ghcr.io/unipept/unipept-database.
+# .github/workflows/image.yml builds it; a version tag publishes it to ghcr.io/unipept/database-tools.
 #
 # A run mounts the host's database directory at the same path, as the user who owns it, for example:
 #   docker run --rm --user "$(id -u):$(id -g)" --network host -v /mnt/data:/mnt/data \
-#     ghcr.io/unipept/unipept-database:<version> \
+#     ghcr.io/unipept/database-tools:<version> \
 #     opensearch/load.sh --opensearch-url http://localhost:9200 ...
 
 # The programs of this workspace, with stable Rust as CI builds them: rust-toolchain.toml, whose
