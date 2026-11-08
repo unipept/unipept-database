@@ -3,8 +3,9 @@
 # version for all of them, so the tables a build writes fit the mapping the loader uses.
 # .github/workflows/image.yml builds it; a version tag publishes it to ghcr.io/unipept/unipept-database.
 #
-# A run mounts the host's database directory at the same path, for example:
-#   docker run --rm --network host -v /mnt/data:/mnt/data ghcr.io/unipept/unipept-database:<version> \
+# A run mounts the host's database directory at the same path, as the user who owns it, for example:
+#   docker run --rm --user "$(id -u):$(id -g)" --network host -v /mnt/data:/mnt/data \
+#     ghcr.io/unipept/unipept-database:<version> \
 #     opensearch/load.sh --opensearch-url http://localhost:9200 ...
 
 # The programs of this workspace, with stable Rust as CI builds them: rust-toolchain.toml, whose
