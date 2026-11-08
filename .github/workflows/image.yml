@@ -104,7 +104,10 @@ jobs:
           for file in .version sa.bin proteins.bin mapping.bin kmer_table.bin datastore/sampledata.json datastore/taxons.tsv; do
             test -s "$index/$file"
           done
-          ! grep -q unknown "$index/build-info.txt"
+          if grep -q unknown "$index/build-info.txt"; then
+            cat "$index/build-info.txt"
+            exit 1
+          fi
           test ! -e "$work/data/.build"
 
       - name: Push the image
