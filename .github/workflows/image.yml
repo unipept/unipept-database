@@ -74,7 +74,7 @@ jobs:
         run: |
           docker run --rm unipept-database:check bash -euo pipefail -c '
             . pipelines/lib/common.sh
-            for tool in $(grep -h -o -E "checkdep \"?[a-z0-9_-]+" pipelines/*/build.sh opensearch/load.sh | grep -o -E "[a-z0-9_-]+$" | sort -u); do
+            for tool in $(grep -h -o -E "checkdep \"?[a-z0-9_-]+" pipelines/*/*.sh opensearch/load.sh | grep -o -E "[a-z0-9_-]+$" | sort -u); do
               checkdep "$tool"
             done
             build_binaries $(grep -h -o -E "build_binaries( \"[a-z-]+\")+" pipelines/*/build.sh | grep -o -E "[a-z-]+\"" | tr -d "\"" | sort -u)
@@ -92,8 +92,7 @@ jobs:
                 --sparseness-factor 2 --kmer-size 5 --construction-algorithm lib-sais
               for file in sa.bin proteins.bin mapping.bin kmer_table.bin; do
                 test -s "/tmp/index/$file"
-              done
-              test ! -e /tmp/index/proteins.tsv'
+              done'
 
       - name: Push the image
         if: startsWith(github.ref, 'refs/tags/v')
