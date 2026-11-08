@@ -1,5 +1,5 @@
 # Builds the image of the data tools (Dockerfile) and checks its tools. A version tag also pushes it
-# as ghcr.io/unipept/unipept-database:<version>, which unipept-apps' playbooks run.
+# as ghcr.io/unipept/database-tools:<version>, which unipept-apps' playbooks run.
 name: Image
 
 on:
@@ -113,7 +113,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          image="ghcr.io/${GITHUB_REPOSITORY}:${GITHUB_REF_NAME#v}"
+          image="ghcr.io/unipept/database-tools:${GITHUB_REF_NAME#v}"
           docker tag unipept-database:check "$image"
           echo "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
           docker push "$image"
