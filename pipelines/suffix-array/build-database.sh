@@ -32,15 +32,6 @@ print_help() {
   echo ""
 }
 
-fail() {
-  echo "Error: $1" >&2
-  exit 1
-}
-
-option_value() {
-  [ -n "${2-}" ] || fail "$1 requires a value."
-}
-
 parse_arguments() {
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -74,6 +65,14 @@ mkdir -p "$STAGING"/{tables,suffix-array,temp}
   --output-dir "$STAGING/tables" \
   --temp-dir "$STAGING/temp"
 
+# Before the suffix array, which takes hours. .version holds YYYY.MM, which the API reads. The
+# directory name uses dashes.
+VERSION=$(tr -d '[:space:]' < "$STAGING/tables/.version" | tr '.' '-')
+[[ "$VERSION" =~ ^[0-9]{4}-[0-9]{2}$ ]] || fail "the tables name the version '$VERSION', not YYYY-MM. The build is in $STAGING."
+
+TARGET="$OUTPUT_DIR/uniprot-$VERSION"
+[ ! -e "$TARGET" ] || fail "$TARGET already exists. The build is in $STAGING."
+
 "$CURRENT_LOCATION/build-index.sh" \
   --uniprot-entries "$STAGING/tables/uniprot_entries.tsv.lz4" \
   --output-dir "$STAGING/suffix-array" \
@@ -93,13 +92,6 @@ for file in \
 do
   [ -s "$file" ] || fail "$file is missing or empty. The build is in $STAGING."
 done
-
-# .version holds YYYY.MM, which the API reads. The directory name uses dashes.
-VERSION=$(tr -d '[:space:]' < "$STAGING/suffix-array/.version" | tr '.' '-')
-[[ "$VERSION" =~ ^[0-9]{4}-[0-9]{2}$ ]] || fail "the tables name the version '$VERSION', not YYYY-MM. The build is in $STAGING."
-
-TARGET="$OUTPUT_DIR/uniprot-$VERSION"
-[ ! -e "$TARGET" ] || fail "$TARGET already exists. The build is in $STAGING."
 
 rm -rf "$STAGING/temp"
 mv "$STAGING" "$TARGET"

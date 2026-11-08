@@ -114,7 +114,7 @@ check_true "it names the setting" grep -qF -- '--sparseness-factor is required' 
 
 section "a whole database, with a stand-in sa-builder"
 build_database() {
-    PATH="${WORK}/bin:${PATH}" "${REPO}/pipelines/suffix-array/build-database.sh" --database-sources swissprot \
+    "${REPO}/pipelines/suffix-array/build-database.sh" --database-sources swissprot \
         --output-dir "${WORK}/databases" "$@" > "${WORK}/database.log" 2>&1
 }
 
@@ -139,15 +139,17 @@ printf 'do not lose me\n' > "${database}/marker"
 build_database "${settings[@]}"
 check "a version that is already there is refused" "$?" "1"
 check_true "the database that was there is kept" test -f "${database}/marker"
-check_true "and so is the build" test -s "${WORK}/databases/.build/suffix-array/sa.bin"
+check_true "and so are the tables" test -s "${WORK}/databases/.build/tables/uniprot_entries.tsv.lz4"
+check_true "before the suffix array is built" test ! -e "${WORK}/databases/.build/suffix-array/sa.bin"
 
 build_database --kmer-size 4 --construction-algorithm lib-sais
 check "a missing setting is refused" "$?" "1"
-check_true "before the staging directory is touched" test -s "${WORK}/databases/.build/suffix-array/sa.bin"
+check_true "before the staging directory is touched" test -s "${WORK}/databases/.build/tables/uniprot_entries.tsv.lz4"
 
+mv "$database" "${WORK}/databases/kept"
 SA_BUILDER_STATUS=3 build_database "${settings[@]}"
 check "a failed sa-builder fails the build" "$?" "3"
-check_true "and the database that was there is kept" test -f "${database}/marker"
+check_true "and puts no database in place" test ! -e "$database"
 
 
 summary

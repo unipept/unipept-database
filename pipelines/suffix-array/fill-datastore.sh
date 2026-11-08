@@ -27,15 +27,6 @@ print_help() {
   echo ""
 }
 
-fail() {
-  echo "Error: $1" >&2
-  exit 1
-}
-
-option_value() {
-  [ -n "${2-}" ] || fail "$1 requires a value."
-}
-
 parse_arguments() {
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -54,7 +45,7 @@ parse_arguments "$@"
 
 checkdep lz4
 
-mkdir -p "$OUTPUT_DIR/datastore"
+checkDirectoryAndCreate "$OUTPUT_DIR/datastore"
 
 for table in "${DATASTORE_TABLES[@]}"; do
   $CMD_LZ4CAT "$TABLES_DIR/$table.tsv.lz4" > "$OUTPUT_DIR/datastore/$table.tsv"
