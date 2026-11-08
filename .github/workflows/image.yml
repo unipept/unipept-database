@@ -1,0 +1,68 @@
+# Builds the image of the data tools (Dockerfile) and checks its tools. A version tag also pushes it
+# as ghcr.io/unipept/unipept-database:<version>, which unipept-apps' playbooks run.
+name: Image
+
+on:
+  push:
+    tags: ["v*"]
+  pull_request:
+    paths:
+      - Dockerfile
+      - .dockerignore
+      - Cargo.toml
+      - Cargo.lock
+      - "crates/**"
+      - "pipelines/**"
+      - "opensearch/**"
+      - .github/workflows/image.yml
+  workflow_dispatch:
+
+# A new push to a pull request cancels the older run.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  image:
+    name: Image
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Build the image
+        run: docker build --tag unipept-database:check .
+
+      - name: Check the tools in the image
+        run: |
+          docker run --rm unipept-database:check bash -euo pipefail -c '
+            for program in function-calculator lca-calculator taxdmp-parser uniprot-parser uniprot-parser-tryptic; do
+              test -x "target/release/$program"
+            done
+            sa-builder --help > /dev/null
+            umgap --version
+            opensearch/load.sh --help > /dev/null
+            for tool in curl gawk lz4 pigz pv python3 unzip uuidgen xmllint zip; do
+              command -v "$tool" > /dev/null
+            done
+            python3 -c "import requests"'
+
+      - name: Push the image
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          image="ghcr.io/${GITHUB_REPOSITORY}:${GITHUB_REF_NAME#v}"
+          docker tag unipept-database:check "$image"
+          echo "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          docker push "$image"

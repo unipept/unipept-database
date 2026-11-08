@@ -588,9 +588,9 @@ $CMD_AWK '
 ################################################################################
 # build_binaries                                                               #
 #                                                                              #
-# Builds the release binaries of the Cargo workspace                           #
-# This function ensures that all the required binaries are available for the   #
-# database building process.                                                   #
+# Builds the release binaries of the Cargo workspace. Without cargo, as in the  #
+# image of the data tools, it uses the binaries already in RUST_BIN_DIR, and   #
+# exits with status code 6 if one of them is not there.                        #
 #                                                                              #
 # Globals:                                                                     #
 #   CURRENT_LOCATION - Directory where the script is currently running         #
@@ -606,11 +606,22 @@ $CMD_AWK '
 ################################################################################
 build_binaries() {
   local packages=()
+  local missing=()
   local package
   for package in "$@"
   do
     packages+=(-p "$package")
+    [ -x "$RUST_BIN_DIR/$package" ] || missing+=("$package")
   done
+  if ! command -v cargo > /dev/null 2>&1
+  then
+    [ "${#missing[@]}" -eq 0 ] || {
+      echo "This script requires the Rust toolchain, or built ${missing[*]} in $RUST_BIN_DIR." >&2
+      exit 6
+    }
+    log "Using the Rust utilities in $RUST_BIN_DIR"
+    return
+  fi
   log "Started building Rust utilities"
   cargo build --release --quiet --manifest-path "$LIB_DIR/../../Cargo.toml" "${packages[@]}"
   log "Finished building Rust utilities"

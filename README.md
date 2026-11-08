@@ -3,6 +3,18 @@
 The Unipept [metaproteomics] and [metagenomics] pipelines operate on data found in the [UniProtKB](https://www.uniprot.org/) database. 
 This collection of scripts is provided to download and process that database (or others) into range of `tsv`-files that can directly be used by the Unipept pipeline.
 
+## The image
+
+`ghcr.io/unipept/unipept-database:<version>` holds the data tools in one image: `pipelines/`, the Rust programs they run, `sa-builder` from unipept-index, `umgap`, and `opensearch/`, the loader. `Dockerfile` builds it; a version tag (`v2.0.0`, …) publishes it through `.github/workflows/image.yml`, which also builds and checks it on every pull request that changes it. Mount the host's database directory at the same path:
+
+```sh
+docker run --rm --network host -v /mnt/data:/mnt/data ghcr.io/unipept/unipept-database:<version> \
+  opensearch/load.sh --opensearch-url http://localhost:9200 --index-name uniprot_entries-2026-03 \
+  --uniprot-entries /mnt/data/uniprot-2026-03/tables/uniprot_entries.tsv.lz4
+```
+
+Without `cargo`, as in the image, the pipelines use the programs already built in `target/release`.
+
 ## Most important scripts
 
 ### pipelines/suffix-array/build.sh

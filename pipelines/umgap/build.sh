@@ -830,7 +830,6 @@ MODE="$1"  # First argument specifies the mode
 shift      # Remove mode from arguments
 
 # Check if all the required dependencies are installed
-checkdep cargo "Rust toolchain"
 checkdep curl
 checkdep uuidgen
 checkdep lz4
