@@ -12,25 +12,22 @@ CURRENT_LOCATION="${BASH_SOURCE%/*}"
 
 source "${CURRENT_LOCATION}/../lib/common.sh"
 
-# Not options: an index built with other values still looks valid to the API, so a mistake here is
-# only visible in what it serves.
-SPARSENESS_FACTOR=2
-CONSTRUCTION_ALGORITHM=lib-sais
-
-# The API uses the k-mer table when it is there. Without it every search reads the whole suffix
-# array. The table is about 127 MB at k=5, whatever the size of the database.
-KMER_SIZE=5
-
 UNIPROT_ENTRIES=""
 OUTPUT_DIR=""
+SPARSENESS_FACTOR=""
+KMER_SIZE=""
+CONSTRUCTION_ALGORITHM=""
 
 print_help() {
-  echo "Usage: $0 --uniprot-entries FILE --output-dir DIR"
+  echo "Usage: $0 --uniprot-entries FILE --output-dir DIR --sparseness-factor N --kmer-size K --construction-algorithm NAME"
   echo ""
-  echo "Options:"
-  echo "  --uniprot-entries  The uniprot_entries.tsv.lz4 to index (required)."
-  echo "  --output-dir       Directory to save the index files (required)."
-  echo "  --help             Prints this help message."
+  echo "Options (all required):"
+  echo "  --uniprot-entries         The uniprot_entries.tsv.lz4 to index."
+  echo "  --output-dir              Directory to save the index files."
+  echo "  --sparseness-factor       Index every N-th position of the protein text."
+  echo "  --kmer-size               The k of the k-mer table."
+  echo "  --construction-algorithm  The algorithm sa-builder builds the suffix array with."
+  echo "  --help                    Prints this help message."
   echo ""
 }
 
@@ -48,6 +45,9 @@ parse_arguments() {
     case "$1" in
       --uniprot-entries) option_value "$1" "${2-}"; UNIPROT_ENTRIES="$2"; shift 2 ;;
       --output-dir) option_value "$1" "${2-}"; OUTPUT_DIR="$2"; shift 2 ;;
+      --sparseness-factor) option_value "$1" "${2-}"; SPARSENESS_FACTOR="$2"; shift 2 ;;
+      --kmer-size) option_value "$1" "${2-}"; KMER_SIZE="$2"; shift 2 ;;
+      --construction-algorithm) option_value "$1" "${2-}"; CONSTRUCTION_ALGORITHM="$2"; shift 2 ;;
       --help) print_help; exit 0 ;;
       *) fail "unknown option '$1'. Run with --help for the options." ;;
     esac
@@ -55,6 +55,9 @@ parse_arguments() {
 
   [ -n "$UNIPROT_ENTRIES" ] || fail "--uniprot-entries is required."
   [ -n "$OUTPUT_DIR" ] || fail "--output-dir is required."
+  [ -n "$SPARSENESS_FACTOR" ] || fail "--sparseness-factor is required."
+  [ -n "$KMER_SIZE" ] || fail "--kmer-size is required."
+  [ -n "$CONSTRUCTION_ALGORITHM" ] || fail "--construction-algorithm is required."
   [ -r "$UNIPROT_ENTRIES" ] || fail "cannot read $UNIPROT_ENTRIES."
 }
 

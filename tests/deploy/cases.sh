@@ -181,6 +181,8 @@ check_true "the k-mer table is built" \
     test -s "${OUT}/uniprot-2026-03/suffix-array/kmer_table.bin"
 check "sa-builder was asked for the k-mer table" \
     "$(grep -c -- '--output-kmer-table' /work/sa-builder-calls)" "1"
+check "with the settings of a production index" \
+    "$(grep -c -- '--kmer-size 5 --sparseness-factor 2 --construction-algorithm lib-sais' /work/sa-builder-calls)" "1"
 # Loading is load.sh's, which is what lets a load that fails be rerun without building again.
 check_true "nothing is loaded into OpenSearch" test ! -e /work/loader-calls
 check_true "it says how to load it, with this checkout's load.sh" grep -qF "${CHECKOUT}/.deploy/server/load.sh --uniprot-version 2026-03" /work/last-output
