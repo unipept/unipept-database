@@ -94,7 +94,8 @@ build_index() {
 }
 
 entries="${WORK}/output/uniprot_entries.tsv.lz4"
-build_index --uniprot-entries "$entries" --output-dir "${WORK}/index"
+settings=(--sparseness-factor 3 --kmer-size 4 --construction-algorithm lib-sais)
+build_index --uniprot-entries "$entries" --output-dir "${WORK}/index" "${settings[@]}"
 check "the build succeeds" "$?" "0"
 for file in sa.bin proteins.bin mapping.bin kmer_table.bin; do
     check_true "it writes ${file}" test -s "${WORK}/index/${file}"
@@ -102,19 +103,23 @@ done
 check "sa-builder is given accession, taxon, sequence and annotations" \
     "$(LC_ALL=C sort "${WORK}/proteins-given.tsv")" \
     "$(cut -f2,4,7,8 "${FIXTURES}/uniprot_entries.tsv" | LC_ALL=C sort)"
-check_true "the k-mer size is 5" grep -qF -- '--kmer-size 5 ' "${WORK}/sa-builder-call"
-check_true "the sparseness factor is 2" grep -qF -- '--sparseness-factor 2 ' "${WORK}/sa-builder-call"
-check_true "the algorithm is lib-sais" grep -qF -- '--construction-algorithm lib-sais ' "${WORK}/sa-builder-call"
+check_true "the k-mer size is the one given" grep -qF -- '--kmer-size 4 ' "${WORK}/sa-builder-call"
+check_true "the sparseness factor is the one given" grep -qF -- '--sparseness-factor 3 ' "${WORK}/sa-builder-call"
+check_true "the algorithm is the one given" grep -qF -- '--construction-algorithm lib-sais ' "${WORK}/sa-builder-call"
 check_true "the suffix array is compressed" grep -qF -- '--compress-sa' "${WORK}/sa-builder-call"
 check_true "the protein file is removed" test ! -e "${WORK}/index/proteins.tsv"
 
-SA_BUILDER_STATUS=3 build_index --uniprot-entries "$entries" --output-dir "${WORK}/failed"
+SA_BUILDER_STATUS=3 build_index --uniprot-entries "$entries" --output-dir "${WORK}/failed" "${settings[@]}"
 check "a failed sa-builder fails the build" "$?" "3"
 check_true "and the protein file is removed" test ! -e "${WORK}/failed/proteins.tsv"
 
-build_index --uniprot-entries "${WORK}/missing.tsv.lz4" --output-dir "${WORK}/refused"
+build_index --uniprot-entries "${WORK}/missing.tsv.lz4" --output-dir "${WORK}/refused" "${settings[@]}"
 check "a missing table is refused" "$?" "1"
 check_true "before anything is written" test ! -e "${WORK}/refused"
+
+build_index --uniprot-entries "$entries" --output-dir "${WORK}/refused" --kmer-size 4 --construction-algorithm lib-sais
+check "a missing setting is refused" "$?" "1"
+check_true "it names the setting" grep -qF -- '--sparseness-factor is required' "${WORK}/index.log"
 
 
 summary

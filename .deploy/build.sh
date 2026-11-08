@@ -29,6 +29,16 @@ SKIP_CHECKS=false
 
 read_conf
 
+# sa-builder settings, below read_conf because they are not a host's to change: an index built with
+# other values still looks valid to the API, so a mistake here is only visible in what it serves.
+SA_SPARSENESS=2
+SA_ALGORITHM=lib-sais
+
+# The k-mer table is an accelerator the API loads when it is there. Without it every search reads
+# the whole suffix array. It is a dense bucket array, about 127 MB at k=5 whatever the database
+# size.
+SA_KMER_SIZE=5
+
 # The UniProtKB version the pipeline wrote beside the tables, as YYYY-MM.
 uniprot_version_from() {
     local version_file="$1" version
@@ -118,7 +128,10 @@ build_suffix_array() {
 
     PATH="${index_dir}/target/release:${PATH}" "${HERE}/../pipelines/suffix-array/build-index.sh" \
         --uniprot-entries "${build_dir}/${ENTRIES_TABLE}" \
-        --output-dir "${build_dir}/suffix-array"
+        --output-dir "${build_dir}/suffix-array" \
+        --sparseness-factor "$SA_SPARSENESS" \
+        --kmer-size "$SA_KMER_SIZE" \
+        --construction-algorithm "$SA_ALGORITHM"
 }
 
 # The tables the API reads, uncompressed, beside the index.

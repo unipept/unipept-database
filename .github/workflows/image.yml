@@ -88,7 +88,8 @@ jobs:
             -v "$PWD/crates/fixtures/data/uniprot_entries.tsv:/fixture.tsv:ro" \
             unipept-database:check bash -euo pipefail -c '
               lz4 -c /fixture.tsv > /tmp/entries.tsv.lz4
-              pipelines/suffix-array/build-index.sh --uniprot-entries /tmp/entries.tsv.lz4 --output-dir /tmp/index
+              pipelines/suffix-array/build-index.sh --uniprot-entries /tmp/entries.tsv.lz4 --output-dir /tmp/index \
+                --sparseness-factor 2 --kmer-size 5 --construction-algorithm lib-sais
               for file in sa.bin proteins.bin mapping.bin kmer_table.bin; do
                 test -s "/tmp/index/$file"
               done
