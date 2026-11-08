@@ -1,7 +1,6 @@
-# Only Cargo.toml, Cargo.lock, crates/, pipelines/ and opensearch/ go into the image.
+# Only Cargo.toml, Cargo.lock, crates/, pipelines/, opensearch/ and assets/ go into the image.
 .git
 .deploy
-assets
 static-database
 target
 tests
