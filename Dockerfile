@@ -10,7 +10,7 @@
 
 # The programs of this workspace, with stable Rust as CI builds them: rust-toolchain.toml, whose
 # nightly is for rustfmt, is not copied. Every program the build makes goes to /out.
-FROM rust:1-bookworm AS workspace
+FROM rust:1-trixie AS workspace
 WORKDIR /src
 COPY Cargo.toml Cargo.lock ./
 COPY crates crates
@@ -20,7 +20,7 @@ RUN cargo build --release --locked \
 # sa-builder, at the unipept-index commit this image records, with stable Rust: the clone's
 # rust-toolchain.toml, whose nightly is for rustfmt, is removed. Its libsais64-rs builds libsais
 # with cmake and generates the bindings with bindgen, which needs libclang.
-FROM rust:1-bookworm AS sa-builder
+FROM rust:1-trixie AS sa-builder
 ARG UNIPEPT_INDEX_COMMIT=07ab4f2f834cf7f85d696a2d8fa210b95d611f99
 RUN apt-get update -qq \
  && apt-get install -y -qq --no-install-recommends clang cmake libclang-dev \
@@ -32,11 +32,11 @@ WORKDIR /src
 RUN cargo build --release --locked -p sa-builder
 
 # umgap, at the version CI's umgap suite installs.
-FROM rust:1-bookworm AS umgap
+FROM rust:1-trixie AS umgap
 ARG UMGAP_VERSION=1.2.0
 RUN cargo install --locked --version "$UMGAP_VERSION" umgap
 
-FROM debian:bookworm-slim
+FROM debian:trixie-slim
 RUN apt-get update -qq \
  && apt-get install -y -qq --no-install-recommends \
       ca-certificates curl gawk libxml2-utils lz4 pigz pv python3 python3-requests unzip \
