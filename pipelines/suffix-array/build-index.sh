@@ -31,15 +31,6 @@ print_help() {
   echo ""
 }
 
-fail() {
-  echo "Error: $1" >&2
-  exit 1
-}
-
-option_value() {
-  [ -n "${2-}" ] || fail "$1 requires a value."
-}
-
 parse_arguments() {
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -66,18 +57,13 @@ parse_arguments "$@"
 checkdep lz4
 checkdep sa-builder "sa-builder from unipept-index"
 
-mkdir -p "$OUTPUT_DIR"
-
-# About 100 GB on full UniProt, and read by nothing after sa-builder.
-PROTEINS="$OUTPUT_DIR/proteins.tsv"
-trap 'rm -f "$PROTEINS"' EXIT
-
-# The four columns sa-builder reads: accession, taxon, sequence, annotations.
-$CMD_LZ4CAT "$UNIPROT_ENTRIES" | cut -f2,4,7,8 > "$PROTEINS"
+checkDirectoryAndCreate "$OUTPUT_DIR"
 
 log "Started building the suffix array."
-sa-builder \
-  --database-file "$PROTEINS" \
+# The four columns sa-builder reads: accession, taxon, sequence, annotations. Through a pipe, as a
+# file would be about 100 GB on full UniProt.
+$CMD_LZ4CAT "$UNIPROT_ENTRIES" | cut -f2,4,7,8 | sa-builder \
+  --database-file /dev/stdin \
   --output-sa "$OUTPUT_DIR/sa.bin" \
   --output-proteins "$OUTPUT_DIR/proteins.bin" \
   --output-mapping "$OUTPUT_DIR/mapping.bin" \

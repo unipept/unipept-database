@@ -91,7 +91,7 @@ check_true "the staging directory is gone" test ! -d "${OUT}/.build"
 
 section "the tables the pipeline actually writes"
 
-# build.sh names these in PIPELINE_TABLES and DATASTORE_TABLES. If the pipeline renamed one, the
+# .deploy/lib/database.sh names these in PIPELINE_TABLES and DATASTORE_TABLES. If the pipeline renamed one, the
 # build would have stopped above; these say which side of the seam the names came from.
 for table in taxons lineages interpro_entries go_terms ec_numbers proteomes; do
     check_true "datastore/${table}.tsv has rows" test -s "${INDEX_DIR}/datastore/${table}.tsv"

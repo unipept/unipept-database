@@ -4,7 +4,7 @@
 # read-only and everything this writes under /work.
 #
 # What is real here: build.sh, clone.sh, load.sh, verify.sh, distribute.sh and both installs
-# themselves, git, ssh and scp. What is stood in for: the pipeline, sa-builder and the OpenSearch
+# themselves, git, ssh and scp. What is stood in for: the table pipeline, sa-builder and the OpenSearch
 # loader, each of which has a suite of its own, and the apt, dpkg, systemd and instance the installs
 # drive.
 #
