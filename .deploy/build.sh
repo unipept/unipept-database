@@ -29,16 +29,6 @@ SKIP_CHECKS=false
 
 read_conf
 
-# sa-builder settings, below read_conf because they are not a host's to change: an index built with
-# other values still looks valid to the API, so a mistake here is only visible in what it serves.
-SA_SPARSENESS=2
-SA_ALGORITHM=lib-sais
-
-# The k-mer table is an accelerator the API loads when it is there. Without it every search reads
-# the whole suffix array. It is a dense bucket array, about 127 MB at k=5 whatever the database
-# size.
-SA_KMER_SIZE=5
-
 # The UniProtKB version the pipeline wrote beside the tables, as YYYY-MM.
 uniprot_version_from() {
     local version_file="$1" version
@@ -126,24 +116,9 @@ build_suffix_array() {
 
     cargo build --release --quiet --manifest-path "${index_dir}/Cargo.toml"
 
-    # The four columns sa-builder reads: accession, taxon, sequence, annotations.
-    lz4cat "${build_dir}/${ENTRIES_TABLE}" | cut -f2,4,7,8 > "${build_dir}/suffix-array/proteins.tsv"
-
-    log "Started building the suffix array."
-    "${index_dir}/target/release/sa-builder" \
-        --database-file "${build_dir}/suffix-array/proteins.tsv" \
-        --output-sa "${build_dir}/suffix-array/sa.bin" \
-        --output-proteins "${build_dir}/suffix-array/proteins.bin" \
-        --output-mapping "${build_dir}/suffix-array/mapping.bin" \
-        --output-kmer-table "${build_dir}/suffix-array/kmer_table.bin" \
-        --kmer-size "$SA_KMER_SIZE" \
-        --sparseness-factor "$SA_SPARSENESS" \
-        --construction-algorithm "$SA_ALGORITHM" \
-        --compress-sa
-    log "Finished building the suffix array."
-
-    # Around 100 GB on full UniProt, and read by nothing after this point.
-    rm -f "${build_dir}/suffix-array/proteins.tsv"
+    PATH="${index_dir}/target/release:${PATH}" "${HERE}/../pipelines/suffix-array/build-index.sh" \
+        --uniprot-entries "${build_dir}/${ENTRIES_TABLE}" \
+        --output-dir "${build_dir}/suffix-array"
 }
 
 # The tables the API reads, uncompressed, beside the index.

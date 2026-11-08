@@ -34,6 +34,14 @@ Below is an overview of the generated files and what they represent:
 
 See [our wiki](https://github.com/unipept/unipept-database/wiki/Building-tables-for-the-suffix-array) for more information on how to run this script.
 
+### pipelines/suffix-array/build-index.sh
+
+This script builds the suffix array the API searches from `uniprot_entries.tsv.lz4`. It writes `sa.bin`, `proteins.bin`, `mapping.bin` and `kmer_table.bin` to the output directory, and needs `sa-builder` from [unipept-index](https://github.com/unipept/unipept-index) on `PATH`, as in the image:
+
+```sh
+pipelines/suffix-array/build-index.sh --uniprot-entries /mnt/data/build/tables/uniprot_entries.tsv.lz4 --output-dir /mnt/data/build/suffix-array
+```
+
 ### pipelines/umgap/build.sh
 
 This script is responsible for parsing datasets to generate files required by the Unipept metagenomics pipeline, which constructs a metagenomics index. 

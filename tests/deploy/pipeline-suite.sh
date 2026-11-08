@@ -104,7 +104,7 @@ check_true "the entries table is kept for clone.sh" \
 
 section "the columns handed to sa-builder"
 
-# build.sh cuts fields 2,4,7,8 out of uniprot_entries.tsv. The column layout is a contract three
+# build-index.sh cuts fields 2,4,7,8 out of uniprot_entries.tsv. The column layout is a contract three
 # consumers slice by position, and this is the one that no parser test covers.
 given="${WORK}/proteins-given-to-sa-builder.tsv"
 entries="$(lz4 -dc "${OUT}/uniprot-2026-09/tables/uniprot_entries.tsv.lz4" | wc -l | tr -d ' ')"
