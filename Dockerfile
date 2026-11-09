@@ -21,7 +21,7 @@ RUN cargo build --release --locked \
 # rust-toolchain.toml, whose nightly is for rustfmt, is removed. Its libsais64-rs builds libsais
 # with cmake and generates the bindings with bindgen, which needs libclang.
 FROM rust:1-trixie AS sa-builder
-ARG UNIPEPT_INDEX_COMMIT=07ab4f2f834cf7f85d696a2d8fa210b95d611f99
+ARG UNIPEPT_INDEX_COMMIT=1f07896116d1e8a48501be6c34f18663ff38aec9
 RUN apt-get update -qq \
  && apt-get install -y -qq --no-install-recommends clang cmake libclang-dev \
  && rm -rf /var/lib/apt/lists/*
