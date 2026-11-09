@@ -1,8 +1,5 @@
 # Three ecosystems live in this repository: cargo (one lockfile at the root covers every workspace
 # member), github-actions (the `uses:` pins in .github/workflows) and devcontainers.
-#
-# Monthly, ungrouped and effectively uncapped: one pull request per update, so each bump is merged
-# on its own evidence rather than as part of a batch that is green only as a whole.
 version: 2
 
 updates:
@@ -13,6 +10,15 @@ updates:
       time: "13:00"
       timezone: Europe/Brussels
     open-pull-requests-limit: 99
+    groups:
+      # Dependabot classifies a Cargo `0.y` minor update as major, so it gets its own PR.
+      cargo-compatible:
+        patterns: ["*"]
+        update-types: [minor, patch]
+    labels:
+      - deps
+    commit-message:
+      prefix: deps
 
   - package-ecosystem: github-actions
     directory: "/"
@@ -21,6 +27,13 @@ updates:
       time: "13:00"
       timezone: Europe/Brussels
     open-pull-requests-limit: 99
+    ignore:
+      # The MSRV job pins this action to the workspace `rust-version`.
+      - dependency-name: dtolnay/rust-toolchain
+    labels:
+      - deps
+    commit-message:
+      prefix: deps
 
   - package-ecosystem: devcontainers
     directory: "/"
@@ -29,3 +42,7 @@ updates:
       time: "13:00"
       timezone: Europe/Brussels
     open-pull-requests-limit: 99
+    labels:
+      - deps
+    commit-message:
+      prefix: deps
