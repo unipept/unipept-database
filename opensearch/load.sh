@@ -4,8 +4,7 @@ set -eo pipefail
 
 # Drops and recreates one index on a running OpenSearch instance, uniprot_entries unless
 # --index-name says otherwise, then imports the proteins into it. Other indices on the instance are
-# not touched. The deploy scripts' load.sh names the index after the version, and refuses the one
-# this host serves.
+# not touched.
 
 
 # All references to an external script should be relative to the location of this script.
@@ -130,7 +129,7 @@ upload_uniprot_entries() {
 usage() {
     cat <<'USAGE'
 Drops and recreates one index on a running OpenSearch, then loads the proteins of a database into
-it. The deploy scripts' load.sh runs this, naming the index after the version.
+it.
 
   opensearch/load.sh --uniprot-entries FILE [OPTIONS]
 
@@ -150,9 +149,7 @@ option_value() {
     { [ -n "${2-}" ] && [[ "$2" != --* ]]; } || opensearch_fail "$1 requires a value."
 }
 
-# Sets the options above from the arguments. Not with need_value and unknown_option from
-# .deploy/lib/core.sh: this script loads the pipelines' library, not .deploy/lib.sh, but its --help
-# and its errors read the same way.
+# Sets the options above from the arguments.
 parse_arguments() {
     while [[ $# -gt 0 ]]; do
         case "$1" in

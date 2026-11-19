@@ -1,8 +1,7 @@
 # shellcheck shell=bash
 #
 # The assertions every suite makes: check, check_true, check_absent, section and summary. Needs
-# nothing else. Sourced, never run. Byte for byte the same as its copy in the other repository that
-# deploys Unipept, so a suite reads the same in both.
+# nothing else. Sourced, never run.
 
 pass=0
 fail=0
