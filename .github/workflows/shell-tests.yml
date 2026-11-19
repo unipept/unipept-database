@@ -6,7 +6,6 @@ on:
   push:
     branches: [main]
     paths:
-      - '.deploy/**'
       - 'pipelines/**'
       - 'opensearch/**'
       - 'tests/**'
@@ -18,7 +17,6 @@ on:
       - '!**/*.md'
   pull_request:
     paths:
-      - '.deploy/**'
       - 'pipelines/**'
       - 'opensearch/**'
       - 'tests/**'
@@ -40,10 +38,8 @@ permissions:
 
 jobs:
   pipelines:
-    # lz() and luz() against a stand-in lz4, .deploy/server/verify.sh against a fixture index
-    # directory, and the parts of .deploy/lib.sh. They need nothing installed and run in seconds, so
-    # they share a runner.
-    name: Pipeline, verify and deploy library suites
+    # lz() and luz() against a stand-in lz4. Needs nothing installed.
+    name: Pipeline suite
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -54,15 +50,6 @@ jobs:
       # Actions starts steps with SIGPIPE ignored; the suite needs its default action.
       - name: Run the pipeline suite
         run: env --default-signal=PIPE tests/run-tests.sh lz
-
-      # Even when the one above failed, so one run reports both.
-      - name: Run the verify suite
-        if: ${{ !cancelled() }}
-        run: tests/run-tests.sh verify
-
-      - name: Run the deploy library suite
-        if: ${{ !cancelled() }}
-        run: tests/run-tests.sh lib
 
   shell:
     # The helpers in pipelines/lib/common.sh. No container.
@@ -82,9 +69,9 @@ jobs:
 
   build:
     # pipelines/suffix-array/build.sh and pipelines/umgap/build.sh end to end, with every source
-    # replaced by a local file, and then .deploy/build.sh over the suffix-array pipeline. One job, so
-    # the later suites reuse what the first compiled rather than building the workspace again.
-    name: Build, umgap and seam suites
+    # replaced by a local file. One job, so the umgap suite reuses what the first compiled rather
+    # than building the workspace again.
+    name: Build and umgap suites
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -115,43 +102,6 @@ jobs:
       - name: Run the umgap suite
         if: ${{ !cancelled() }}
         run: env --default-signal=PIPE tests/run-tests.sh umgap
-
-      # .deploy/build.sh over the real pipeline. The container suite stubs the pipeline, so this is
-      # what holds the contract between the two. Even when the suites above failed, so one run
-      # reports all of them.
-      - name: Run the seam suite
-        if: ${{ !cancelled() }}
-        run: env --default-signal=PIPE tests/run-tests.sh seam
-
-  deploy:
-    # .deploy/build.sh, server/clone.sh, server/load.sh and both installs in a container, over a
-    # real ssh and scp.
-    name: Deploy suite
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
-
-      # Through the Actions cache, so the image's apt layer is only rebuilt when the Dockerfile
-      # changes. The suite is told the image is there and does not build it again.
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-
-      - name: Build the deploy test image
-        uses: docker/build-push-action@v7
-        with:
-          context: tests/deploy
-          tags: unipept-deploy-test
-          load: true
-          cache-from: type=gha,scope=deploy-test
-          cache-to: type=gha,scope=deploy-test,mode=max
-
-      - name: Run the deploy suite
-        env:
-          DEPLOY_TEST_IMAGE_BUILT: 'true'
-        run: tests/run-tests.sh deploy
 
   opensearch:
     # opensearch/load.sh against a real OpenSearch in a container.

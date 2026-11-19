@@ -16,8 +16,8 @@ FIXTURES="${REPO}/crates/fixtures/data"
 
 # shellcheck source=../lib.sh
 source "${HERE}/../lib.sh"
-# shellcheck source=../deploy/stubs.sh
-source "${HERE}/../deploy/stubs.sh"
+# shellcheck source=stubs.sh
+source "${HERE}/stubs.sh"
 
 sed --version > /dev/null 2>&1 || { echo "the build suite needs GNU sed first on PATH" >&2; exit 1; }
 checkdep gawk
